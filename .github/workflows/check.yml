@@ -1,0 +1,21 @@
+name: Check Wappy
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build check-types test lint
+      - run: cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
+      - run: pnpm --filter client tauri build --debug --no-bundle
