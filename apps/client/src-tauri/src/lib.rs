@@ -1,5 +1,35 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+fn raise_desktop(desktop: &WebviewWindow) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    return desktop.with_webview(|webview| unsafe {
+        // Tauri runs this closure on the main thread; the native window is alive here.
+        let window = &*webview.ns_window().cast::<objc2_app_kit::NSWindow>();
+        window.orderFrontRegardless();
+    });
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, HWND_TOPMOST, SWP_ASYNCWINDOWPOS, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        };
+        // Reapply the native z-order even when Tauri's always-on-top flag is unchanged.
+        return unsafe {
+            SetWindowPos(
+                desktop.hwnd()?,
+                Some(HWND_TOPMOST),
+                0,
+                0,
+                0,
+                0,
+                SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
+            )
+        }
+        .map_err(|error| tauri::Error::Io(std::io::Error::other(error.to_string())));
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    desktop.set_always_on_top(true)
+}
+
 fn place_desktop(sidebar: &WebviewWindow) -> tauri::Result<()> {
     let monitor = sidebar.current_monitor()?.or(sidebar.primary_monitor()?);
     if let (Some(monitor), Some(desktop)) =
@@ -43,6 +73,17 @@ fn set_sidebar_compact(window: WebviewWindow, compact: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
+fn set_sidebar_pinned(window: WebviewWindow, pinned: bool) -> Result<(), String> {
+    window
+        .set_always_on_top(pinned)
+        .map_err(|error| error.to_string())?;
+    if let Some(desktop) = window.app_handle().get_webview_window("desktop") {
+        raise_desktop(&desktop).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> {
     if window.label() != "desktop" {
         return Err("Only the character window can track the cursor".into());
@@ -64,13 +105,22 @@ pub fn run() {
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window, false)?;
+                window.show()?;
                 if let Some(desktop) = app.get_webview_window("desktop") {
                     // Start click-through; the character view enables input only on pets.
                     desktop.set_ignore_cursor_events(true)?;
                     place_desktop(&window)?;
                     desktop.show()?;
+                    #[cfg(target_os = "macos")]
+                    desktop.with_webview(|webview| unsafe {
+                        let window = &*webview.ns_window().cast::<objc2_app_kit::NSWindow>();
+                        // One level above Tauri's floating sidebar, without taking focus.
+                        window.setLevel(window.level() + 1);
+                        window.orderFrontRegardless();
+                    })?;
+                    #[cfg(not(target_os = "macos"))]
+                    raise_desktop(&desktop)?;
                 }
-                window.show()?;
             }
             Ok(())
         })
@@ -80,10 +130,17 @@ pub fn run() {
             }
             match event {
                 WindowEvent::Destroyed => window.app_handle().exit(0),
-                WindowEvent::Moved(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                WindowEvent::Moved(_)
+                | WindowEvent::ScaleFactorChanged { .. }
+                | WindowEvent::Focused(true) => {
                     if let Some(sidebar) = window.app_handle().get_webview_window("main") {
                         if let Err(error) = place_desktop(&sidebar) {
                             eprintln!("Could not position desktop characters: {error}");
+                        }
+                    }
+                    if let Some(desktop) = window.app_handle().get_webview_window("desktop") {
+                        if let Err(error) = raise_desktop(&desktop) {
+                            eprintln!("Could not raise desktop characters: {error}");
                         }
                     }
                 }
@@ -92,6 +149,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             set_sidebar_compact,
+            set_sidebar_pinned,
             desktop_cursor_position
         ])
         .run(tauri::generate_context!())

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -187,6 +187,16 @@ function App() {
       setCompact(!compact);
     });
   }
+  function dragWindow(event: MouseEvent<HTMLElement>) {
+    if (
+      !desktop ||
+      event.button !== 0 ||
+      (event.target as HTMLElement).closest("button")
+    )
+      return;
+    event.preventDefault();
+    void windowAction(() => getCurrentWindow().startDragging());
+  }
   const onlineCount =
     connection === "online"
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
@@ -245,6 +255,14 @@ function App() {
   if (compact && state)
     return (
       <main className="sidebar compact-sidebar">
+        <div
+          className="compact-drag-handle"
+          onMouseDown={dragWindow}
+          title="드래그해서 앱 이동"
+          aria-label="앱 이동 영역"
+        >
+          ⠿
+        </div>
         <button
           className="compact-open"
           onClick={toggleCompact}
@@ -291,12 +309,16 @@ function App() {
 
   return (
     <main className="sidebar">
-      <header className="app-header">
-        <div className="brand" data-tauri-drag-region>
+      <header
+        className="app-header"
+        onMouseDown={dragWindow}
+        title="드래그해서 앱 이동"
+      >
+        <div className="brand">
           <span className="brand-icon" aria-hidden="true">
             ✳
           </span>
-          <span data-tauri-drag-region>
+          <span>
             wappy<span className="brand-period">.</span>
           </span>
         </div>
@@ -309,7 +331,7 @@ function App() {
               title="항상 위에 표시"
               onClick={() =>
                 void windowAction(async () => {
-                  await getCurrentWindow().setAlwaysOnTop(!pinned);
+                  await invoke("set_sidebar_pinned", { pinned: !pinned });
                   setPinned(!pinned);
                 })
               }
