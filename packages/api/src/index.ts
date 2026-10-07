@@ -42,6 +42,11 @@ export interface ApiErrorBody {
 /** The client and server share method, path, request and response types. */
 export interface ApiRoutes {
   "POST /session": { input: ProfileInput; output: Session };
+  "POST /session/recover": { input: { code: string }; output: Session };
+  "POST /recovery-code": {
+    input: Record<string, never>;
+    output: { code: string };
+  };
   "GET /state": { input: undefined; output: SidebarState };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "POST /invites": { input: Record<string, never>; output: Invite };

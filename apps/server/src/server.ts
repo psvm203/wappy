@@ -98,6 +98,9 @@ export function createApp(options: {
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
       expires_at INTEGER NOT NULL
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS recovery_codes (
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
+    ) STRICT;
   `);
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
@@ -148,15 +151,17 @@ export function createApp(options: {
         json(res, 200, { ok: true });
         return;
       }
+      const publicSession =
+        route === "POST /session" || route === "POST /session/recover";
       if (req.method !== "GET") {
-        const key = `${req.socket.remoteAddress}:${route === "POST /session" ? "signup" : "write"}`;
+        const key = `${req.socket.remoteAddress}:${publicSession ? "session" : "write"}`;
         const limit = limits.get(key);
         const current =
           limit && limit.until > now()
             ? limit
             : { count: 0, until: now() + 60_000 };
         limits.set(key, current);
-        if (++current.count > (route === "POST /session" ? 10 : 60)) {
+        if (++current.count > (publicSession ? 10 : 60)) {
           res.setHeader("Retry-After", "60");
           throw new HttpError(
             429,
@@ -164,8 +169,10 @@ export function createApp(options: {
           );
         }
       }
+      const body = req.method === "GET" ? undefined : await readBody(req);
+      // Authenticate after the last await so recovery also revokes in-flight writes.
       let self: Profile | undefined;
-      if (route !== "POST /session") {
+      if (!publicSession) {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
@@ -181,7 +188,6 @@ export function createApp(options: {
           );
         self = profile(user.id as string);
       }
-      const body = req.method === "GET" ? undefined : await readBody(req);
       switch (route) {
         case "POST /session": {
           let input;
@@ -201,6 +207,35 @@ export function createApp(options: {
           );
           lastSeen.set(user.id, now());
           reply(res, route, { token, profile: user }, 201);
+          break;
+        }
+        case "POST /session/recover": {
+          const code = field(body, "code");
+          if (!/^wappy-recovery-[A-Za-z0-9_-]{43}$/.test(code))
+            throw new HttpError(400, "올바른 복구 코드를 입력해 주세요.");
+          const token = secret();
+          // One atomic statement preserves the profile and revokes the old session.
+          // Keep the recovery key valid: a lost response must remain retryable.
+          const user = db
+            .prepare(
+              `UPDATE users SET token_hash = ?
+               WHERE id = (SELECT owner_id FROM recovery_codes WHERE code_hash = ?)
+               RETURNING id, name, character, status`,
+            )
+            .get(hash(token), hash(code)) as unknown as Profile | undefined;
+          if (!user)
+            throw new HttpError(401, "복구 코드와 서버 주소를 확인해 주세요.");
+          lastSeen.set(user.id, now());
+          reply(res, route, { token, profile: user });
+          break;
+        }
+        case "POST /recovery-code": {
+          const code = `wappy-recovery-${secret()}`;
+          db.prepare(
+            `INSERT INTO recovery_codes VALUES (?, ?) ON CONFLICT(owner_id)
+             DO UPDATE SET code_hash = excluded.code_hash`,
+          ).run(hash(code), self!.id);
+          reply(res, route, { code }, 201);
           break;
         }
         case "GET /state": {
