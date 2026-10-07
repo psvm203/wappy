@@ -1,8 +1,11 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+pub mod startup;
 mod state_sync;
 mod tray;
 pub use tray::show_sidebar;
+
+const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
 
 fn raise_desktop(desktop: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
@@ -107,7 +110,11 @@ fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> 
 pub fn app_builder() -> tauri::Builder<tauri::Wry> {
     let builder = tauri::Builder::default();
     #[cfg(any(target_os = "macos", windows))]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
+        // An OS login launch must not interrupt an already running, hidden app.
+        if args.iter().any(|arg| arg == AUTOSTART_ARGUMENT) {
+            return;
+        }
         if let Err(error) = show_sidebar(app) {
             eprintln!("Could not restore the running Wappy instance: {error}");
         }
@@ -128,7 +135,9 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window, false)?;
-                window.show()?;
+                if !std::env::args().any(|arg| arg == AUTOSTART_ARGUMENT) {
+                    window.show()?;
+                }
                 if let Some(desktop) = app.get_webview_window("desktop") {
                     // Start click-through; the character view enables input only on pets.
                     desktop.set_ignore_cursor_events(true)?;
@@ -182,7 +191,9 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             desktop_cursor_position,
             tray::sync_tray_controls,
             state_sync::start_state_polling,
-            state_sync::stop_state_polling
+            state_sync::stop_state_polling,
+            startup::startup_status,
+            startup::set_startup_enabled
         ])
 }
 

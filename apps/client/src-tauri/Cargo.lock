@@ -477,6 +477,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "objc2-app-kit",
+ "plist",
  "reqwest",
  "serde",
  "serde_json",
@@ -485,6 +486,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "windows",
+ "windows-registry",
 ]
 
 [[package]]

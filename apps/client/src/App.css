@@ -488,6 +488,24 @@
 .server-panel {
   margin-top: 20px;
 }
+.startup-panel {
+  margin-top: 20px;
+}
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 15px;
+  cursor: pointer;
+}
+.setting-toggle input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: #678b57;
+}
 .saved-profiles {
   margin: 0 0 26px;
 }

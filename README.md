@@ -33,6 +33,10 @@ pnpm desktop
 
 **× 버튼과 창 닫기는 사이드바만 숨깁니다.** macOS 메뉴 막대 또는 Windows 알림 영역의 Wappy 아이콘에서 **사이드바 열기**, **잠깐 쉬기 / 다시 걷기**, **캐릭터 숨기기 / 표시**를 사용할 수 있습니다. 트레이와 사이드바는 같은 설정을 제어합니다. **Wappy 종료**를 선택하면 캐릭터 창과 프로세스까지 함께 종료됩니다. 숨긴 상태에서 앱을 다시 실행하면 기존 사이드바가 나타나며 중복 실행되지 않습니다. macOS에서는 Dock 아이콘으로도 다시 열 수 있습니다.
 
+데스크톱 앱의 첫 화면 또는 **내 모습 → 다음에도 함께 시작해요**에서 **컴퓨터 로그인 시 Wappy 실행**을 켤 수 있습니다. 최초 실행만으로 등록하지 않으며, 사용자가 선택할 때 현재 OS 사용자에게만 등록합니다. 자동으로 시작할 때는 사이드바를 숨기고 트레이와 캐릭터 창을 실행합니다. 캐릭터의 움직임·표시 설정과 마지막에 선택한 프로필은 유지됩니다. 자동 실행이 중복 요청되어도 숨긴 사이드바를 열지 않으며, 직접 앱을 실행하거나 트레이를 선택하면 다시 열립니다.
+
+설정 화면을 열거나 앱으로 돌아오면 OS의 등록 상태를 다시 읽습니다. 변경이 실패해도 상태를 다시 확인하며, 상태를 읽지 못하면 선택을 잠그고 **자동 실행 상태 다시 확인**을 제공합니다. 앱을 사용할 위치에 설치한 뒤 켜고, 앱을 옮기거나 삭제하기 전에는 꺼 주세요. macOS에서는 사용자 `Library/LaunchAgents/com.wappy.client.plist`에 등록하며 OS의 백그라운드 실행 허용은 별도로 적용될 수 있습니다. Windows에서는 현재 사용자의 `Run` 항목에 경로를 따옴표로 감싸 등록하고, 작업 관리자의 해당 앱 시작 허용 상태도 확인합니다. 컴퓨터 전체의 시작 설정은 변경하지 않습니다. [Apple Launch Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html), [Microsoft Run 키](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)
+
 캐릭터 창은 사이드바와 일반 앱 창보다 앞에 표시됩니다. 사이드바를 클릭하거나 고정 설정을 바꿔도 캐릭터가 그 뒤로 가려지지 않습니다.
 
 사이드바는 처음에 현재 모니터의 작업 영역 오른쪽에 배치되며, 화면 배율·작업 표시줄·Dock을 고려합니다. 상단 로고와 빈 공간을 드래그해 옮길 수 있고, 접은 상태에서는 위쪽의 **⠿** 손잡이를 드래그하면 됩니다. 접거나 펼치면 현재 모니터 오른쪽으로 다시 정렬됩니다. 항상 위에 표시 설정은 상단 버튼으로 바꿀 수 있습니다.
@@ -116,10 +120,11 @@ pnpm --filter client tauri build
 
 Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows/check.yml`은 macOS·Windows 각각에서 타입 검사, 빌드, API 통합 테스트, Rust 백그라운드 조회 테스트, 네이티브 디버그 빌드를 실행합니다. 실제 배포 서명·공증 인증서는 별도로 설정해야 합니다.
 
-실제 데스크톱 세션에서는 프런트엔드 빌드 후 다음 검사로 트레이 생성, 닫기 후 숨김, 숨긴 상태의 제어 이벤트, 두 번째 실행 시 기존 창 복원, 최소화 복원과 종료를 확인할 수 있습니다. WebView의 타이머를 비활성화한 채 로컬 테스트 서버를 조회하여 접속 상태 갱신, 오류 후 재연결, 프로필 보관 후 조회 중단과 재선택 후 재개, 세션 삭제 후 조회 중단도 확인합니다. 별도 앱 식별자와 비공개 WebView 저장소를 사용하므로 기존 프로필을 읽거나 변경하지 않습니다. 잠시 테스트 창과 트레이 아이콘이 나타났다가 종료됩니다.
+실제 데스크톱 세션에서는 프런트엔드 빌드 후 다음 검사로 트레이 생성, 닫기 후 숨김, 숨긴 상태의 제어 이벤트, 두 번째 실행 시 기존 창 복원, 최소화 복원과 종료를 확인할 수 있습니다. WebView의 타이머를 비활성화한 채 로컬 테스트 서버를 조회하여 접속 상태 갱신, 오류 후 재연결, 프로필 보관 후 조회 중단과 재선택 후 재개, 세션 삭제 후 조회 중단도 확인합니다. 별도 앱 식별자와 비공개 WebView 저장소를 사용하므로 기존 프로필을 읽거나 변경하지 않습니다. 검사 전용 자동 실행 항목을 잠시 등록했다가 제거하며 실제 Wappy의 자동 실행 설정은 건드리지 않습니다. 잠시 테스트 창과 트레이 아이콘이 나타났다가 종료됩니다.
 
 ```sh
 cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked
+cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked -- --autostart
 ```
 
 macOS의 투명 창은 `macOSPrivateApi`를 사용하므로 직접 배포를 전제로 합니다. Mac App Store 배포에는 투명 창 설정을 변경해야 합니다. [Tauri 설정 문서](https://v2.tauri.app/reference/config/#macosprivateapi)

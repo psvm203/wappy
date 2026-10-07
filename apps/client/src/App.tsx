@@ -29,6 +29,7 @@ import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
+import { StartupSettings } from "./StartupSettings";
 import {
   forgetSavedSession,
   loadSavedSessions,
@@ -606,6 +607,7 @@ function App() {
               {error}
             </p>
           )}
+          {desktop && <StartupSettings />}
         </div>
       ) : (
         <>
@@ -996,6 +998,7 @@ function App() {
                     프로필 보관하고 서버 바꾸기
                   </button>
                 </section>
+                {desktop && <StartupSettings />}
               </>
             )}
           </div>

@@ -1,6 +1,7 @@
 //! Run on a desktop after building the frontend:
 //! cargo run --example lifecycle --features tauri/custom-protocol
 //! Uses private browsing so the check cannot read or change a real profile.
+use client_lib::startup::Startup;
 use std::{
     io::{BufRead, BufReader, Write},
     net::TcpListener,
@@ -13,7 +14,40 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tauri::{Emitter, Listener, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
+
+struct StartupCleanup(Startup);
+impl Drop for StartupCleanup {
+    fn drop(&mut self) {
+        if let Err(error) = self.0.set_enabled(false) {
+            eprintln!("Could not remove the smoke check startup entry: {error}");
+        }
+    }
+}
+
+fn secondary_launch(app: &AppHandle, autostart: bool) -> Result<(), String> {
+    let mut command = Command::new(std::env::current_exe().map_err(|error| error.to_string())?);
+    command
+        .arg("--secondary")
+        .env("WAPPY_LIFECYCLE_ID", &app.config().identifier);
+    if autostart {
+        command.arg("--autostart");
+    }
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let mut status = None;
+    if let Err(error) = until(|| {
+        status = child.try_wait().ok().flatten();
+        status.is_some()
+    }) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!("Second instance did not exit: {error}"));
+    }
+    if !status.is_some_and(|status| status.success()) {
+        return Err("Second instance failed to hand over to the first".into());
+    }
+    Ok(())
+}
 
 fn until(mut check: impl FnMut() -> bool) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(10);
@@ -47,12 +81,13 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .eval(format!(
             r#"(() => {{
       const click = () => {{
-        const button = [...document.querySelectorAll('button')].find(button =>
+        const button = [...document.querySelectorAll('button,label')].find(button =>
           button.textContent.trim() === {label} || button.getAttribute('aria-label') === {label});
-        if (button && !button.disabled) {{ observer.disconnect(); button.click(); }}
+        const control = button?.querySelector('input') || button;
+        if (control && !control.disabled) {{ observer.disconnect(); control.click(); }}
       }};
       const observer = new MutationObserver(click);
-      observer.observe(document.body, {{ childList: true, subtree: true }});
+      observer.observe(document.body, {{ childList: true, subtree: true, attributes: true }});
       click();
     }})()"#
         ))
@@ -97,7 +132,15 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
 
 fn main() -> Result<(), String> {
     let mut context = tauri::generate_context!();
-    context.config_mut().identifier = "com.wappy.lifecycle-check".into();
+    context.config_mut().identifier = std::env::var("WAPPY_LIFECYCLE_ID")
+        .ok()
+        .filter(|id| {
+            id.strip_prefix("com.wappy.lifecycle-check-")
+                .is_some_and(|suffix| {
+                    !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
+                })
+        })
+        .unwrap_or_else(|| format!("com.wappy.lifecycle-check-{}", std::process::id()));
     for window in &mut context.config_mut().app.windows {
         window.incognito = true;
     }
@@ -134,6 +177,23 @@ fn main() -> Result<(), String> {
             let desktop = handle
                 .get_webview_window("desktop")
                 .ok_or("Missing character window")?;
+            let autostart = std::env::args().any(|arg| arg == "--autostart");
+            if sidebar.is_visible().unwrap_or(false) == autostart {
+                return Err("Initial sidebar visibility did not match the launch mode".into());
+            }
+            let startup = Startup::new(&handle)?;
+            if startup.is_enabled().map_err(|error| error.to_string())? {
+                return Err("The unique smoke check startup entry unexpectedly exists".into());
+            }
+            let startup = StartupCleanup(startup);
+            if client_lib::startup::set_startup_enabled(desktop.clone(), true).is_ok() {
+                return Err("The character window was allowed to change login startup".into());
+            }
+            click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
+            until(|| startup.0.is_enabled().unwrap_or(false))?;
+            // Wait for readback to re-enable the checkbox before toggling off.
+            click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
+            until(|| startup.0.is_enabled().is_ok_and(|enabled| !enabled))?;
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             if handle.get_webview_window("main").is_none() || !desktop.is_visible().unwrap_or(false)
@@ -211,23 +271,12 @@ fn main() -> Result<(), String> {
                 return Err("The previous session kept polling after page reload".into());
             }
 
-            let mut second =
-                Command::new(std::env::current_exe().map_err(|error| error.to_string())?)
-                    .arg("--secondary")
-                    .spawn()
-                    .map_err(|error| error.to_string())?;
-            let mut status = None;
-            if let Err(error) = until(|| {
-                status = second.try_wait().ok().flatten();
-                status.is_some()
-            }) {
-                let _ = second.kill();
-                let _ = second.wait();
-                return Err(format!("Second instance did not exit: {error}"));
+            secondary_launch(&handle, true)?;
+            thread::sleep(Duration::from_millis(500));
+            if sidebar.is_visible().unwrap_or(true) {
+                return Err("A duplicate login launch unexpectedly opened the sidebar".into());
             }
-            if !status.is_some_and(|status| status.success()) {
-                return Err("Second instance failed to hand over to the first".into());
-            }
+            secondary_launch(&handle, false)?;
             until(|| sidebar.is_visible().unwrap_or(false))?;
             sidebar.minimize().map_err(|error| error.to_string())?;
             until(|| sidebar.is_minimized().unwrap_or(false))?;
@@ -240,7 +289,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: native tray, close-to-hide, hidden controls and presence with WebView timers disabled, reconnect, saved profile pauses and resumes presence, session cleanup, single-instance reopen and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, hidden presence with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);
