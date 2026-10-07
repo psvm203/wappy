@@ -19,3 +19,4 @@ jobs:
       - run: pnpm exec turbo run build check-types test lint
       - run: cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
       - run: pnpm --filter client tauri build --debug --no-bundle
+      - run: cargo check --manifest-path apps/client/src-tauri/Cargo.toml --examples --features tauri/custom-protocol --locked

@@ -1,7 +1,89 @@
 import { useEffect, useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { isTauri, invoke } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { SidebarState } from "@wappy/api";
+import { loadCharacterPreferences, PREFERENCES_KEY } from "./preferences";
+
+export function useCharacterPreferences() {
+  const [preferences, setPreferences] = useState(() =>
+    loadCharacterPreferences(
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    ),
+  );
+  const [storageError, setStorageError] = useState("");
+  const [trayError, setTrayError] = useState("");
+  const [trayReady, setTrayReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+      setStorageError("");
+    } catch {
+      setStorageError(
+        "캐릭터 설정을 저장하지 못했어요. 이번 실행에만 적용됩니다.",
+      );
+    }
+  }, [preferences]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () =>
+      setPreferences((current) => ({ ...current, paused: media.matches }));
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    void listen<string>("wappy:tray-control", ({ payload }) => {
+      if (disposed) return;
+      if (payload === "toggle-paused")
+        setPreferences((current) => ({ ...current, paused: !current.paused }));
+      if (payload === "toggle-visible")
+        setPreferences((current) => ({
+          ...current,
+          visible: !current.visible,
+        }));
+    })
+      .then((stop) => {
+        if (disposed) return stop();
+        unlisten = stop;
+        setTrayReady(true);
+      })
+      .catch(() => {
+        if (!disposed)
+          setTrayError(
+            "트레이 제어를 연결하지 못했어요. 사이드바에서 캐릭터를 제어해 주세요.",
+          );
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!trayReady) return;
+    let disposed = false;
+    void invoke("sync_tray_controls", { ...preferences })
+      .then(() => {
+        if (!disposed) setTrayError("");
+      })
+      .catch(() => {
+        if (!disposed)
+          setTrayError(
+            "트레이 메뉴를 갱신하지 못했어요. 사이드바에서 캐릭터를 제어해 주세요.",
+          );
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [preferences, trayReady]);
+
+  return { preferences, setPreferences, error: storageError || trayError };
+}
 
 export interface DesktopSnapshot {
   state: SidebarState | null;

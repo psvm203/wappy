@@ -1,5 +1,8 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+mod tray;
+pub use tray::show_sidebar;
+
 fn raise_desktop(desktop: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     return desktop.with_webview(|webview| unsafe {
@@ -99,10 +102,18 @@ fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> 
     ))
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
+/// Shared by the desktop entry point and the native lifecycle smoke check.
+pub fn app_builder() -> tauri::Builder<tauri::Wry> {
+    let builder = tauri::Builder::default();
+    #[cfg(any(target_os = "macos", windows))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Err(error) = show_sidebar(app) {
+            eprintln!("Could not restore the running Wappy instance: {error}");
+        }
+    }));
+    builder
         .setup(|app| {
+            tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window, false)?;
                 window.show()?;
@@ -129,6 +140,12 @@ pub fn run() {
                 return;
             }
             match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    if let Err(error) = window.hide() {
+                        eprintln!("Could not hide the sidebar: {error}");
+                    }
+                }
                 WindowEvent::Destroyed => window.app_handle().exit(0),
                 WindowEvent::Moved(_)
                 | WindowEvent::ScaleFactorChanged { .. }
@@ -150,8 +167,22 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_sidebar_compact,
             set_sidebar_pinned,
-            desktop_cursor_position
+            desktop_cursor_position,
+            tray::sync_tray_controls
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    app_builder()
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if matches!(_event, tauri::RunEvent::Reopen { .. }) {
+                if let Err(error) = tray::show_sidebar(_app) {
+                    eprintln!("Could not reopen the sidebar: {error}");
+                }
+            }
+        });
 }

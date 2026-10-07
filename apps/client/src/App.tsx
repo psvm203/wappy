@@ -18,7 +18,7 @@ import {
   serverUrl,
 } from "./api";
 import { Character } from "./Character";
-import { useDesktopSync } from "./desktop";
+import { useCharacterPreferences, useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import "./App.css";
@@ -43,25 +43,21 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
-  const [motionPaused, setMotionPaused] = useState(
-    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  const [charactersVisible, setCharactersVisible] = useState(true);
+  const {
+    preferences,
+    setPreferences,
+    error: preferencesError,
+  } = useCharacterPreferences();
+  const { paused: motionPaused, visible: charactersVisible } = preferences;
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
-  const desktopError = useDesktopSync({
+  const syncError = useDesktopSync({
     state,
     connected: connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
   });
-
-  useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setMotionPaused(preference.matches);
-    preference.addEventListener("change", update);
-    return () => preference.removeEventListener("change", update);
-  }, []);
+  const desktopError = preferencesError || syncError;
 
   useEffect(() => {
     if (!session) return;
@@ -245,7 +241,12 @@ function App() {
         <button
           className="text-button"
           disabled={!desktop}
-          onClick={() => setMotionPaused(!motionPaused)}
+          onClick={() =>
+            setPreferences((current) => ({
+              ...current,
+              paused: !current.paused,
+            }))
+          }
           aria-label={
             motionPaused ? "캐릭터 움직임 다시 시작" : "캐릭터 움직임 멈추기"
           }
@@ -262,7 +263,12 @@ function App() {
         <button
           className="text-button"
           disabled={!desktop}
-          onClick={() => setCharactersVisible(!charactersVisible)}
+          onClick={() =>
+            setPreferences((current) => ({
+              ...current,
+              visible: !current.visible,
+            }))
+          }
           aria-label={
             charactersVisible
               ? "바탕화면 캐릭터 숨기기"
@@ -279,6 +285,12 @@ function App() {
               : "캐릭터 표시"}
         </button>
       </div>
+      {desktop && (
+        <p className="hint">
+          닫아도 캐릭터는 남아요. 메뉴 막대·트레이에서 다시 열거나 종료할 수
+          있어요.
+        </p>
+      )}
     </section>
   );
 
@@ -380,8 +392,8 @@ function App() {
             </button>
             <button
               className="icon-button"
-              aria-label="앱 종료"
-              title="앱 종료"
+              aria-label="사이드바 숨기기"
+              title="사이드바 숨기기 — 메뉴 막대·트레이에서 다시 열 수 있어요"
               onClick={() =>
                 void windowAction(() => getCurrentWindow().close())
               }
