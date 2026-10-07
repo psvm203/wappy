@@ -146,6 +146,48 @@
   flex-direction: column;
   gap: 11px;
 }
+.friend-filters {
+  margin-bottom: 16px;
+}
+.friend-filters .field {
+  margin-bottom: 9px;
+}
+.friend-views {
+  display: flex;
+  gap: 5px;
+}
+.friend-views button {
+  flex: 1;
+  padding: 9px 5px;
+  border-radius: 8px;
+  background: #f0f1e9;
+  color: #68745e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.friend-views button[aria-pressed="true"] {
+  background: #e3edd3;
+  color: #374936;
+  font-weight: 700;
+}
+.friend-views span {
+  font-size: 10px;
+}
+.friend-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 34px;
+}
+.friend-results p {
+  margin: 0;
+  color: #68745e;
+  font-size: 10px;
+}
+.friend-filter-empty {
+  padding: 20px 10px;
+}
 .friend-card {
   display: flex;
   align-items: center;

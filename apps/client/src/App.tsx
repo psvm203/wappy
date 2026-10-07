@@ -40,6 +40,7 @@ import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
 import { FriendGreeting } from "./FriendGreeting";
+import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
 import { reconcilePresence } from "./presence";
 import {
@@ -85,6 +86,9 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
+  const [friendQuery, setFriendQuery] = useState("");
+  const [friendView, setFriendView] = useState<FriendView>("all");
+  const friendSearch = useRef<HTMLInputElement>(null);
   const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
     null,
   );
@@ -116,6 +120,8 @@ function App() {
       if (currentSession.current !== session) return;
       setCompact(false);
       setPanel("friends");
+      setFriendQuery("");
+      setFriendView("all");
       setGreetingTarget(target);
     });
   });
@@ -149,6 +155,8 @@ function App() {
     currentSession.current = next;
     setSession(next);
     setPresenceStatus("ready");
+    setFriendQuery("");
+    setFriendView("all");
   }
 
   function applyState(next: SidebarState) {
@@ -382,6 +390,8 @@ function App() {
     setCode("");
     setNotice(`${friend.name} 님과 친구가 되었어요.`);
     setPanel("friends");
+    setFriendQuery("");
+    setFriendView("all");
     applyState(
       parseSidebarState(await request(current, "GET /state", undefined)),
     );
@@ -430,6 +440,17 @@ function App() {
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
   const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
+  const listedFriends = filterFriends(
+    state?.friends ?? [],
+    friendQuery,
+    friendView,
+    connection === "online",
+  );
+  function resetFriendFilters() {
+    setFriendQuery("");
+    setFriendView("all");
+    friendSearch.current?.focus();
+  }
   const presenceHidden =
     connection === "online" &&
     presenceStatus === "ready" &&
@@ -887,10 +908,63 @@ function App() {
                 {desktopControls}
                 {presenceControls}
                 {state.friends.length > 0 && (
-                  <p className="hint greeting-hint">
-                    손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
-                    전까지 최근 인사 하나를 하루 동안 보관해요.
-                  </p>
+                  <>
+                    <p className="hint greeting-hint">
+                      손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
+                      전까지 최근 인사 하나를 하루 동안 보관해요.
+                    </p>
+                    <section className="friend-filters" aria-label="친구 찾기">
+                      <label className="field friend-search">
+                        이름이나 상태로 찾기
+                        <input
+                          ref={friendSearch}
+                          type="search"
+                          maxLength={120}
+                          value={friendQuery}
+                          placeholder="이름, 상태 검색"
+                          onChange={(event) =>
+                            setFriendQuery(event.target.value)
+                          }
+                        />
+                      </label>
+                      <div
+                        className="friend-views"
+                        role="group"
+                        aria-label="친구 목록 보기"
+                      >
+                        {(
+                          [
+                            ["all", "전체", state.friends.length],
+                            ["online", "접속 중", onlineCount],
+                            ["waves", "새 인사", waveCount],
+                          ] as const
+                        ).map(([view, label, count]) => (
+                          <button
+                            key={view}
+                            id={`friend-view-${view}`}
+                            aria-pressed={friendView === view}
+                            onClick={() => setFriendView(view)}
+                          >
+                            {label} <span>{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="friend-results">
+                        <p role="status">
+                          {listedFriends.length}명 표시 · 전체{" "}
+                          {state.friends.length}명
+                        </p>
+                        {(friendQuery || friendView !== "all") && (
+                          <button
+                            className="text-button"
+                            onClick={resetFriendFilters}
+                          >
+                            필터 초기화
+                          </button>
+                        )}
+                      </div>
+                    </section>
+                  </>
                 )}
                 {state.friends.length === 0 ? (
                   <div className="empty-state invitation-empty">
@@ -907,106 +981,128 @@ function App() {
                       첫 친구 초대하기 <span aria-hidden="true">+</span>
                     </button>
                   </div>
+                ) : listedFriends.length === 0 ? (
+                  <div className="empty-state friend-filter-empty">
+                    <h2>
+                      {friendView === "online" && connection !== "online"
+                        ? "접속 상태를 확인할 수 없어요."
+                        : friendView === "waves" && !friendQuery.trim()
+                          ? "새 인사가 아직 없어요."
+                          : "조건에 맞는 친구가 없어요."}
+                    </h2>
+                    <p>
+                      {friendView === "online" && connection !== "online"
+                        ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록과 받은 인사는 계속 볼 수 있어요."
+                        : "검색어나 목록 보기를 바꾸면 다른 친구도 볼 수 있어요."}
+                    </p>
+                  </div>
                 ) : (
                   <ul className="friend-list">
-                    {[...state.friends]
-                      .sort((a, b) => Number(b.online) - Number(a.online))
-                      .map((friend) => (
-                        <li
-                          id={`friend-${friend.id}`}
-                          tabIndex={-1}
-                          aria-label={`${friend.name} 님의 친구 카드`}
-                          className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
-                          key={friend.id}
-                        >
-                          <div className="friend-scene">
-                            <Character
-                              kind={friend.character}
-                              asleep={!friend.online || connection !== "online"}
+                    {listedFriends.map((friend) => (
+                      <li
+                        id={`friend-${friend.id}`}
+                        tabIndex={-1}
+                        aria-label={`${friend.name} 님의 친구 카드`}
+                        className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
+                        key={friend.id}
+                      >
+                        <div className="friend-scene">
+                          <Character
+                            kind={friend.character}
+                            asleep={!friend.online || connection !== "online"}
+                          />
+                          <div className="scene-floor" />
+                        </div>
+                        <div className="friend-info">
+                          <div className="friend-name">
+                            <strong>{friend.name}</strong>
+                            <span
+                              className={`online-dot ${!friend.online || connection !== "online" ? "offline" : ""}`}
                             />
-                            <div className="scene-floor" />
                           </div>
-                          <div className="friend-info">
-                            <div className="friend-name">
-                              <strong>{friend.name}</strong>
-                              <span
-                                className={`online-dot ${!friend.online || connection !== "online" ? "offline" : ""}`}
-                              />
-                            </div>
-                            <p>{friend.status || "그냥, 함께 있는 중"}</p>
-                            <small>
-                              {connection !== "online"
-                                ? "접속 상태 확인 중"
-                                : friend.online
-                                  ? "지금 함께 있어요"
-                                  : "잠시 쉬고 있어요"}
-                            </small>
-                            <FriendGreeting
-                              friend={friend}
-                              disabled={busy || connection !== "online"}
-                              onSend={() =>
+                          <p>{friend.status || "그냥, 함께 있는 중"}</p>
+                          <small>
+                            {connection !== "online"
+                              ? "접속 상태 확인 중"
+                              : friend.online
+                                ? "지금 함께 있어요"
+                                : "잠시 쉬고 있어요"}
+                          </small>
+                          <FriendGreeting
+                            friend={friend}
+                            disabled={busy || connection !== "online"}
+                            onSend={() =>
+                              void action(async () => {
+                                await request(session, "POST /friends/wave", {
+                                  friendId: friend.id,
+                                });
+                                setNotice(
+                                  `${friend.name} 님에게 인사를 보냈어요.`,
+                                );
+                              })
+                            }
+                            onRead={() =>
+                              void action(async () => {
+                                if (!friend.wave) return;
+                                // The read button is disabled, then removed. Move focus before
+                                // waiting so a late response cannot interrupt new input.
+                                document
+                                  .getElementById(
+                                    friendView === "waves"
+                                      ? "friend-view-waves"
+                                      : `friend-${friend.id}`,
+                                  )
+                                  ?.focus({ preventScroll: true });
+                                await request(session, "POST /waves/read", {
+                                  waveId: friend.wave.id,
+                                });
+                                await refresh();
+                              })
+                            }
+                          />
+                        </div>
+                        <button
+                          className="remove-button"
+                          aria-label={`${friend.name} 친구 연결 해제`}
+                          title="친구 연결 해제"
+                          onClick={() =>
+                            setRemoving(
+                              removing === friend.id ? null : friend.id,
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                        {removing === friend.id && (
+                          <div className="remove-confirm">
+                            <p>{friend.name} 님과 연결을 해제할까요?</p>
+                            <button
+                              className="text-button"
+                              onClick={() => setRemoving(null)}
+                            >
+                              취소
+                            </button>
+                            <button
+                              className="text-button danger"
+                              disabled={busy}
+                              onClick={() =>
                                 void action(async () => {
-                                  await request(session, "POST /friends/wave", {
-                                    friendId: friend.id,
-                                  });
-                                  setNotice(
-                                    `${friend.name} 님에게 인사를 보냈어요.`,
+                                  await request(
+                                    session,
+                                    "POST /friends/remove",
+                                    { friendId: friend.id },
                                   );
-                                })
-                              }
-                              onRead={() =>
-                                void action(async () => {
-                                  if (!friend.wave) return;
-                                  await request(session, "POST /waves/read", {
-                                    waveId: friend.wave.id,
-                                  });
+                                  setRemoving(null);
                                   await refresh();
                                 })
                               }
-                            />
+                            >
+                              연결 해제
+                            </button>
                           </div>
-                          <button
-                            className="remove-button"
-                            aria-label={`${friend.name} 친구 연결 해제`}
-                            title="친구 연결 해제"
-                            onClick={() =>
-                              setRemoving(
-                                removing === friend.id ? null : friend.id,
-                              )
-                            }
-                          >
-                            ×
-                          </button>
-                          {removing === friend.id && (
-                            <div className="remove-confirm">
-                              <p>{friend.name} 님과 연결을 해제할까요?</p>
-                              <button
-                                className="text-button"
-                                onClick={() => setRemoving(null)}
-                              >
-                                취소
-                              </button>
-                              <button
-                                className="text-button danger"
-                                disabled={busy}
-                                onClick={() =>
-                                  void action(async () => {
-                                    await request(
-                                      session,
-                                      "POST /friends/remove",
-                                      { friendId: friend.id },
-                                    );
-                                    setRemoving(null);
-                                    await refresh();
-                                  })
-                                }
-                              >
-                                연결 해제
-                              </button>
-                            </div>
-                          )}
-                        </li>
-                      ))}
+                        )}
+                      </li>
+                    ))}
                   </ul>
                 )}
                 <div className="little-note">

@@ -360,12 +360,30 @@ fn main() -> Result<(), String> {
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("An invalid or stale greeting shortcut opened the sidebar".into());
             }
+            click_button(&sidebar, "새 인사 1")?;
+            sidebar.eval(r#"(() => {
+                const input = document.querySelector('.friend-search input');
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-matching-friend');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            })()"#).map_err(|error| error.to_string())?;
+            text_rendered(
+                &sidebar,
+                ".friend-filter-empty",
+                "조건에 맞는 친구가 없어요.",
+                true,
+            )?;
             click_button(&sidebar, "접기 ⇥")?;
             text_rendered(&sidebar, ".compact-sidebar", "", true)?;
             click_button(&desktop, "Friend 님의 인사 보기")?;
             until(|| sidebar.is_visible().unwrap_or(false))?;
             text_rendered(&sidebar, ".sidebar:not(.compact-sidebar)", "", true)?;
             text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
+            text_rendered(
+                &sidebar,
+                ".friend-views [aria-pressed='true']",
+                "전체",
+                true,
+            )?;
             text_rendered(&sidebar, ".received-wave", "인사를 보냈어요", true)?;
             text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
             sidebar.minimize().map_err(|error| error.to_string())?;
