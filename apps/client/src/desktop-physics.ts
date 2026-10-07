@@ -91,11 +91,30 @@ export function releaseVelocity(samples: DragSample[], now: number) {
   return { vx: vx * scale, vy: vy * scale };
 }
 
-function turn(body: Body, target: number, dt: number) {
-  const difference = Math.atan2(
-    Math.sin(target - body.angle),
-    Math.cos(target - body.angle),
+function angleDifference(angle: number, target: number) {
+  return Math.atan2(Math.sin(target - angle), Math.cos(target - angle));
+}
+
+export function needsAnimation(
+  body: Body,
+  width: number,
+  height: number,
+  walking: boolean,
+) {
+  if (body.mode === "air") return true;
+  if (body.mode === "drag")
+    return Math.abs(angleDifference(body.angle, 0)) > 0.001;
+  if (walking) return true; // Resting pets still need their wake-up timer.
+  const pose = walkPose(body, width, height);
+  return (
+    body.x !== pose.x ||
+    body.y !== pose.y ||
+    Math.abs(angleDifference(body.angle, pose.angle)) > 0.001
   );
+}
+
+function turn(body: Body, target: number, dt: number) {
+  const difference = angleDifference(body.angle, target);
   body.angle += difference * Math.min(1, dt * 14);
 }
 

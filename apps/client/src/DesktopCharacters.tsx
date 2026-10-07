@@ -8,6 +8,7 @@ import {
   CHARACTER_SIZE,
   createBody,
   moveBody,
+  needsAnimation,
   releaseVelocity,
   type Body,
   type DragSample,
@@ -51,8 +52,7 @@ export function DesktopCharacters({
 }) {
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  const wakeAnimation = useRef(() => {});
 
   useLayoutEffect(() => {
     const ids = new Set(residents.map((profile) => profile.id));
@@ -62,35 +62,63 @@ export function DesktopCharacters({
   }, [residents]);
 
   useEffect(() => {
-    let frame: number;
+    let frame: number | null = null;
     let previous = performance.now();
+    const moving = (resident: Resident) =>
+      needsAnimation(resident.body, innerWidth, innerHeight, resident.walking);
+    const schedule = () => {
+      if (!paused && [...entries.current.values()].some(moving))
+        frame = requestAnimationFrame(animate);
+    };
     const animate = (now: number) => {
+      frame = null;
       const elapsed = (now - previous) / 1000;
       previous = now;
       for (const resident of entries.current.values()) {
-        if (!pausedRef.current)
-          advanceBody(
-            resident.body,
-            elapsed,
-            innerWidth,
-            innerHeight,
-            resident.walking,
-          );
-        else
-          moveBody(
-            resident.body,
-            resident.body.x,
-            resident.body.y,
-            innerWidth,
-            innerHeight,
-          );
+        if (!moving(resident)) continue;
+        advanceBody(
+          resident.body,
+          elapsed,
+          innerWidth,
+          innerHeight,
+          resident.walking,
+        );
         draw(resident);
       }
-      frame = requestAnimationFrame(animate);
+      schedule();
     };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+    const wake = () => {
+      if (frame !== null) return;
+      previous = performance.now();
+      schedule();
+    };
+    const resize = () => {
+      for (const resident of entries.current.values()) {
+        moveBody(
+          resident.body,
+          resident.body.x,
+          resident.body.y,
+          innerWidth,
+          innerHeight,
+        );
+        draw(resident);
+      }
+      wake();
+    };
+    wakeAnimation.current = wake;
+    wake();
+    window.addEventListener("resize", resize);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", resize);
+      wakeAnimation.current = () => {};
+    };
+  }, [paused]);
+
+  useEffect(() => {
+    // Presence changes can wake an idle scene without resetting a running frame clock.
+    wakeAnimation.current();
+  }, [residents]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -155,6 +183,7 @@ export function DesktopCharacters({
       samples: [{ x: body.x, y: body.y, time: event.timeStamp }],
     };
     draw(resident);
+    wakeAnimation.current();
   }
 
   function moveDrag(event: PointerEvent<HTMLElement>) {
@@ -194,6 +223,7 @@ export function DesktopCharacters({
       );
       resident.body.mode = "air";
       draw(resident);
+      wakeAnimation.current();
     }
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId))

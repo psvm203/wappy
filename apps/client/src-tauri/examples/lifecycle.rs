@@ -117,7 +117,7 @@ fn text_rendered(
         }}
       }};
       const observer = new MutationObserver(check);
-      observer.observe(document.body, {{ childList: true, subtree: true, characterData: true }});
+      observer.observe(document.body, {{ childList: true, subtree: true, characterData: true, attributes: true }});
       check();
     }})()"#)).map_err(|error| error.to_string())?;
     let result = received
@@ -125,6 +125,24 @@ fn text_rendered(
         .map_err(|error| {
             format!("Expected UI did not render ({selector}, present={present}): {error}")
         });
+    window.app_handle().unlisten(listener);
+    result
+}
+
+fn animation_frames(window: &tauri::WebviewWindow) -> Result<u64, String> {
+    let (sent, received) = mpsc::channel();
+    let listener = window
+        .app_handle()
+        .listen_any("wappy:lifecycle-frames", move |event| {
+            if let Ok(count) = serde_json::from_str::<u64>(event.payload()) {
+                let _ = sent.send(count);
+            }
+        });
+    window.eval("window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', { target: { kind: 'AnyLabel', label: 'main' }, event: 'wappy:lifecycle-frames', payload: window.__wappyFrames });")
+        .map_err(|error| error.to_string())?;
+    let result = received
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|error| format!("Animation frame count was not received: {error}"));
     window.app_handle().unlisten(listener);
     result
 }
@@ -182,7 +200,17 @@ fn main() -> Result<(), String> {
     let app = client_lib::app_builder()
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("disable-webview-timers")
-                .js_init_script("window.setTimeout = () => 0; window.setInterval = () => 0;")
+                .js_init_script(
+                    r#"
+                    window.setTimeout = () => 0; window.setInterval = () => 0;
+                    window.__wappyFrames = 0;
+                    const raf = window.requestAnimationFrame.bind(window);
+                    window.requestAnimationFrame = callback => raf(now => {
+                        window.__wappyFrames++;
+                        callback(now);
+                    });
+                "#,
+                )
                 .build(),
         )
         .build(context)
@@ -284,8 +312,27 @@ fn main() -> Result<(), String> {
             handle
                 .emit_to("main", "wappy:tray-control", "toggle-visible")
                 .map_err(|error| error.to_string())?;
-            snapshot(&received, |value| value["visible"] == true)?;
+            let shown = snapshot(&received, |value| value["visible"] == true)?;
             text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            if shown["paused"] != true {
+                click_button(&sidebar, "캐릭터 움직임 멈추기")?;
+            }
+            text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
+            // Count real WebView animation callbacks, rather than only checking the pause flag.
+            thread::sleep(Duration::from_millis(100));
+            let idle_frames = animation_frames(&desktop)?;
+            thread::sleep(Duration::from_millis(500));
+            if animation_frames(&desktop)? != idle_frames {
+                return Err("Paused characters continued to request animation frames".into());
+            }
+            click_button(&sidebar, "캐릭터 움직임 다시 시작")?;
+            text_rendered(&desktop, ".desktop-characters.is-paused", "", false)?;
+            thread::sleep(Duration::from_millis(500));
+            if animation_frames(&desktop)? <= idle_frames {
+                return Err("Characters did not resume animation after unpausing".into());
+            }
+            click_button(&sidebar, "캐릭터 움직임 멈추기")?;
+            text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             text_rendered(
                 &sidebar,
                 ".presence-controls [role='status']",
@@ -368,7 +415,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, hidden presence and greeting bubbles with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);

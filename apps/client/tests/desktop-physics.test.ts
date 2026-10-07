@@ -4,11 +4,36 @@ import {
   advanceBody,
   createBody,
   moveBody,
+  needsAnimation,
   releaseVelocity,
 } from "../src/desktop-physics.ts";
 
 const width = 1470,
   height = 923;
+
+test("idle bodies sleep, but resize, rotation, flight and online rest keep needed frames", () => {
+  const body = createBody("idle", width, height);
+  assert.equal(needsAnimation(body, width, height, false), false);
+  assert.equal(needsAnimation(body, width, height, true), true);
+  body.restTime = 1;
+  assert.equal(needsAnimation(body, width, height, true), true);
+  body.angle += 2 * Math.PI;
+  assert.equal(needsAnimation(body, width, height, false), false);
+  assert.equal(needsAnimation(body, 640, 480, false), true);
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, 640, 480, false);
+  assert.equal(needsAnimation(body, 640, 480, false), false);
+  body.mode = "drag";
+  body.angle = Math.PI;
+  assert.equal(needsAnimation(body, width, height, false), true);
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, false);
+  assert.equal(needsAnimation(body, width, height, false), false);
+  Object.assign(body, { mode: "air", x: 700, y: 400, vx: 1400, vy: 200 });
+  assert.equal(needsAnimation(body, width, height, false), true);
+  for (let i = 0; i < 1200 && needsAnimation(body, width, height, false); i++)
+    advanceBody(body, 1 / 60, width, height, false);
+  assert.equal(body.mode, "walk");
+  assert.equal(needsAnimation(body, width, height, false), false);
+});
 
 test("automatic walking covers all four edges without leaving the screen", (t) => {
   t.mock.method(Math, "random", () => 0.5);
