@@ -94,29 +94,38 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .map_err(|error| error.to_string())
 }
 
-fn wave_rendered(desktop: &tauri::WebviewWindow, present: bool) -> Result<(), String> {
+fn text_rendered(
+    window: &tauri::WebviewWindow,
+    selector: &str,
+    text: &str,
+    present: bool,
+) -> Result<(), String> {
+    let selector = serde_json::to_string(selector).map_err(|error| error.to_string())?;
+    let text = serde_json::to_string(text).map_err(|error| error.to_string())?;
     let (sent, received) = mpsc::channel();
-    let listener = desktop
+    let listener = window
         .app_handle()
-        .listen_any("wappy:lifecycle-wave", move |_| {
+        .listen_any("wappy:lifecycle-rendered", move |_| {
             let _ = sent.send(());
         });
-    desktop.eval(format!(r#"(() => {{
+    window.eval(format!(r#"(() => {{
       const check = () => {{
-        const bubble = document.querySelector('.resident-wave');
-        if (!!bubble === {present} && (!bubble || bubble.textContent.includes('안녕!'))) {{
+        const element = document.querySelector({selector});
+        if (!!element === {present} && (!element || element.textContent.includes({text}))) {{
           observer.disconnect();
-          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-wave', payload: null }});
+          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-rendered', payload: null }});
         }}
       }};
       const observer = new MutationObserver(check);
-      observer.observe(document.body, {{ childList: true, subtree: true }});
+      observer.observe(document.body, {{ childList: true, subtree: true, characterData: true }});
       check();
     }})()"#)).map_err(|error| error.to_string())?;
     let result = received
         .recv_timeout(Duration::from_secs(5))
-        .map_err(|error| format!("Desktop greeting did not render (present={present}): {error}"));
-    desktop.app_handle().unlisten(listener);
+        .map_err(|error| {
+            format!("Expected UI did not render ({selector}, present={present}): {error}")
+        });
+    window.app_handle().unlisten(listener);
     result
 }
 
@@ -149,7 +158,7 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
                 break;
             }
             let status = if index == 1 { 503 } else { 200 };
-            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#;
+            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#;
             let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }
     });
@@ -257,6 +266,9 @@ fn main() -> Result<(), String> {
                 if update["state"]["friends"][0]["wave"]["id"] != "native-wave" {
                     return Err("The native connection dropped an incoming greeting".into());
                 }
+                if update["state"]["presence"]["sharing"] != false {
+                    return Err("The native connection dropped the private presence setting".into());
+                }
                 if sidebar.is_visible().unwrap_or(true) {
                     return Err("The presence check unexpectedly showed the sidebar".into());
                 }
@@ -273,7 +285,13 @@ fn main() -> Result<(), String> {
                 .emit_to("main", "wappy:tray-control", "toggle-visible")
                 .map_err(|error| error.to_string())?;
             snapshot(&received, |value| value["visible"] == true)?;
-            wave_rendered(&desktop, true)?;
+            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            text_rendered(
+                &sidebar,
+                ".presence-controls [role='status']",
+                "친구에게 오프라인으로 보여요.",
+                true,
+            )?;
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("An incoming greeting unexpectedly opened the sidebar".into());
             }
@@ -281,7 +299,7 @@ fn main() -> Result<(), String> {
             click_button(&sidebar, "내 모습")?;
             click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
             snapshot(&received, |value| value["state"].is_null())?;
-            wave_rendered(&desktop, false)?;
+            text_rendered(&desktop, ".resident-wave", "", false)?;
             if !matches!(
                 requests.recv_timeout(Duration::from_secs(6)),
                 Err(mpsc::RecvTimeoutError::Timeout)

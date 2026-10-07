@@ -104,6 +104,11 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS recovery_codes (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS presence_settings (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
+      revision INTEGER NOT NULL CHECK (revision >= 1)
+    ) STRICT;
     CREATE TABLE IF NOT EXISTS waves (
       id TEXT NOT NULL UNIQUE,
       user_id TEXT NOT NULL, friend_id TEXT NOT NULL, sender_id TEXT NOT NULL,
@@ -255,9 +260,11 @@ export function createApp(options: {
           lastSeen.set(self!.id, time);
           const rows = db
             .prepare(
-              `SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at
+              `SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at,
+              COALESCE(p.sharing, 1) AS sharing
             FROM friendships f
             JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+            LEFT JOIN presence_settings p ON p.user_id = u.id
             LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
               AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
             WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id`,
@@ -270,18 +277,31 @@ export function createApp(options: {
             ) as unknown as (Profile & {
             wave_id: string | null;
             wave_sent_at: number | null;
+            sharing: number;
           })[];
+          const presence = db
+            .prepare(
+              "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
+            )
+            .get(self!.id);
           reply(res, route, {
             self: self!,
-            friends: rows.map(({ wave_id, wave_sent_at, ...friend }) => ({
-              ...friend,
-              online:
-                lastSeen.has(friend.id) &&
-                time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
-              ...(wave_id && wave_sent_at !== null
-                ? { wave: { id: wave_id, sentAt: wave_sent_at } }
-                : {}),
-            })),
+            presence: {
+              sharing: presence ? presence.sharing === 1 : true,
+              revision: presence ? Number(presence.revision) : 0,
+            },
+            friends: rows.map(
+              ({ wave_id, wave_sent_at, sharing, ...friend }) => ({
+                ...friend,
+                online:
+                  sharing === 1 &&
+                  lastSeen.has(friend.id) &&
+                  time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+                ...(wave_id && wave_sent_at !== null
+                  ? { wave: { id: wave_id, sentAt: wave_sent_at } }
+                  : {}),
+              }),
+            ),
           });
           break;
         }
@@ -296,6 +316,26 @@ export function createApp(options: {
             "UPDATE users SET name = ?, character = ?, status = ? WHERE id = ?",
           ).run(input.name, input.character, input.status, self!.id);
           reply(res, route, { ...input, id: self!.id });
+          break;
+        }
+        case "PATCH /presence": {
+          if (!isRecord(body) || typeof body.sharing !== "boolean")
+            throw new HttpError(400, "접속 공개 여부를 확인해 주세요.");
+          const setting = db
+            .prepare(
+              `
+            INSERT INTO presence_settings (user_id, sharing, revision) VALUES (?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET sharing = excluded.sharing,
+              revision = presence_settings.revision + 1
+            RETURNING sharing, revision
+          `,
+            )
+            .get(self!.id, Number(body.sharing))!;
+          lastSeen.set(self!.id, now());
+          reply(res, route, {
+            sharing: setting.sharing === 1,
+            revision: Number(setting.revision),
+          });
           break;
         }
         case "POST /invites": {

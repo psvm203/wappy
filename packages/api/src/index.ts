@@ -33,6 +33,12 @@ export interface Wave {
 export interface SidebarState {
   self: Profile;
   friends: Friend[];
+  /** Private to the authenticated profile; absent on servers without this feature. */
+  presence?: PresenceSettings;
+}
+export interface PresenceSettings {
+  sharing: boolean;
+  revision: number;
 }
 export interface Session {
   token: string;
@@ -56,6 +62,7 @@ export interface ApiRoutes {
   };
   "GET /state": { input: undefined; output: SidebarState };
   "PATCH /profile": { input: ProfileInput; output: Profile };
+  "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/accept": { input: { code: string }; output: Profile };
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
@@ -68,6 +75,18 @@ export type Output<R extends Route> = ApiRoutes[R]["output"];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parsePresenceSettings(value: unknown): PresenceSettings {
+  if (
+    !isRecord(value) ||
+    typeof value.sharing !== "boolean" ||
+    typeof value.revision !== "number" ||
+    !Number.isSafeInteger(value.revision) ||
+    value.revision < 0
+  )
+    throw new Error("잘못된 접속 공개 설정입니다.");
+  return { sharing: value.sharing, revision: value.revision };
 }
 
 /** Runtime validation at the HTTP boundary; TypeScript alone cannot validate JSON. */
@@ -138,5 +157,11 @@ export function parseSidebarState(value: unknown): SidebarState {
     }
     return { ...parsed, online: friend.online, ...(wave ? { wave } : {}) };
   });
-  return { self, friends };
+  return {
+    self,
+    friends,
+    ...(value.presence === undefined
+      ? {}
+      : { presence: parsePresenceSettings(value.presence) }),
+  };
 }

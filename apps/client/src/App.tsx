@@ -9,6 +9,7 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   parseSidebarState,
+  parsePresenceSettings,
   type Invite,
   type ProfileInput,
   type Session,
@@ -31,6 +32,8 @@ import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
 import { FriendGreeting } from "./FriendGreeting";
+import { PresenceControl } from "./PresenceControl";
+import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
   loadSavedSessions,
@@ -64,6 +67,9 @@ function App() {
   const [invite, setInvite] = useState<Invite | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [presenceStatus, setPresenceStatus] = useState<
+    "ready" | "pending" | "unknown"
+  >("ready");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
@@ -91,13 +97,18 @@ function App() {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
     currentSession.current = next;
     setSession(next);
+    setPresenceStatus("ready");
+  }
+
+  function applyState(next: SidebarState) {
+    setState((current) => reconcilePresence(current, next));
   }
 
   useEffect(() => {
     if (!session) return;
     return subscribeState(session, (update) => {
       if (currentSession.current !== session) return;
-      if (update.connection === "online") setState(update.state);
+      if (update.connection === "online") applyState(update.state);
       setConnection(update.connection);
     });
   }, [session]);
@@ -123,11 +134,56 @@ function App() {
 
   async function refresh() {
     if (session) {
-      setState(
-        parseSidebarState(await request(session, "GET /state", undefined)),
+      const next = parseSidebarState(
+        await request(session, "GET /state", undefined),
       );
-      setConnection("online");
+      if (currentSession.current === session) {
+        applyState(next);
+        setConnection("online");
+      }
+      return next;
     }
+  }
+
+  function changePresence(sharing: boolean) {
+    if (!session) return;
+    void action(async () => {
+      setPresenceStatus("pending");
+      try {
+        const presence = parsePresenceSettings(
+          await request(session, "PATCH /presence", { sharing }),
+        );
+        setState((current) =>
+          current
+            ? reconcilePresence(current, { ...current, presence })
+            : current,
+        );
+        setPresenceStatus("ready");
+      } catch (cause) {
+        // A lost response can still mean the server applied the change.
+        setPresenceStatus("unknown");
+        try {
+          const next = await refresh();
+          if (next?.presence) setPresenceStatus("ready");
+        } catch {
+          /* Keep the status unknown until an explicit retry succeeds. */
+        }
+        throw cause;
+      }
+    });
+  }
+
+  function retryPresence() {
+    void action(async () => {
+      setPresenceStatus("pending");
+      try {
+        const next = await refresh();
+        setPresenceStatus(next?.presence ? "ready" : "unknown");
+      } catch (cause) {
+        setPresenceStatus("unknown");
+        throw cause;
+      }
+    });
   }
 
   function connectSession(address: string, created: Session) {
@@ -275,7 +331,7 @@ function App() {
     setCode("");
     setNotice(`${friend.name} 님과 친구가 되었어요.`);
     setPanel("friends");
-    setState(
+    applyState(
       parseSidebarState(await request(current, "GET /state", undefined)),
     );
     setConnection("online");
@@ -323,6 +379,21 @@ function App() {
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
   const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
+  const presenceHidden =
+    connection === "online" &&
+    presenceStatus === "ready" &&
+    state?.presence?.sharing === false;
+  const presenceControls = (
+    <PresenceControl
+      setting={state?.presence}
+      connected={connection === "online"}
+      busy={busy}
+      pending={presenceStatus === "pending"}
+      unknown={presenceStatus === "unknown"}
+      onChange={changePresence}
+      onRetry={retryPresence}
+    />
+  );
 
   const desktopControls = (
     <section className="desktop-controls" aria-label="바탕화면 캐릭터 설정">
@@ -410,9 +481,12 @@ function App() {
           <span className="wordmark">w.</span>
           <Character kind={state.self.character} />
           <span
-            className={`online-dot ${connection !== "online" ? "offline" : ""}`}
+            className={`online-dot ${connection !== "online" || presenceHidden || presenceStatus !== "ready" ? "offline" : ""}`}
           />
           <span className="compact-count">{onlineCount}</span>
+          {presenceHidden && (
+            <span className="compact-presence">접속 숨김</span>
+          )}
         </button>
         <div className="compact-friends">
           {state.friends.map((friend) => (
@@ -626,10 +700,14 @@ function App() {
         <>
           <div className="connection-line">
             <span
-              className={`online-dot ${connection !== "online" ? "offline" : ""}`}
+              className={`online-dot ${connection !== "online" || presenceHidden || presenceStatus !== "ready" ? "offline" : ""}`}
             />
             {connection === "online"
-              ? "우리의 작은 아지트"
+              ? presenceStatus !== "ready"
+                ? "접속 공개 상태 확인 필요"
+                : presenceHidden
+                  ? "접속 숨김 · 친구에게 오프라인으로 표시"
+                  : "우리의 작은 아지트"
               : connection === "connecting"
                 ? "아지트에 들어가는 중…"
                 : connection === "unauthorized"
@@ -747,6 +825,7 @@ function App() {
                   <span className="count-badge">{onlineCount} online</span>
                 </div>
                 {desktopControls}
+                {presenceControls}
                 {state.friends.length > 0 && (
                   <p className="hint greeting-hint">
                     손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
@@ -1014,6 +1093,7 @@ function App() {
                   <>
                     <p className="eyebrow">THIS IS ME</p>
                     <h1 className="profile-title">오늘의 나는.</h1>
+                    {presenceControls}
                     <ProfileForm
                       key={state.self.id}
                       initial={state.self}

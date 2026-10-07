@@ -671,3 +671,217 @@ test("greetings are private, bounded, durable and acknowledged without losing ne
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("presence sharing stays private and hidden through polling, profile edits, restart and recovery", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-presence-"));
+  const databasePath = join(directory, "test.sqlite");
+  let time = Date.now();
+  let server = createApp({ databasePath, now: () => time });
+  let base = "";
+  async function listen() {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    base = `http://127.0.0.1:${address.port}`;
+  }
+  async function close() {
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+  }
+  async function call(
+    method: string,
+    path: string,
+    token?: string,
+    body?: unknown,
+  ) {
+    const response = await fetch(base + path, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  const state = async (person: Session) =>
+    (await call("GET", "/state", person.token)).body as SidebarState;
+  const share = (person: Session, sharing: boolean) =>
+    call("PATCH", "/presence", person.token, { sharing });
+  try {
+    await listen();
+    const alice = (
+      await call("POST", "/session", undefined, {
+        name: "Alice",
+        character: "cat",
+        status: "",
+      })
+    ).body as Session;
+    const bob = (
+      await call("POST", "/session", undefined, {
+        name: "Bob",
+        character: "frog",
+        status: "",
+      })
+    ).body as Session;
+    const invite = (await call("POST", "/invites", alice.token, {}))
+      .body as Invite;
+    await call("POST", "/invites/accept", bob.token, { code: invite.code });
+    // Upgrade a populated database that did not have private presence settings.
+    await close();
+    const old = new DatabaseSync(databasePath);
+    old.exec("DROP TABLE presence_settings");
+    old.close();
+    server = createApp({ databasePath, now: () => time });
+    await listen();
+    assert.deepEqual((await state(alice)).presence, {
+      sharing: true,
+      revision: 0,
+    });
+    assert.deepEqual((await state(bob)).presence, {
+      sharing: true,
+      revision: 0,
+    });
+    assert.equal((await state(bob)).friends[0]?.online, true);
+    assert.equal(
+      (await call("PATCH", "/presence", undefined, { sharing: false })).status,
+      401,
+    );
+    for (const body of [
+      null,
+      [],
+      {},
+      { sharing: "false" },
+      { sharing: 0 },
+      { sharing: null },
+    ])
+      assert.equal(
+        (await call("PATCH", "/presence", alice.token, body)).status,
+        400,
+      );
+    assert.deepEqual((await state(alice)).presence, {
+      sharing: true,
+      revision: 0,
+    });
+
+    const hidden = await call("PATCH", "/presence", alice.token, {
+      sharing: false,
+      userId: bob.profile.id,
+      revision: 999,
+    });
+    assert.equal(hidden.status, 200);
+    assert.deepEqual(hidden.body, { sharing: false, revision: 1 });
+    for (let i = 0; i < 3; i++) {
+      const own = await state(alice);
+      assert.deepEqual(own.presence, hidden.body);
+      assert.equal(
+        own.friends[0]?.online,
+        true,
+        "hiding presence does not stop incoming presence",
+      );
+      const observer = await state(bob);
+      assert.deepEqual(
+        observer.presence,
+        { sharing: true, revision: 0 },
+        "only the authenticated profile is changed",
+      );
+      assert.equal(observer.friends[0]?.online, false);
+      assert.deepEqual(
+        Object.keys(observer.friends[0]!).sort(),
+        ["character", "id", "name", "online", "status"],
+        "friends cannot distinguish hidden presence from being offline",
+      );
+    }
+    const updated = await call("PATCH", "/profile", alice.token, {
+      name: "Alicia",
+      character: "bear",
+      status: "쉬는 중",
+      sharing: true,
+    });
+    assert.equal(updated.status, 200);
+    assert.deepEqual(
+      (await state(alice)).presence,
+      hidden.body,
+      "old clients editing a profile must not reset privacy",
+    );
+    assert.equal((await state(bob)).friends[0]?.name, "Alicia");
+    assert.equal((await state(bob)).friends[0]?.online, false);
+    assert.equal(
+      (
+        await call("POST", "/friends/wave", bob.token, {
+          friendId: alice.profile.id,
+        })
+      ).status,
+      201,
+    );
+    assert.ok((await state(alice)).friends[0]?.wave);
+    assert.equal(
+      (
+        await call("POST", "/friends/wave", alice.token, {
+          friendId: bob.profile.id,
+        })
+      ).status,
+      201,
+    );
+    assert.ok((await state(bob)).friends[0]?.wave);
+    assert.equal(
+      (await state(bob)).friends[0]?.online,
+      false,
+      "explicit greetings do not reset privacy",
+    );
+
+    assert.deepEqual((await share(alice, true)).body, {
+      sharing: true,
+      revision: 2,
+    });
+    assert.equal((await state(bob)).friends[0]?.online, true);
+    time += ONLINE_TIMEOUT_MS;
+    assert.equal(
+      (await state(bob)).friends[0]?.online,
+      false,
+      "visible users still time out",
+    );
+    await state(alice);
+    assert.equal((await state(bob)).friends[0]?.online, true);
+    const hiddenAgain = (await share(alice, false)).body;
+    const recovery = (await call("POST", "/recovery-code", alice.token, {}))
+      .body as { code: string };
+    await close();
+    server = createApp({ databasePath, now: () => time });
+    await listen();
+    assert.deepEqual((await state(alice)).presence, hiddenAgain);
+    assert.equal((await state(bob)).friends[0]?.online, false);
+    const recovered = (
+      await call("POST", "/session/recover", undefined, recovery)
+    ).body as Session;
+    assert.equal(
+      (await share(alice, true)).status,
+      401,
+      "revoked sessions cannot publish presence",
+    );
+    assert.deepEqual((await state(recovered)).presence, hiddenAgain);
+    assert.equal(
+      (await state(bob)).friends[0]?.online,
+      false,
+      "recovery does not briefly expose a hidden profile",
+    );
+
+    const simultaneous = await Promise.all([
+      share(recovered, true),
+      share(recovered, false),
+    ]);
+    assert.ok(simultaneous.every((result) => result.status === 200));
+    const settings = simultaneous
+      .map((result) => result.body as { sharing: boolean; revision: number })
+      .sort((a, b) => a.revision - b.revision);
+    assert.equal(settings[1]!.revision, settings[0]!.revision + 1);
+    assert.deepEqual((await state(recovered)).presence, settings[1]);
+    assert.equal((await state(bob)).friends[0]?.online, settings[1]!.sharing);
+  } finally {
+    if (server.listening) await close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

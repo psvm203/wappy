@@ -544,6 +544,28 @@
   height: 16px;
   accent-color: #678b57;
 }
+.presence-controls {
+  padding: 12px;
+  margin-bottom: 18px;
+  border: 1px solid #dce3d2;
+  border-radius: 12px;
+}
+.presence-controls .setting-toggle {
+  margin-top: 0;
+  min-height: 32px;
+}
+.presence-controls .hint {
+  margin: 6px 0 0;
+}
+.presence-controls .text-button {
+  margin-top: 8px;
+}
+.compact-presence {
+  display: block;
+  font-size: 9px;
+  margin-top: 5px;
+  color: #68745e;
+}
 .saved-profiles {
   margin: 0 0 26px;
 }

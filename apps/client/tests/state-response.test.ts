@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseSidebarState } from "@wappy/api";
+import {
+  parseSidebarState,
+  parsePresenceSettings,
+  type SidebarState,
+} from "@wappy/api";
+import { reconcilePresence } from "../src/presence.ts";
 
 test("invalid server states cannot become online or corrupt character rendering", () => {
   const self = { id: "self", name: "Alice", character: "cat", status: "함께" };
@@ -52,4 +57,63 @@ test("invalid server states cannot become online or corrupt character rendering"
     },
   ])
     assert.throws(() => parseSidebarState(invalid));
+});
+
+test("private presence settings are validated and older polls cannot undo a confirmed change", () => {
+  const state: SidebarState = {
+    self: { id: "alice", name: "Alice", character: "cat", status: "" },
+    friends: [],
+  };
+  const hidden = { sharing: false, revision: 2 };
+  assert.deepEqual(
+    parsePresenceSettings({ ...hidden, token: "discard" }),
+    hidden,
+  );
+  assert.deepEqual(parseSidebarState({ ...state, presence: hidden }), {
+    ...state,
+    presence: hidden,
+  });
+  assert.equal(
+    parseSidebarState(state).presence,
+    undefined,
+    "older servers do not imply a confirmed sharing preference",
+  );
+  for (const presence of [
+    null,
+    [],
+    {},
+    { sharing: "false", revision: 1 },
+    { sharing: false, revision: -1 },
+    { sharing: true, revision: NaN },
+    { sharing: true, revision: 0.5 },
+    { sharing: true, revision: Number.MAX_SAFE_INTEGER + 1 },
+  ]) {
+    assert.throws(() => parsePresenceSettings(presence));
+    assert.throws(() => parseSidebarState({ ...state, presence }));
+  }
+  const current = { ...state, presence: hidden };
+  const oldPoll = {
+    ...state,
+    self: { ...state.self, status: "still update profiles" },
+    presence: { sharing: true, revision: 1 },
+  };
+  assert.deepEqual(reconcilePresence(current, oldPoll), {
+    ...oldPoll,
+    presence: hidden,
+  });
+  const shown = { ...state, presence: { sharing: true, revision: 3 } };
+  assert.deepEqual(reconcilePresence(current, shown), shown);
+  assert.deepEqual(reconcilePresence(shown, current), shown);
+  assert.deepEqual(reconcilePresence(null, current), current);
+  const other = {
+    ...state,
+    self: { ...state.self, id: "bob" },
+    presence: { sharing: true, revision: 0 },
+  };
+  assert.deepEqual(reconcilePresence(current, other), other);
+  assert.deepEqual(
+    reconcilePresence(current, state),
+    state,
+    "missing support must not keep claiming a hidden state",
+  );
 });
