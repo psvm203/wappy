@@ -17,6 +17,7 @@ import {
   serverUrl,
 } from "./api";
 import { Character } from "./Character";
+import { CharacterPark } from "./CharacterPark";
 import { ProfileForm } from "./ProfileForm";
 import "./App.css";
 
@@ -39,6 +40,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(false);
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
 
@@ -184,25 +186,18 @@ function App() {
           title="사이드바 펼치기"
         >
           <span className="wordmark">w.</span>
-          <Character kind={state.self.character} />
           <span
             className={`online-dot ${connection !== "online" ? "offline" : ""}`}
           />
           <span className="compact-count">{onlineCount}</span>
         </button>
-        <div className="compact-friends">
-          {state.friends.map((friend) => (
-            <div
-              key={friend.id}
-              title={`${friend.name} · ${friend.status || "쉬어가는 중"}`}
-            >
-              <Character
-                kind={friend.character}
-                asleep={!friend.online || connection !== "online"}
-              />
-            </div>
-          ))}
-        </div>
+        <CharacterPark
+          state={state}
+          connected={connection === "online"}
+          paused={motionPaused}
+          onTogglePause={() => setMotionPaused(!motionPaused)}
+          compact
+        />
         {error && (
           <p className="error" role="alert">
             {error}
@@ -406,13 +401,14 @@ function App() {
                   </h1>
                   <span className="count-badge">{onlineCount} online</span>
                 </div>
+                <CharacterPark
+                  state={state}
+                  connected={connection === "online"}
+                  paused={motionPaused}
+                  onTogglePause={() => setMotionPaused(!motionPaused)}
+                />
                 {state.friends.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-characters">
-                      <Character kind="cat" />
-                      <span aria-hidden="true">+</span>
-                      <Character kind="bear" asleep />
-                    </div>
+                  <div className="empty-state invitation-empty">
                     <h2>옆자리를 비워뒀어요.</h2>
                     <p>
                       친구를 초대하면 이곳에서

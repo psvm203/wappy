@@ -147,7 +147,7 @@
 .friend-card {
   display: flex;
   align-items: center;
-  min-height: 118px;
+  min-height: 82px;
   background: #f1f1ea;
   border-radius: 15px;
   padding: 8px 11px 8px 4px;
@@ -160,21 +160,21 @@
   background: #f4f6ec;
 }
 .friend-scene {
-  width: 90px;
+  width: 54px;
   flex-shrink: 0;
   position: relative;
 }
 .friend-scene .character {
-  width: 90px;
+  width: 54px;
   position: relative;
   z-index: 1;
 }
 .scene-floor {
   position: absolute;
-  bottom: 7px;
-  width: 78px;
-  height: 30px;
-  left: 6px;
+  bottom: 4px;
+  width: 46px;
+  height: 16px;
+  left: 4px;
   border-radius: 50%;
   background: #e3e8d6;
 }
@@ -331,18 +331,11 @@
 .empty-state .primary {
   margin-top: 24px;
 }
-.empty-characters {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.invitation-empty {
+  padding-top: 0;
 }
-.empty-characters .character {
-  width: 82px;
-}
-.empty-characters > span {
-  font-size: 23px;
-  margin: 0 10px;
-  color: #b6bdaa;
+.invitation-empty h2 {
+  margin-top: 12px;
 }
 .loading-orbit {
   display: inline-block;
@@ -641,19 +634,6 @@
   font-size: 10px;
   margin-left: 5px;
   color: #68745e;
-}
-.compact-friends {
-  overflow-y: auto;
-  width: 100%;
-  flex: 1;
-  scrollbar-width: none;
-}
-.compact-friends > div {
-  margin: 10px 0;
-}
-.compact-sidebar .character {
-  width: 58px;
-  margin: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
