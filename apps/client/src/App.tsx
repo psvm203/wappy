@@ -189,7 +189,7 @@ function App() {
         {desktop ? (
           <>
             <span className="desktop-motion-active">
-              캐릭터들이 바탕화면을 산책해요.
+              캐릭터들이 화면 가장자리를 따라 걸어요.
             </span>
             <span className="desktop-motion-reduced">
               시스템의 ‘동작 줄이기’ 설정으로 캐릭터가 쉬고 있어요.

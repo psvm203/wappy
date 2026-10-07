@@ -1,43 +1,38 @@
 .desktop-characters {
-  --resident-width: 76px;
   position: fixed;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
 }
-.park-ground {
+.edge-walker {
   position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-/* Percent transforms use this track, leaving room for the entire avatar and name. */
-.park-track {
-  position: absolute;
-  inset: 16px calc(var(--resident-width) + 16px) 124px 16px;
-}
-.park-path {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transform: translate(var(--x0), var(--y0));
-  animation: park-roam var(--duration) linear var(--delay) infinite;
-}
-.park-resident {
-  width: var(--resident-width);
+  top: 0;
+  left: 0;
+  width: 76px;
   margin: 0;
+  /* Rounded corners turn gravity smoothly. Viewport lengths keep even paused
+     characters positioned correctly on first paint and monitor changes. */
+  offset-path: rect(20px calc(100vw - 20px) calc(100vh - 20px) 20px round 64px);
+  offset-anchor: 50% 92%;
+  offset-rotate: auto 180deg;
+  offset-distance: var(--start);
+  animation: edge-walk var(--duration) linear infinite;
   filter: drop-shadow(0 2px 3px #0002);
 }
-.park-facing {
-  animation: park-face var(--duration) step-end var(--delay) infinite;
+.edge-facing {
+  transform: scaleX(var(--facing));
 }
-.park-resident .character {
-  animation: park-step 0.48s ease-in-out infinite alternate;
+.edge-walker .character {
+  transform-origin: 50% 92%;
+  animation: edge-step 0.7s infinite;
 }
-.park-resident .character-body {
+.edge-walker .character-body {
   animation: none;
 }
-.park-resident figcaption {
-  margin-top: 2px;
+.edge-walker figcaption {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  width: 100%;
   padding: 3px 4px;
   border-radius: 6px;
   background: #fbfbf7e8;
@@ -49,45 +44,31 @@
   text-overflow: ellipsis;
 }
 .desktop-characters.is-paused *,
-.park-path.is-resting,
-.park-path.is-resting * {
+.edge-walker.is-resting,
+.edge-walker.is-resting * {
   animation-play-state: paused;
 }
-.park-path.is-resting .character {
+.edge-walker.is-resting .character {
   animation: none;
 }
-@keyframes park-roam {
-  0%,
-  8%,
-  100% {
-    transform: translate(var(--x0), var(--y0));
-  }
-  32%,
-  40% {
-    transform: translate(var(--x1), var(--y1));
-  }
-  64%,
-  72% {
-    transform: translate(var(--x2), var(--y2));
-  }
-}
-@keyframes park-face {
-  0%,
-  100% {
-    transform: scaleX(var(--direction0));
-  }
-  32% {
-    transform: scaleX(var(--direction1));
-  }
-  64% {
-    transform: scaleX(var(--direction2));
-  }
-}
-@keyframes park-step {
+@keyframes edge-walk {
   from {
-    transform: translateY(0) rotate(-2deg);
+    offset-distance: var(--start);
   }
   to {
-    transform: translateY(-3px) rotate(2deg);
+    offset-distance: var(--finish);
+  }
+}
+/* A small hop slows against gravity, then accelerates back toward the edge.
+   The parent rotates this local downward direction onto each wall/ceiling. */
+@keyframes edge-step {
+  0%,
+  100% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.33, 0.67, 0.67, 1);
+  }
+  50% {
+    transform: translateY(-4px);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.67, 0.33);
   }
 }
