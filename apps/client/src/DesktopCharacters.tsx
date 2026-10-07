@@ -37,7 +37,8 @@ function draw({ body, element }: Resident) {
   );
   element.style.setProperty("--name-x", `${nameX - body.x}px`);
   element.style.setProperty("--name-y", `${nameY - body.y}px`);
-  element.dataset.motion = body.mode;
+  element.dataset.motion =
+    body.mode === "walk" && body.restTime > 0 ? "idle" : body.mode;
 }
 
 export function DesktopCharacters({

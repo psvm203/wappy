@@ -12,6 +12,8 @@ export interface Body {
   direction: number;
   speed: number;
   walkSpeed: number;
+  wanderTime: number;
+  restTime: number;
   mode: "walk" | "air" | "drag";
 }
 
@@ -56,6 +58,8 @@ export function createBody(id: string, width: number, height: number): Body {
     direction: seed % 2 === 0 ? 1 : -1,
     speed,
     walkSpeed: speed,
+    wanderTime: 1 + Math.random() * 3,
+    restTime: 0,
     mode: "walk",
   };
   Object.assign(body, walkPose(body, width, height));
@@ -115,12 +119,31 @@ export function advanceBody(
     }
     if (body.mode === "walk") {
       if (walking) {
-        body.walkSpeed += (body.speed - body.walkSpeed) * Math.min(1, dt * 3);
-        body.phase =
-          (((body.phase + (body.direction * body.walkSpeed * dt) / perimeter) %
-            1) +
-            1) %
-          1;
+        if (body.restTime > 0) {
+          body.restTime = Math.max(0, body.restTime - dt);
+        } else {
+          body.wanderTime -= dt;
+          if (body.wanderTime <= 0) {
+            // Each pet chooses independently; polling and dragging do not reset its clock.
+            body.wanderTime = 3 + Math.random() * 5;
+            body.speed = 25 + Math.random() * 40;
+            if (Math.random() < 0.45) body.direction *= -1;
+            if (Math.random() < 0.2) {
+              body.restTime = 0.5 + Math.random() * 1.1;
+              body.walkSpeed = 0;
+            }
+          }
+          if (body.restTime === 0) {
+            body.walkSpeed +=
+              (body.speed - body.walkSpeed) * Math.min(1, dt * 3);
+            body.phase =
+              (((body.phase +
+                (body.direction * body.walkSpeed * dt) / perimeter) %
+                1) +
+                1) %
+              1;
+          }
+        }
       }
       const pose = walkPose(body, width, height);
       body.x = pose.x;
@@ -175,6 +198,8 @@ export function advanceBody(
       if (Math.abs(tangent) > 10)
         body.direction = Math.sign(tangent) * (hit < 2 ? 1 : -1);
       body.walkSpeed = Math.max(body.speed, Math.abs(tangent) * 0.8);
+      body.restTime = 0;
+      body.wanderTime = 2 + Math.random() * 3;
       body.vx = body.vy = 0;
       body.mode = "walk";
     }
