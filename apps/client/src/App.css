@@ -815,6 +815,38 @@
 .desktop-controls button:disabled {
   cursor: default;
 }
+.resident-selection {
+  border-top: 1px solid #d8e0cc;
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 11px;
+  color: #526649;
+}
+.resident-selection summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.resident-selection fieldset {
+  border: 0;
+  padding: 0;
+  margin: 10px 0;
+  min-width: 0;
+}
+.selection-legend {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.resident-selection .setting-toggle {
+  margin-top: 3px;
+  padding: 5px 0;
+  overflow-wrap: anywhere;
+}
+.selection-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
 .compact-sidebar .desktop-controls {
   margin: 0;
   padding: 6px;

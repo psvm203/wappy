@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { DesktopCharacters } from "./DesktopCharacters";
+import { visibleResidents } from "./resident-selection";
 import {
   DESKTOP_READY_EVENT,
   DESKTOP_STATE_EVENT,
@@ -33,11 +34,11 @@ export function DesktopOverlay() {
   }, []);
 
   if (!snapshot?.state || !snapshot.visible) return null;
-  return (
-    <DesktopCharacters
-      state={snapshot.state}
-      connected={snapshot.connected}
-      paused={snapshot.paused}
-    />
+  const residents = visibleResidents(
+    snapshot.state,
+    snapshot.connected,
+    snapshot.hiddenIds,
   );
+  if (residents.length === 0) return null;
+  return <DesktopCharacters residents={residents} paused={snapshot.paused} />;
 }

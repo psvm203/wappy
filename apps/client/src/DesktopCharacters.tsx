@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type PointerEvent } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SidebarState } from "@wappy/api";
+import type { DesktopResident } from "./resident-selection";
 import { Character } from "./Character";
 import {
   advanceBody,
@@ -43,36 +43,23 @@ function draw({ body, element }: Resident) {
 }
 
 export function DesktopCharacters({
-  state,
-  connected,
+  residents,
   paused,
 }: {
-  state: SidebarState;
-  connected: boolean;
+  residents: DesktopResident[];
   paused: boolean;
 }) {
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
-  // The local pet keeps walking even if the presence server is temporarily unreachable.
-  const residents = [
-    { ...state.self, online: true, wave: undefined },
-    ...state.friends.map((friend) => ({
-      ...friend,
-      online: connected && friend.online,
-    })),
-  ];
 
   useLayoutEffect(() => {
-    const ids = new Set([
-      state.self.id,
-      ...state.friends.map((friend) => friend.id),
-    ]);
+    const ids = new Set(residents.map((profile) => profile.id));
     for (const id of entries.current.keys())
       if (!ids.has(id)) entries.current.delete(id);
     if (drag.current && !ids.has(drag.current.id)) drag.current = null;
-  }, [state]);
+  }, [residents]);
 
   useEffect(() => {
     let frame: number;
@@ -219,7 +206,7 @@ export function DesktopCharacters({
       aria-label="바탕화면 캐릭터"
     >
       {residents.map((resident) => {
-        const name = `${resident.name}${resident.id === state.self.id ? " (나)" : ""}`;
+        const name = `${resident.name}${resident.isSelf ? " (나)" : ""}`;
         return (
           <figure
             key={resident.id}

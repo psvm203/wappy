@@ -295,11 +295,32 @@ fn main() -> Result<(), String> {
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("An incoming greeting unexpectedly opened the sidebar".into());
             }
+            sidebar
+                .eval("document.querySelector('.resident-selection').open = true;")
+                .map_err(|error| error.to_string())?;
+            click_button(&sidebar, "내 캐릭터만")?;
+            let selected = snapshot(&received, |value| {
+                value["hiddenIds"] == serde_json::json!(["greeting-friend"])
+            })?;
+            if selected["state"]["friends"][0]["wave"]["id"] != "native-wave" {
+                return Err("Character selection removed a friend or its greeting".into());
+            }
+            text_rendered(&desktop, ".resident-wave", "", false)?;
+            text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
+            text_rendered(&sidebar, ".received-wave", "인사를 보냈어요", true)?;
+            click_button(&sidebar, "Presence (나)")?;
+            text_rendered(&desktop, ".desktop-characters", "", false)?;
+            click_button(&sidebar, "모두 선택")?;
+            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            click_button(&sidebar, "내 캐릭터만")?;
+            text_rendered(&desktop, ".resident-wave", "", false)?;
             // Exercise the real UI handlers without relying on WebView timers.
             click_button(&sidebar, "내 모습")?;
             click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
             snapshot(&received, |value| value["state"].is_null())?;
             text_rendered(&desktop, ".resident-wave", "", false)?;
+            // Requests made before the profile switch are not evidence of continued polling.
+            while requests.try_recv().is_ok() {}
             if !matches!(
                 requests.recv_timeout(Duration::from_secs(6)),
                 Err(mpsc::RecvTimeoutError::Timeout)
@@ -316,6 +337,8 @@ fn main() -> Result<(), String> {
             if !request.contains(&format!("Bearer {}", "a".repeat(43))) {
                 return Err("Returning to a saved profile lost its credential".into());
             }
+            text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
+            text_rendered(&desktop, ".resident-wave", "", false)?;
             sidebar
                 .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
                 .map_err(|error| error.to_string())?;

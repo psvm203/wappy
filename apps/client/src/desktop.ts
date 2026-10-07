@@ -3,6 +3,60 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { SidebarState } from "@wappy/api";
 import { loadCharacterPreferences, PREFERENCES_KEY } from "./preferences";
+import { loadHiddenResidents, saveHiddenResidents } from "./resident-selection";
+
+const NO_HIDDEN_RESIDENTS: string[] = [];
+
+export function useResidentSelection(key: string | null) {
+  const [selection, setSelection] = useState<{
+    key: string | null;
+    hiddenIds: string[];
+    changed: boolean;
+  }>({ key: null, hiddenIds: [], changed: false });
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!key) {
+      setSelection({ key: null, hiddenIds: [], changed: false });
+      setError("");
+      return;
+    }
+    let hiddenIds: string[] = [];
+    try {
+      hiddenIds = loadHiddenResidents(key);
+      setError("");
+    } catch {
+      setError(
+        "캐릭터 선택을 읽지 못해 모두 선택했어요. 다시 선택하거나 앱을 다시 열어 주세요.",
+      );
+    }
+    // Do not overwrite an unreadable saved selection until the user makes a choice.
+    setSelection({ key, hiddenIds, changed: false });
+  }, [key]);
+  useEffect(() => {
+    if (!key || selection.key !== key || !selection.changed) return;
+    try {
+      saveHiddenResidents(key, selection.hiddenIds);
+      setError("");
+    } catch {
+      setError(
+        "캐릭터 선택을 저장하지 못했어요. 앱을 다시 열거나 프로필을 전환하면 유지되지 않을 수 있어요.",
+      );
+    }
+  }, [key, selection]);
+
+  const ready = key !== null && selection.key === key;
+  return {
+    ready,
+    hiddenIds: ready ? selection.hiddenIds : NO_HIDDEN_RESIDENTS,
+    error: ready ? error : "",
+    setHiddenIds: (update: (current: string[]) => string[]) =>
+      setSelection((current) =>
+        key && current.key === key
+          ? { ...current, hiddenIds: update(current.hiddenIds), changed: true }
+          : current,
+      ),
+  };
+}
 
 export function useCharacterPreferences() {
   const [preferences, setPreferences] = useState(() =>
@@ -90,6 +144,7 @@ export interface DesktopSnapshot {
   connected: boolean;
   paused: boolean;
   visible: boolean;
+  hiddenIds: string[];
 }
 
 export const DESKTOP_STATE_EVENT = "wappy:desktop-state";
@@ -100,6 +155,7 @@ export function useDesktopSync({
   connected,
   paused,
   visible,
+  hiddenIds,
 }: DesktopSnapshot) {
   const [error, setError] = useState("");
   useEffect(() => {
@@ -121,6 +177,7 @@ export function useDesktopSync({
           connected,
           paused,
           visible,
+          hiddenIds,
         } satisfies DesktopSnapshot);
         if (!disposed) setError("");
       } catch {
@@ -142,6 +199,6 @@ export function useDesktopSync({
       disposed = true;
       unlisten?.();
     };
-  }, [state, connected, paused, visible]);
+  }, [state, connected, paused, visible, hiddenIds]);
   return error;
 }

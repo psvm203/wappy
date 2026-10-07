@@ -25,7 +25,13 @@ import {
   serverUrl,
 } from "./api";
 import { Character } from "./Character";
-import { useCharacterPreferences, useDesktopSync } from "./desktop";
+import {
+  useCharacterPreferences,
+  useDesktopSync,
+  useResidentSelection,
+} from "./desktop";
+import { ResidentSelection } from "./ResidentSelection";
+import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { InviteField } from "./InviteField";
@@ -85,13 +91,19 @@ function App() {
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
+  const selection = useResidentSelection(
+    desktop && session && state
+      ? residentSelectionKey(session.server, state.self.id)
+      : null,
+  );
   const syncError = useDesktopSync({
-    state,
+    state: selection.ready ? state : null,
     connected: connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
+    hiddenIds: selection.hiddenIds,
   });
-  const desktopError = preferencesError || syncError;
+  const desktopError = preferencesError || selection.error || syncError;
 
   function changeSession(next: SavedSession | null) {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
@@ -452,6 +464,15 @@ function App() {
               : "캐릭터 표시"}
         </button>
       </div>
+      {desktop && state && !compact && (
+        <ResidentSelection
+          state={state}
+          hiddenIds={selection.hiddenIds}
+          ready={selection.ready}
+          visible={charactersVisible}
+          onChange={selection.setHiddenIds}
+        />
+      )}
       {desktop && (
         <p className="hint">
           닫아도 캐릭터는 남아요. 메뉴 막대·트레이에서 다시 열거나 종료할 수
