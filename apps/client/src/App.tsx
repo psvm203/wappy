@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-  POLL_INTERVAL_MS,
+  parseSidebarState,
   type Invite,
   type ProfileInput,
   type Session,
@@ -21,6 +21,7 @@ import { Character } from "./Character";
 import { useCharacterPreferences, useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
+import { subscribeState } from "./state-sync";
 import "./App.css";
 
 const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
@@ -61,36 +62,10 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    const controller = new AbortController();
-    let timer: number;
-    let unauthorized = false;
-    async function poll() {
-      try {
-        const next = await request(
-          session!,
-          "GET /state",
-          undefined,
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setState(next);
-          setConnection("online");
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          unauthorized = cause instanceof ApiError && cause.status === 401;
-          setConnection(unauthorized ? "unauthorized" : "offline");
-        }
-      } finally {
-        if (!controller.signal.aborted && !unauthorized)
-          timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-      }
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
+    return subscribeState(session, (update) => {
+      if (update.connection === "online") setState(update.state);
+      setConnection(update.connection);
+    });
   }, [session]);
 
   useEffect(() => {
@@ -114,7 +89,9 @@ function App() {
 
   async function refresh() {
     if (session) {
-      setState(await request(session, "GET /state", undefined));
+      setState(
+        parseSidebarState(await request(session, "GET /state", undefined)),
+      );
       setConnection("online");
     }
   }

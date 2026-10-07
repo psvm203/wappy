@@ -85,3 +85,30 @@ export function parseProfile(value: unknown): ProfileInput {
   }
   return { name, status, character: value.character as Character };
 }
+
+/** Validate state from a server before using it to render either desktop window. */
+export function parseSidebarState(value: unknown): SidebarState {
+  function profile(input: unknown): Profile {
+    if (
+      !isRecord(input) ||
+      typeof input.id !== "string" ||
+      !input.id ||
+      input.id.length > 128
+    )
+      throw new Error("잘못된 프로필 응답입니다.");
+    return { id: input.id, ...parseProfile(input) };
+  }
+  if (!isRecord(value) || !Array.isArray(value.friends))
+    throw new Error("잘못된 친구 목록 응답입니다.");
+  const self = profile(value.self);
+  const ids = new Set([self.id]);
+  const friends = value.friends.map((friend): Friend => {
+    if (!isRecord(friend) || typeof friend.online !== "boolean")
+      throw new Error("잘못된 접속 상태 응답입니다.");
+    const parsed = profile(friend);
+    if (ids.has(parsed.id)) throw new Error("중복된 친구 응답입니다.");
+    ids.add(parsed.id);
+    return { ...parsed, online: friend.online };
+  });
+  return { self, friends };
+}

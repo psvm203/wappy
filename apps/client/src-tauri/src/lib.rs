@@ -1,5 +1,6 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+mod state_sync;
 mod tray;
 pub use tray::show_sidebar;
 
@@ -112,6 +113,17 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         }
     }));
     builder
+        .manage(state_sync::StatePolling::default())
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                // Navigation destroys JS subscriptions even when React cleanup cannot run.
+                if let Err(error) = webview.state::<state_sync::StatePolling>().stop(None) {
+                    eprintln!("Could not stop the previous session connection: {error}");
+                }
+            }
+        })
         .setup(|app| {
             tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
@@ -168,7 +180,9 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             set_sidebar_compact,
             set_sidebar_pinned,
             desktop_cursor_position,
-            tray::sync_tray_controls
+            tray::sync_tray_controls,
+            state_sync::start_state_polling,
+            state_sync::stop_state_polling
         ])
 }
 

@@ -2,6 +2,8 @@
 //! cargo run --example lifecycle --features tauri/custom-protocol
 //! Uses private browsing so the check cannot read or change a real profile.
 use std::{
+    io::{BufRead, BufReader, Write},
+    net::TcpListener,
     process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -39,6 +41,42 @@ fn snapshot(
     }
 }
 
+fn presence_server() -> Result<(String, Receiver<String>), String> {
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
+    let base = format!(
+        "http://{}",
+        listener.local_addr().map_err(|error| error.to_string())?
+    );
+    let (sent, requests) = mpsc::channel();
+    thread::spawn(move || {
+        for (index, socket) in listener.incoming().enumerate() {
+            let Ok(mut socket) = socket else {
+                break;
+            };
+            let _ = socket.set_read_timeout(Some(Duration::from_secs(5)));
+            let Ok(stream) = socket.try_clone() else {
+                break;
+            };
+            let mut reader = BufReader::new(stream);
+            let mut request = String::new();
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+                request.push_str(&line);
+            }
+            if sent.send(request).is_err() {
+                break;
+            }
+            let status = if index == 1 { 503 } else { 200 };
+            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"friends":[]}"#;
+            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        }
+    });
+    Ok((base, requests))
+}
+
 fn main() -> Result<(), String> {
     let mut context = tauri::generate_context!();
     context.config_mut().identifier = "com.wappy.lifecycle-check".into();
@@ -46,6 +84,11 @@ fn main() -> Result<(), String> {
         window.incognito = true;
     }
     let app = client_lib::app_builder()
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("disable-webview-timers")
+                .js_init_script("window.setTimeout = () => 0; window.setInterval = () => 0;")
+                .build(),
+        )
         .build(context)
         .map_err(|error| error.to_string())?;
     if std::env::args().any(|arg| arg == "--secondary") {
@@ -96,6 +139,40 @@ fn main() -> Result<(), String> {
                 value["paused"] == paused && value["visible"] == visible
             })?;
 
+            // The real sidebar is hidden and all WebView timers are disabled.
+            // Presence must still poll, report a failure and reconnect using native time.
+            let (server, requests) = presence_server()?;
+            let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
+            sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
+                .map_err(|error| error.to_string())?;
+            for connected in [true, false, true] {
+                snapshot(&received, |value| {
+                    value["state"]["self"]["id"] == "presence-check"
+                        && value["connected"] == connected
+                })?;
+                if sidebar.is_visible().unwrap_or(true) {
+                    return Err("The presence check unexpectedly showed the sidebar".into());
+                }
+                let request = requests
+                    .recv_timeout(Duration::from_secs(1))
+                    .map_err(|error| error.to_string())?;
+                if !request.starts_with("GET /state HTTP/1.1")
+                    || !request.contains(&format!("Bearer {}", "a".repeat(43)))
+                {
+                    return Err("Background presence used the wrong request or credential".into());
+                }
+            }
+            sidebar
+                .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
+                .map_err(|error| error.to_string())?;
+            snapshot(&received, |value| value["state"].is_null())?;
+            if !matches!(
+                requests.recv_timeout(Duration::from_secs(6)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ) {
+                return Err("The previous session kept polling after page reload".into());
+            }
+
             let mut second =
                 Command::new(std::env::current_exe().map_err(|error| error.to_string())?)
                     .arg("--secondary")
@@ -125,7 +202,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: native tray, close-to-hide, controls while hidden, single-instance reopen and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: native tray, close-to-hide, hidden controls and presence with WebView timers disabled, reconnect, session cleanup, single-instance reopen and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);
