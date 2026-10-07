@@ -187,6 +187,8 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
 
 fn main() -> Result<(), String> {
     let mut context = tauri::generate_context!();
+    // Cargo examples do not inherit the main executable's Windows icon resource.
+    context.set_default_window_icon(Some(tauri::include_image!("icons/32x32.png")));
     context.config_mut().identifier = std::env::var("WAPPY_LIFECYCLE_ID")
         .ok()
         .filter(|id| {
@@ -232,6 +234,7 @@ fn main() -> Result<(), String> {
     thread::spawn(move || {
         let check = || -> Result<(), String> {
             let initial = snapshot(&received, |_| true)?;
+            println!("CHECK: windows are ready; checking login startup and tray controls");
             if initial["state"] != serde_json::Value::Null {
                 return Err("Smoke check unexpectedly accessed a saved profile".into());
             }
@@ -284,6 +287,7 @@ fn main() -> Result<(), String> {
 
             // The real sidebar is hidden and all WebView timers are disabled.
             // Presence must still poll, report a failure and reconnect using native time.
+            println!("CHECK: hidden background connection and reconnect");
             let (server, requests) = presence_server()?;
             let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
@@ -321,6 +325,7 @@ fn main() -> Result<(), String> {
             }
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             // Count real WebView animation callbacks, rather than only checking the pause flag.
+            println!("CHECK: animation stops and resumes");
             thread::sleep(Duration::from_millis(100));
             let idle_frames = animation_frames(&desktop)?;
             thread::sleep(Duration::from_millis(500));
@@ -347,6 +352,7 @@ fn main() -> Result<(), String> {
             if client_lib::open_sidebar(desktop.clone()).is_ok() {
                 return Err("The character window bypassed sidebar navigation validation".into());
             }
+            println!("CHECK: greeting shortcuts restore and focus the sidebar");
             for target in [
                 serde_json::Value::Null,
                 serde_json::json!({ "profileKey": "previous-profile", "friendId": "greeting-friend" }),
@@ -415,6 +421,7 @@ fn main() -> Result<(), String> {
             click_button(&sidebar, "내 캐릭터만")?;
             text_rendered(&desktop, ".resident-wave", "", false)?;
             // Exercise the real UI handlers without relying on WebView timers.
+            println!("CHECK: profile switching and session cleanup");
             click_button(&sidebar, "내 모습")?;
             click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
             snapshot(&received, |value| value["state"].is_null())?;
@@ -450,6 +457,7 @@ fn main() -> Result<(), String> {
                 return Err("The previous session kept polling after page reload".into());
             }
 
+            println!("CHECK: duplicate launches and minimized window restoration");
             secondary_launch(&handle, true)?;
             thread::sleep(Duration::from_millis(500));
             if sidebar.is_visible().unwrap_or(true) {
