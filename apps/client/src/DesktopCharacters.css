@@ -1,0 +1,72 @@
+.desktop-characters {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.desktop-resident {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 84px;
+  height: 84px;
+  margin: 0;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+.desktop-resident[data-motion="drag"] {
+  cursor: grabbing;
+  z-index: 1;
+}
+.resident-rotation {
+  transform: rotate(var(--angle));
+}
+.resident-facing {
+  transform: scaleX(var(--facing));
+}
+.desktop-resident .character {
+  width: 76px;
+  height: 84px;
+  margin: auto;
+  filter: drop-shadow(0 2px 3px #0002);
+}
+.desktop-resident .character-body {
+  animation: none;
+}
+.desktop-resident[data-motion="walk"]:not(.is-resting) .character {
+  animation: edge-step 0.7s infinite;
+}
+.desktop-resident figcaption {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) translate(var(--name-x), var(--name-y));
+  width: 84px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  background: #fbfbf7e8;
+  color: #536447;
+  font-size: 9px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.desktop-characters.is-paused * {
+  animation-play-state: paused;
+}
+@keyframes edge-step {
+  0%,
+  100% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.33, 0.67, 0.67, 1);
+  }
+  50% {
+    transform: translateY(-4px);
+    animation-timing-function: cubic-bezier(0.33, 0, 0.67, 0.33);
+  }
+}

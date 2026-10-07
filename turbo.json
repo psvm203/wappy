@@ -5,17 +5,37 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
+      "outputs": ["dist/**"],
+      "env": ["VITE_API_URL"]
     },
     "lint": {
       "dependsOn": ["^lint"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^build", "^check-types"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "desktop": {
+      "dependsOn": ["^build"],
+      "with": ["server#dev"],
+      "cache": false,
+      "persistent": true,
+      "env": ["VITE_API_URL", "TAURI_DEV_HOST"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": [
+        "VITE_API_URL",
+        "TAURI_DEV_HOST",
+        "HOST",
+        "PORT",
+        "DATABASE_PATH",
+        "ALLOWED_ORIGINS"
+      ]
     }
   }
 }

@@ -1,7 +1,5 @@
-# Tauri + React + Typescript
+# Wappy client
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+React + Tauri 2 기반 macOS·Windows 사이드바입니다. 실행 방법, 서버 설정과 API는 [저장소 README](../../README.md)를 참고하세요.
 
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+루트에서 `pnpm desktop`으로 서버와 데스크톱 앱을 함께 실행합니다. `pnpm dev`는 브라우저 개발용입니다. `pnpm --filter client tauri build`는 현재 운영체제의 설치 패키지를 만듭니다.
