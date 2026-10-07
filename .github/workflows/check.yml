@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   check:
+    name: Check ${{ matrix.artifact }}
     timeout-minutes: 45
     strategy:
       fail-fast: false

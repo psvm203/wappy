@@ -154,10 +154,10 @@ GitHub Actions의 **Check Wappy → Artifacts**에서 해당 커밋의 테스트
 
 ```sh
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
-pnpm --filter client tauri build --ci --target universal-apple-darwin
+CI=true pnpm --filter client tauri build --ci --target universal-apple-darwin
 ```
 
-macOS 결과물은 `apps/client/src-tauri/target/universal-apple-darwin/release/bundle/dmg/`에 생성됩니다. DMG를 열고 Wappy를 Applications 폴더로 옮겨 사용하세요.
+macOS 결과물은 `apps/client/src-tauri/target/universal-apple-darwin/release/bundle/dmg/`에 생성됩니다. `CI=true`는 Finder 자동화 권한이 필요한 DMG 창 꾸미기를 생략합니다. DMG를 열고 Wappy를 Applications 폴더로 옮겨 사용하세요.
 
 화면이 켜진 실제 데스크톱 세션에서는 프런트엔드 빌드 후 다음 검사로 트레이 생성, 닫기 후 숨김, 숨긴 상태의 제어 이벤트, 일시정지 시 애니메이션 프레임 중단과 다시 걷기 시 재개, 두 번째 실행 시 기존 창 복원, 최소화 복원과 종료를 확인할 수 있습니다. WebView의 타이머를 비활성화한 채 로컬 테스트 서버를 조회하여 접속 상태 갱신, 오류 후 재연결, 숨긴 사이드바의 접속 숨김 설정 표시와 받은 인사의 실제 말풍선 렌더링, 인사 말풍선에서 검색·필터를 해제하고 접힌 사이드바의 친구 카드로 이동·초점 복원과 오래된 요청 무시, 캐릭터 개별 선택·전체 선택 해제와 보관한 프로필의 선택 복원, 프로필 보관 후 말풍선 숨김과 조회 중단 및 재선택 후 재개, 세션 삭제 후 조회 중단도 확인합니다. 별도 앱 식별자와 비공개 WebView 저장소를 사용하므로 기존 프로필을 읽거나 변경하지 않습니다. 검사 전용 자동 실행 항목을 잠시 등록했다가 제거하며 실제 Wappy의 자동 실행 설정은 건드리지 않습니다. 잠시 테스트 창과 트레이 아이콘이 나타났다가 종료됩니다.
 
