@@ -5,6 +5,7 @@ import {
   POLL_INTERVAL_MS,
   type Invite,
   type ProfileInput,
+  type Session,
   type SidebarState,
 } from "@wappy/api";
 import {
@@ -19,6 +20,7 @@ import {
 import { Character } from "./Character";
 import { useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
+import { RecoveryCode, RecoveryForm } from "./Recovery";
 import "./App.css";
 
 const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
@@ -26,6 +28,7 @@ const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
 function App() {
   const [session, setSession] = useState(loadSession);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
+  const [onboarding, setOnboarding] = useState<"create" | "recover">("create");
   const [state, setState] = useState<SidebarState | null>(null);
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
@@ -64,6 +67,7 @@ function App() {
     if (!session) return;
     const controller = new AbortController();
     let timer: number;
+    let unauthorized = false;
     async function poll() {
       try {
         const next = await request(
@@ -77,14 +81,12 @@ function App() {
           setConnection("online");
         }
       } catch (cause) {
-        if (!controller.signal.aborted)
-          setConnection(
-            cause instanceof ApiError && cause.status === 401
-              ? "unauthorized"
-              : "offline",
-          );
+        if (!controller.signal.aborted) {
+          unauthorized = cause instanceof ApiError && cause.status === 401;
+          setConnection(unauthorized ? "unauthorized" : "offline");
+        }
       } finally {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted && !unauthorized)
           timer = window.setTimeout(poll, POLL_INTERVAL_MS);
       }
     }
@@ -121,6 +123,49 @@ function App() {
     }
   }
 
+  function connectSession(address: string, created: Session) {
+    const saved = { server: address, token: created.token };
+    setSession(saved);
+    setServer(address);
+    setState({ self: created.profile, friends: [] });
+    setInvite(null);
+    setCode("");
+    setRemoving(null);
+    setPanel("friends");
+    setConnection("online");
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+    } catch {
+      setError(
+        "프로필을 기기에 저장하지 못했습니다. 앱을 닫기 전에 ‘내 모습’에서 복구 코드를 보관해 주세요.",
+      );
+    }
+  }
+
+  function selectedServer() {
+    try {
+      return serverUrl(server);
+    } catch {
+      throw new ApiError(
+        400,
+        "올바른 서버 주소를 입력해 주세요. 예: http://localhost:3001",
+      );
+    }
+  }
+
+  function recoverProfile(recoveryCode: string) {
+    void action(async () => {
+      const address = selectedServer();
+      const recovered = await request(
+        { server: address },
+        "POST /session/recover",
+        { code: recoveryCode },
+      );
+      connectSession(address, recovered);
+      setNotice("프로필을 복구했어요. 기존 기기는 로그아웃됩니다.");
+    });
+  }
+
   function saveProfile(profile: ProfileInput) {
     void action(async () => {
       if (session) {
@@ -131,31 +176,16 @@ function App() {
         setPanel("friends");
         setNotice("새로운 모습으로 바꿨어요.");
       } else {
-        let address: string;
-        try {
-          address = serverUrl(server);
-        } catch {
-          throw new ApiError(
-            400,
-            "올바른 서버 주소를 입력해 주세요. 예: http://localhost:3001",
-          );
-        }
+        const address = selectedServer();
         const created = await request(
           { server: address },
           "POST /session",
           profile,
         );
-        const saved = { server: address, token: created.token };
-        setSession(saved);
-        setState({ self: created.profile, friends: [] });
-        setConnection("online");
-        try {
-          localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
-        } catch {
-          setError(
-            "프로필을 기기에 저장하지 못했습니다. 앱을 닫으면 이 프로필로 돌아올 수 없습니다.",
-          );
-        }
+        connectSession(address, created);
+        setNotice(
+          "‘내 모습’에서 복구 코드를 보관하면 기기를 바꿔도 돌아올 수 있어요.",
+        );
       }
     });
   }
@@ -381,21 +411,55 @@ function App() {
             친구들의 작은 존재감을
             <br />내 화면 한쪽에 놓아두세요.
           </p>
-          <ProfileForm initial={emptyProfile} busy={busy} onSave={saveProfile}>
-            <details className="server-settings">
-              <summary>연결할 서버</summary>
-              <label className="field">
-                서버 주소
-                <input
-                  type="url"
-                  required
-                  value={server}
-                  onChange={(event) => setServer(event.target.value)}
-                />
-              </label>
-              <p className="hint">친구와 같은 서버 주소를 사용해 주세요.</p>
-            </details>
-          </ProfileForm>
+          <nav className="onboarding-tabs" aria-label="시작 방법">
+            {(
+              [
+                ["create", "처음이에요"],
+                ["recover", "다시 돌아왔어요"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                className="text-button"
+                aria-current={onboarding === id ? "page" : undefined}
+                disabled={busy}
+                onClick={() => {
+                  setOnboarding(id);
+                  setError("");
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {onboarding === "recover" ? (
+            <RecoveryForm
+              server={server}
+              onServerChange={setServer}
+              busy={busy}
+              onRecover={recoverProfile}
+            />
+          ) : (
+            <ProfileForm
+              initial={emptyProfile}
+              busy={busy}
+              onSave={saveProfile}
+            >
+              <details className="server-settings">
+                <summary>연결할 서버</summary>
+                <label className="field">
+                  서버 주소
+                  <input
+                    type="url"
+                    required
+                    value={server}
+                    onChange={(event) => setServer(event.target.value)}
+                  />
+                </label>
+                <p className="hint">친구와 같은 서버 주소를 사용해 주세요.</p>
+              </details>
+            </ProfileForm>
+          )}
           {error && (
             <p className="error" role="alert">
               {error}
@@ -412,7 +476,9 @@ function App() {
               ? "우리의 작은 아지트"
               : connection === "connecting"
                 ? "아지트에 들어가는 중…"
-                : "연결을 다시 확인하는 중…"}
+                : connection === "unauthorized"
+                  ? "프로필 인증이 만료되었어요"
+                  : "연결을 다시 확인하는 중…"}
             {state && (
               <button
                 className="text-button"
@@ -430,10 +496,16 @@ function App() {
           )}
           {connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
-              <p>이 서버에서 저장된 프로필을 찾을 수 없어요.</p>
+              <p>
+                프로필 인증이 만료되었어요. 다른 기기에서 복구했다면 그 기기에서
+                계속 이용할 수 있어요.
+              </p>
               <details>
-                <summary>새 프로필로 시작하기</summary>
-                <p>기존 프로필과 친구 목록으로 돌아올 수 없게 됩니다.</p>
+                <summary>이 기기에서 다시 시작하기</summary>
+                <p>
+                  복구 코드가 있으면 같은 서버의 프로필과 친구 목록을 불러올 수
+                  있어요.
+                </p>
                 <button
                   className="text-button danger"
                   onClick={() => {
@@ -445,11 +517,13 @@ function App() {
                     setSession(null);
                     setState(null);
                     setInvite(null);
+                    setOnboarding("recover");
+                    setConnection("connecting");
                     setPanel("friends");
                     setError("");
                   }}
                 >
-                  저장된 프로필 지우기
+                  복구 화면으로 이동
                 </button>
               </details>
             </div>
@@ -489,7 +563,7 @@ function App() {
                 </button>
               </p>
             )}
-            {!state && (
+            {!state && connection !== "unauthorized" && (
               <div className="empty-state">
                 <span className="loading-orbit" />
                 <h2>친구들을 만나러 가는 중</h2>
@@ -701,10 +775,12 @@ function App() {
                 <p className="eyebrow">THIS IS ME</p>
                 <h1 className="profile-title">오늘의 나는.</h1>
                 <ProfileForm
+                  key={state.self.id}
                   initial={state.self}
                   busy={busy}
                   onSave={saveProfile}
                 />
+                <RecoveryCode key={session.token} session={session} />
               </>
             )}
           </div>
