@@ -41,6 +41,24 @@ fn snapshot(
     }
 }
 
+fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), String> {
+    let label = serde_json::to_string(label).map_err(|error| error.to_string())?;
+    sidebar
+        .eval(format!(
+            r#"(() => {{
+      const click = () => {{
+        const button = [...document.querySelectorAll('button')].find(button =>
+          button.textContent.trim() === {label} || button.getAttribute('aria-label') === {label});
+        if (button && !button.disabled) {{ observer.disconnect(); button.click(); }}
+      }};
+      const observer = new MutationObserver(click);
+      observer.observe(document.body, {{ childList: true, subtree: true }});
+      click();
+    }})()"#
+        ))
+        .map_err(|error| error.to_string())
+}
+
 fn presence_server() -> Result<(String, Receiver<String>), String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
     let base = format!(
@@ -162,6 +180,26 @@ fn main() -> Result<(), String> {
                     return Err("Background presence used the wrong request or credential".into());
                 }
             }
+            // Exercise the real UI handlers without relying on WebView timers.
+            click_button(&sidebar, "내 모습")?;
+            click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
+            snapshot(&received, |value| value["state"].is_null())?;
+            if !matches!(
+                requests.recv_timeout(Duration::from_secs(6)),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ) {
+                return Err("A saved profile kept polling after switching to onboarding".into());
+            }
+            click_button(&sidebar, &format!("Presence · {server} 프로필로 돌아가기"))?;
+            snapshot(&received, |value| {
+                value["state"]["self"]["id"] == "presence-check" && value["connected"] == true
+            })?;
+            let request = requests
+                .recv_timeout(Duration::from_secs(1))
+                .map_err(|error| error.to_string())?;
+            if !request.contains(&format!("Bearer {}", "a".repeat(43))) {
+                return Err("Returning to a saved profile lost its credential".into());
+            }
             sidebar
                 .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
                 .map_err(|error| error.to_string())?;
@@ -202,7 +240,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: native tray, close-to-hide, hidden controls and presence with WebView timers disabled, reconnect, session cleanup, single-instance reopen and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: native tray, close-to-hide, hidden controls and presence with WebView timers disabled, reconnect, saved profile pauses and resumes presence, session cleanup, single-instance reopen and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);

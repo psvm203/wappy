@@ -1,4 +1,10 @@
-import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -22,6 +28,15 @@ import { useCharacterPreferences, useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { InviteField } from "./InviteField";
+import { SavedProfiles } from "./SavedProfiles";
+import {
+  forgetSavedSession,
+  loadSavedSessions,
+  parkSession,
+  saveSession,
+  type SavedProfile,
+  type SavedSession,
+} from "./sessions";
 import {
   formatInvitation,
   isLocalServer,
@@ -34,6 +49,8 @@ const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
 
 function App() {
   const [session, setSession] = useState(loadSession);
+  const currentSession = useRef(session);
+  const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join" | "recover">(
     "create",
@@ -68,9 +85,16 @@ function App() {
   });
   const desktopError = preferencesError || syncError;
 
+  function changeSession(next: SavedSession | null) {
+    // Invalidate old callbacks immediately, before React runs effect cleanup.
+    currentSession.current = next;
+    setSession(next);
+  }
+
   useEffect(() => {
     if (!session) return;
     return subscribeState(session, (update) => {
+      if (currentSession.current !== session) return;
       if (update.connection === "online") setState(update.state);
       setConnection(update.connection);
     });
@@ -106,7 +130,7 @@ function App() {
 
   function connectSession(address: string, created: Session) {
     const saved = { server: address, token: created.token };
-    setSession(saved);
+    changeSession(saved);
     setServer(address);
     setState({ self: created.profile, friends: [] });
     setInvite(null);
@@ -115,10 +139,52 @@ function App() {
     setPanel("friends");
     setConnection("online");
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(saved));
+      saveSession({ ...saved, profile: created.profile });
+      setSavedSessions(loadSavedSessions());
     } catch {
       setError(
         "프로필을 기기에 저장하지 못했습니다. 앱을 닫기 전에 ‘내 모습’에서 복구 코드를 보관해 주세요.",
+      );
+    }
+  }
+
+  function showOnboarding(mode: "create" | "recover") {
+    changeSession(null);
+    setState(null);
+    setInvite(null);
+    setCode("");
+    setRemoving(null);
+    setOnboarding(mode);
+    setConnection("connecting");
+    setPanel("friends");
+    setNotice("");
+    setError("");
+  }
+
+  function switchServer() {
+    if (!session || busy) return;
+    try {
+      setSavedSessions(
+        parkSession({ ...session, ...(state ? { profile: state.self } : {}) }),
+      );
+      showOnboarding("create");
+    } catch {
+      setError(
+        "프로필을 보관하지 못해 현재 연결을 유지했어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
+      );
+    }
+  }
+
+  function selectSavedSession(saved: SavedProfile) {
+    if (busy) return;
+    try {
+      saveSession(saved);
+      showOnboarding("create");
+      setServer(saved.server);
+      changeSession({ server: saved.server, token: saved.token });
+    } catch {
+      setError(
+        "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
   }
@@ -472,6 +538,21 @@ function App() {
               </button>
             ))}
           </nav>
+          <SavedProfiles
+            sessions={savedSessions}
+            busy={busy}
+            onSelect={selectSavedSession}
+            onForget={(saved) => {
+              try {
+                setSavedSessions(forgetSavedSession(saved));
+                setError("");
+              } catch {
+                setError(
+                  "보관한 프로필을 지우지 못했습니다. 다시 시도해 주세요.",
+                );
+              }
+            }}
+          />
           {onboarding === "recover" ? (
             <RecoveryForm
               server={server}
@@ -550,9 +631,15 @@ function App() {
             )}
           </div>
           {connection === "offline" && (
-            <p className="connection-warning" role="status">
-              서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.
-            </p>
+            <div className="connection-warning" role="status">
+              <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
+              <button
+                className="text-button"
+                onClick={() => setPanel("profile")}
+              >
+                서버 설정 보기
+              </button>
+            </div>
           )}
           {connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
@@ -568,19 +655,17 @@ function App() {
                 </p>
                 <button
                   className="text-button danger"
+                  disabled={busy}
                   onClick={() => {
                     try {
                       localStorage.removeItem(SESSION_KEY);
                     } catch {
-                      /* State can still be reset. */
+                      setError(
+                        "이 기기의 로그인 정보를 지우지 못했습니다. 다시 시도해 주세요.",
+                      );
+                      return;
                     }
-                    setSession(null);
-                    setState(null);
-                    setInvite(null);
-                    setOnboarding("recover");
-                    setConnection("connecting");
-                    setPanel("friends");
-                    setError("");
+                    showOnboarding("recover");
                   }}
                 >
                   복구 화면으로 이동
@@ -623,7 +708,7 @@ function App() {
                 </button>
               </p>
             )}
-            {!state && connection !== "unauthorized" && (
+            {!state && panel !== "profile" && connection !== "unauthorized" && (
               <div className="empty-state">
                 <span className="loading-orbit" />
                 <h2>친구들을 만나러 가는 중</h2>
@@ -871,17 +956,46 @@ function App() {
                 </form>
               </div>
             )}
-            {state && panel === "profile" && (
+            {panel === "profile" && (
               <>
-                <p className="eyebrow">THIS IS ME</p>
-                <h1 className="profile-title">오늘의 나는.</h1>
-                <ProfileForm
-                  key={state.self.id}
-                  initial={state.self}
-                  busy={busy}
-                  onSave={saveProfile}
-                />
-                <RecoveryCode key={session.token} session={session} />
+                {state && (
+                  <>
+                    <p className="eyebrow">THIS IS ME</p>
+                    <h1 className="profile-title">오늘의 나는.</h1>
+                    <ProfileForm
+                      key={state.self.id}
+                      initial={state.self}
+                      busy={busy}
+                      onSave={saveProfile}
+                    />
+                    <RecoveryCode key={session.token} session={session} />
+                  </>
+                )}
+                <section
+                  className="invite-card server-panel"
+                  aria-label="서버 설정"
+                >
+                  <h2>함께할 서버</h2>
+                  <p className="hint server-address">
+                    현재 서버: <strong>{session.server}</strong>
+                  </p>
+                  <p>
+                    현재 프로필을 이 기기에 보관하고 첫 화면으로 돌아갑니다.
+                    다른 서버에서 새로 시작하거나, 보관한 프로필로 다시 돌아올
+                    수 있어요.
+                  </p>
+                  <p className="hint">
+                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다. 복구
+                    코드를 함께 보관해 주세요.
+                  </p>
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={switchServer}
+                  >
+                    프로필 보관하고 서버 바꾸기
+                  </button>
+                </section>
               </>
             )}
           </div>

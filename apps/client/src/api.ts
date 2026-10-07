@@ -1,34 +1,9 @@
 import { isRecord, type Input, type Output, type Route } from "@wappy/api";
-import { serverUrl } from "./invitations";
 export { serverUrl } from "./invitations";
+export { SESSION_KEY, loadSession, type SavedSession } from "./sessions";
 
 export const DEFAULT_SERVER =
   import.meta.env.VITE_API_URL || "http://localhost:3001";
-export const SESSION_KEY = "wappy.session.v1";
-export interface SavedSession {
-  server: string;
-  token: string;
-}
-
-export function loadSession(): SavedSession | null {
-  try {
-    const value: unknown = JSON.parse(
-      localStorage.getItem(SESSION_KEY) || "null",
-    );
-    if (
-      isRecord(value) &&
-      typeof value.server === "string" &&
-      typeof value.token === "string" &&
-      /^[A-Za-z0-9_-]{43}$/.test(value.token)
-    ) {
-      return { server: serverUrl(value.server), token: value.token };
-    }
-  } catch {
-    /* An absent or damaged local session returns to onboarding. */
-  }
-  return null;
-}
-
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
