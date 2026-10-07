@@ -144,7 +144,20 @@ cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked
 pnpm --filter client tauri build
 ```
 
-Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows/check.yml`은 macOS·Windows 각각에서 타입 검사, 빌드, API 통합 테스트, Rust 백그라운드 조회 테스트, 네이티브 디버그 빌드를 실행합니다. 실제 배포 서명·공증 인증서는 별도로 설정해야 합니다.
+Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows/check.yml`은 macOS·Windows 각각에서 타입 검사, 빌드, API 통합 테스트, Rust 테스트와 실제 창·트레이·백그라운드 연결 검사를 실행한 뒤 설치 프로그램을 만듭니다. 한 운영체제의 실패가 다른 운영체제의 검사를 취소하지 않습니다.
+
+GitHub Actions의 **Check Wappy → Artifacts**에서 해당 커밋의 테스트용 설치 파일을 받을 수 있습니다. macOS는 Apple Silicon·Intel을 모두 담은 **universal DMG**, Windows는 **x64 NSIS 설치 프로그램**입니다. Windows 설치는 현재 사용자에게 적용하고 한국어·영어를 선택할 수 있습니다. WebView2가 없으면 설치 과정에서 내려받으므로 인터넷 연결이 필요합니다. 아티팩트는 7일 동안 보관하며, 워크플로를 수동으로 다시 실행할 수도 있습니다. [Tauri Windows 설치 프로그램](https://v2.tauri.app/distribute/windows-installer/), [macOS DMG](https://v2.tauri.app/distribute/dmg/)
+
+이 파일들은 개발자 배포 서명·Apple 공증이 없는 테스트용 빌드입니다. 일반 사용자에게 배포하기 전에는 해당 인증서를 설정하고 설치·업데이트·삭제를 실제 기기에서 검증해야 합니다. 워크플로는 GitHub Release를 발행하거나 서버를 배포하지 않습니다. 설치한 앱에서 친구와 같은 서버 주소를 입력하세요.
+
+로컬에서 두 macOS 아키텍처를 함께 빌드하려면 다음 명령을 사용합니다. Windows에서는 해당 OS에서 `pnpm --filter client tauri build --ci --target x86_64-pc-windows-msvc`를 실행하면 `apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`에 설치 파일이 생성됩니다.
+
+```sh
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+pnpm --filter client tauri build --ci --target universal-apple-darwin
+```
+
+macOS 결과물은 `apps/client/src-tauri/target/universal-apple-darwin/release/bundle/dmg/`에 생성됩니다. DMG를 열고 Wappy를 Applications 폴더로 옮겨 사용하세요.
 
 화면이 켜진 실제 데스크톱 세션에서는 프런트엔드 빌드 후 다음 검사로 트레이 생성, 닫기 후 숨김, 숨긴 상태의 제어 이벤트, 일시정지 시 애니메이션 프레임 중단과 다시 걷기 시 재개, 두 번째 실행 시 기존 창 복원, 최소화 복원과 종료를 확인할 수 있습니다. WebView의 타이머를 비활성화한 채 로컬 테스트 서버를 조회하여 접속 상태 갱신, 오류 후 재연결, 숨긴 사이드바의 접속 숨김 설정 표시와 받은 인사의 실제 말풍선 렌더링, 인사 말풍선에서 검색·필터를 해제하고 접힌 사이드바의 친구 카드로 이동·초점 복원과 오래된 요청 무시, 캐릭터 개별 선택·전체 선택 해제와 보관한 프로필의 선택 복원, 프로필 보관 후 말풍선 숨김과 조회 중단 및 재선택 후 재개, 세션 삭제 후 조회 중단도 확인합니다. 별도 앱 식별자와 비공개 WebView 저장소를 사용하므로 기존 프로필을 읽거나 변경하지 않습니다. 검사 전용 자동 실행 항목을 잠시 등록했다가 제거하며 실제 Wappy의 자동 실행 설정은 건드리지 않습니다. 잠시 테스트 창과 트레이 아이콘이 나타났다가 종료됩니다.
 
