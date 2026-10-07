@@ -1,8 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, type PointerEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
 import { Character } from "./Character";
+import { OPEN_GREETING_EVENT } from "./desktop";
 import {
   advanceBody,
   CHARACTER_SIZE,
@@ -46,10 +54,13 @@ function draw({ body, element }: Resident) {
 export function DesktopCharacters({
   residents,
   paused,
+  profileKey,
 }: {
   residents: DesktopResident[];
   paused: boolean;
+  profileKey: string | null;
 }) {
+  const [failedGreeting, setFailedGreeting] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
   const wakeAnimation = useRef(() => {});
@@ -127,7 +138,7 @@ export function DesktopCharacters({
     let timer: ReturnType<typeof setTimeout>;
     let interactive = false;
     // Click-through windows do not receive pointermove. Poll the native cursor to
-    // enable input only over a character, and keep capture until a drag ends.
+    // enable input over a character or greeting, and keep capture until a drag ends.
     const poll = async () => {
       try {
         const [x, y] = await invoke<[number, number]>(
@@ -137,12 +148,16 @@ export function DesktopCharacters({
         const hit =
           !!drag.current ||
           [...entries.current.values()].some(({ element }) => {
-            const rect = element.querySelector("svg")!.getBoundingClientRect();
-            return (
-              x >= rect.left - 6 &&
-              x <= rect.right + 6 &&
-              y >= rect.top - 6 &&
-              y <= rect.bottom + 6
+            return [...element.querySelectorAll("svg, .resident-wave")].some(
+              (target) => {
+                const rect = target.getBoundingClientRect();
+                return (
+                  x >= rect.left - 6 &&
+                  x <= rect.right + 6 &&
+                  y >= rect.top - 6 &&
+                  y <= rect.bottom + 6
+                );
+              },
             );
           });
         if (hit !== interactive) {
@@ -168,7 +183,12 @@ export function DesktopCharacters({
   }, []);
 
   function startDrag(event: PointerEvent<HTMLElement>, id: string) {
-    if (event.button !== 0 || drag.current) return;
+    if (
+      event.button !== 0 ||
+      drag.current ||
+      (event.target as Element).closest("button")
+    )
+      return;
     const resident = entries.current.get(id)!;
     const body = resident.body;
     event.preventDefault();
@@ -272,12 +292,30 @@ export function DesktopCharacters({
             </div>
             <figcaption className={resident.wave ? "has-wave" : undefined}>
               {resident.wave && (
-                <span
+                <button
+                  type="button"
                   className="resident-wave"
-                  aria-label={`${resident.name} 님의 인사`}
+                  aria-label={`${resident.name} 님의 인사 보기`}
+                  title={
+                    failedGreeting === resident.id
+                      ? "열지 못했어요. 다시 누르거나 트레이에서 사이드바를 열어 주세요."
+                      : "사이드바에서 인사 보기"
+                  }
+                  onClick={async () => {
+                    if (!profileKey) return;
+                    try {
+                      await emitTo("main", OPEN_GREETING_EVENT, {
+                        profileKey,
+                        friendId: resident.id,
+                      });
+                      setFailedGreeting(null);
+                    } catch {
+                      setFailedGreeting(resident.id);
+                    }
+                  }}
                 >
-                  👋 안녕!
-                </span>
+                  {failedGreeting === resident.id ? "다시 열기" : "👋 안녕!"}
+                </button>
               )}
               <span className="resident-name">{name}</span>
             </figcaption>

@@ -3,7 +3,7 @@ use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent}
 pub mod startup;
 mod state_sync;
 mod tray;
-pub use tray::show_sidebar;
+pub use tray::{open_sidebar, show_sidebar};
 
 const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
 
@@ -186,6 +186,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            tray::open_sidebar,
             set_sidebar_compact,
             set_sidebar_pinned,
             desktop_cursor_position,

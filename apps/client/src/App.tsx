@@ -27,8 +27,10 @@ import {
 import { Character } from "./Character";
 import {
   useCharacterPreferences,
+  useDesktopGreeting,
   useDesktopSync,
   useResidentSelection,
+  type GreetingTarget,
 } from "./desktop";
 import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
@@ -83,6 +85,9 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
+  const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
+    null,
+  );
   const {
     preferences,
     setPreferences,
@@ -91,19 +96,53 @@ function App() {
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
-  const selection = useResidentSelection(
-    desktop && session && state
+  const profileKey =
+    session && state
       ? residentSelectionKey(session.server, state.self.id)
-      : null,
-  );
+      : null;
+  const selection = useResidentSelection(desktop ? profileKey : null);
+  const greetingError = useDesktopGreeting((target) => {
+    if (
+      !session ||
+      currentSession.current !== session ||
+      target.profileKey !== profileKey ||
+      !state?.friends.some((friend) => friend.id === target.friendId)
+    )
+      return;
+    void windowAction(async () => {
+      await invoke("open_sidebar");
+      if (currentSession.current !== session) return;
+      if (compact) await invoke("set_sidebar_compact", { compact: false });
+      if (currentSession.current !== session) return;
+      setCompact(false);
+      setPanel("friends");
+      setGreetingTarget(target);
+    });
+  });
   const syncError = useDesktopSync({
     state: selection.ready ? state : null,
+    profileKey,
     connected: connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
     hiddenIds: selection.hiddenIds,
   });
-  const desktopError = preferencesError || selection.error || syncError;
+  const desktopError =
+    preferencesError || selection.error || greetingError || syncError;
+
+  useEffect(() => {
+    if (!greetingTarget) return;
+    if (
+      greetingTarget.profileKey === profileKey &&
+      !compact &&
+      panel === "friends"
+    ) {
+      const card = document.getElementById(`friend-${greetingTarget.friendId}`);
+      card?.focus({ preventScroll: true });
+      card?.scrollIntoView({ block: "center" });
+    }
+    setGreetingTarget(null);
+  }, [greetingTarget, profileKey, compact, panel]);
 
   function changeSession(next: SavedSession | null) {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
@@ -874,6 +913,9 @@ function App() {
                       .sort((a, b) => Number(b.online) - Number(a.online))
                       .map((friend) => (
                         <li
+                          id={`friend-${friend.id}`}
+                          tabIndex={-1}
+                          aria-label={`${friend.name} 님의 친구 카드`}
                           className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
                           key={friend.id}
                         >

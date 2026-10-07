@@ -40,5 +40,11 @@ export function DesktopOverlay() {
     snapshot.hiddenIds,
   );
   if (residents.length === 0) return null;
-  return <DesktopCharacters residents={residents} paused={snapshot.paused} />;
+  return (
+    <DesktopCharacters
+      residents={residents}
+      paused={snapshot.paused}
+      profileKey={snapshot.profileKey}
+    />
+  );
 }

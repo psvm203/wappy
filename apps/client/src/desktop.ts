@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { SidebarState } from "@wappy/api";
@@ -141,6 +141,7 @@ export function useCharacterPreferences() {
 
 export interface DesktopSnapshot {
   state: SidebarState | null;
+  profileKey: string | null;
   connected: boolean;
   paused: boolean;
   visible: boolean;
@@ -149,9 +150,57 @@ export interface DesktopSnapshot {
 
 export const DESKTOP_STATE_EVENT = "wappy:desktop-state";
 export const DESKTOP_READY_EVENT = "wappy:desktop-ready";
+export const OPEN_GREETING_EVENT = "wappy:open-greeting";
+
+export interface GreetingTarget {
+  profileKey: string;
+  friendId: string;
+}
+
+export function useDesktopGreeting(onOpen: (target: GreetingTarget) => void) {
+  const handler = useRef(onOpen);
+  handler.current = onOpen;
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    void listen<unknown>(OPEN_GREETING_EVENT, ({ payload }) => {
+      if (
+        !disposed &&
+        payload &&
+        typeof payload === "object" &&
+        "profileKey" in payload &&
+        typeof payload.profileKey === "string" &&
+        "friendId" in payload &&
+        typeof payload.friendId === "string"
+      )
+        handler.current({
+          profileKey: payload.profileKey,
+          friendId: payload.friendId,
+        });
+    })
+      .then((stop) => {
+        if (disposed) return stop();
+        unlisten = stop;
+      })
+      .catch(() => {
+        if (!disposed)
+          setError(
+            "인사 바로가기를 연결하지 못했어요. 트레이에서 사이드바를 열어 주세요.",
+          );
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+  return error;
+}
 
 export function useDesktopSync({
   state,
+  profileKey,
   connected,
   paused,
   visible,
@@ -171,9 +220,10 @@ export function useDesktopSync({
     const send = async () => {
       if (disposed) return;
       try {
-        // Only public profiles and display settings cross windows, never session tokens.
+        // Only public profiles and navigation/display settings cross windows, never session tokens.
         await emitTo("desktop", DESKTOP_STATE_EVENT, {
           state,
+          profileKey,
           connected,
           paused,
           visible,
@@ -199,6 +249,6 @@ export function useDesktopSync({
       disposed = true;
       unlisten?.();
     };
-  }, [state, connected, paused, visible, hiddenIds]);
+  }, [state, profileKey, connected, paused, visible, hiddenIds]);
   return error;
 }

@@ -20,6 +20,14 @@ pub fn show_sidebar(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn open_sidebar(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the sidebar can open itself".into());
+    }
+    show_sidebar(window.app_handle()).map_err(|error| error.to_string())
+}
+
 pub fn setup(app: &App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "wappy-show", "사이드바 열기", true, None::<&str>)?;
     // Enable controls only after the sidebar has registered its event listener.

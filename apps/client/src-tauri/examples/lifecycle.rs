@@ -113,11 +113,13 @@ fn text_rendered(
         const element = document.querySelector({selector});
         if (!!element === {present} && (!element || element.textContent.includes({text}))) {{
           observer.disconnect();
+          document.removeEventListener('focusin', check);
           window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-rendered', payload: null }});
         }}
       }};
       const observer = new MutationObserver(check);
       observer.observe(document.body, {{ childList: true, subtree: true, characterData: true, attributes: true }});
+      document.addEventListener('focusin', check);
       check();
     }})()"#)).map_err(|error| error.to_string())?;
     let result = received
@@ -342,6 +344,39 @@ fn main() -> Result<(), String> {
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("An incoming greeting unexpectedly opened the sidebar".into());
             }
+            if client_lib::open_sidebar(desktop.clone()).is_ok() {
+                return Err("The character window bypassed sidebar navigation validation".into());
+            }
+            for target in [
+                serde_json::Value::Null,
+                serde_json::json!({ "profileKey": "previous-profile", "friendId": "greeting-friend" }),
+                serde_json::json!({ "profileKey": shown["profileKey"], "friendId": "removed-friend" }),
+            ] {
+                handle
+                    .emit_to("main", "wappy:open-greeting", target)
+                    .map_err(|error| error.to_string())?;
+            }
+            thread::sleep(Duration::from_millis(200));
+            if sidebar.is_visible().unwrap_or(true) {
+                return Err("An invalid or stale greeting shortcut opened the sidebar".into());
+            }
+            click_button(&sidebar, "접기 ⇥")?;
+            text_rendered(&sidebar, ".compact-sidebar", "", true)?;
+            click_button(&desktop, "Friend 님의 인사 보기")?;
+            until(|| sidebar.is_visible().unwrap_or(false))?;
+            text_rendered(&sidebar, ".sidebar:not(.compact-sidebar)", "", true)?;
+            text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
+            text_rendered(&sidebar, ".received-wave", "인사를 보냈어요", true)?;
+            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            sidebar.minimize().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_minimized().unwrap_or(false))?;
+            click_button(&desktop, "Friend 님의 인사 보기")?;
+            until(|| {
+                sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
+            })?;
+            text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
+            sidebar.close().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             sidebar
                 .eval("document.querySelector('.resident-selection').open = true;")
                 .map_err(|error| error.to_string())?;
@@ -415,7 +450,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, scoped greeting shortcut restores compact sidebar without consuming the wave, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);

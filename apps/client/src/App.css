@@ -158,6 +158,10 @@
   gap: 7px;
   flex-wrap: wrap;
 }
+.friend-card:focus {
+  outline: 2px solid #60764e;
+  outline-offset: 2px;
+}
 .friend-card.is-online {
   background: #f4f6ec;
 }
