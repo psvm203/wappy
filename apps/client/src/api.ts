@@ -1,4 +1,6 @@
 import { isRecord, type Input, type Output, type Route } from "@wappy/api";
+import { serverUrl } from "./invitations";
+export { serverUrl } from "./invitations";
 
 export const DEFAULT_SERVER =
   import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -6,23 +8,6 @@ export const SESSION_KEY = "wappy.session.v1";
 export interface SavedSession {
   server: string;
   token: string;
-}
-
-export function serverUrl(value: string): string {
-  const url = new URL(value);
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== "/"
-  ) {
-    throw new Error(
-      "서버 주소는 http:// 또는 https://로 시작하는 기본 주소를 입력해 주세요.",
-    );
-  }
-  return url.origin;
 }
 
 export function loadSession(): SavedSession | null {

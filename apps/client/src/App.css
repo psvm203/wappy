@@ -473,7 +473,7 @@
 .onboarding-tabs {
   display: flex;
   justify-content: center;
-  gap: 22px;
+  gap: 15px;
   margin-bottom: 24px;
 }
 .onboarding-tabs [aria-current="page"] {
@@ -582,6 +582,9 @@
 }
 .server-address strong {
   font-weight: 500;
+}
+.invitation-destination {
+  overflow-wrap: anywhere;
 }
 .accept-form {
   margin-top: 28px;

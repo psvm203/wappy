@@ -26,7 +26,8 @@ h1 {
   letter-spacing: -0.9px;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button {
@@ -40,6 +41,7 @@ button:disabled {
 }
 button:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 summary:focus-visible {
   outline: 2px solid #73985c;
   outline-offset: 3px;

@@ -21,6 +21,12 @@ import { Character } from "./Character";
 import { useCharacterPreferences, useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
+import { InviteField } from "./InviteField";
+import {
+  formatInvitation,
+  isLocalServer,
+  parseInvitation,
+} from "./invitations";
 import { subscribeState } from "./state-sync";
 import "./App.css";
 
@@ -29,7 +35,9 @@ const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
 function App() {
   const [session, setSession] = useState(loadSession);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
-  const [onboarding, setOnboarding] = useState<"create" | "recover">("create");
+  const [onboarding, setOnboarding] = useState<"create" | "join" | "recover">(
+    "create",
+  );
   const [state, setState] = useState<SidebarState | null>(null);
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
@@ -149,13 +157,31 @@ function App() {
         setPanel("friends");
         setNotice("새로운 모습으로 바꿨어요.");
       } else {
-        const address = selectedServer();
+        const received = onboarding === "join" ? receivedInvitation() : null;
+        const address = received?.server ?? selectedServer();
         const created = await request(
           { server: address },
           "POST /session",
           profile,
         );
         connectSession(address, created);
+        if (received) {
+          // Save the new session before accepting: failed acceptance must stay retryable.
+          setCode(code);
+          setPanel("invite");
+          try {
+            await connectFriend(
+              { server: address, token: created.token },
+              received.code,
+            );
+          } catch (cause) {
+            throw new ApiError(
+              400,
+              `프로필은 만들었어요. 친구 연결 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
+            );
+          }
+          return;
+        }
         setNotice(
           "‘내 모습’에서 복구 코드를 보관하면 기기를 바꿔도 돌아올 수 있어요.",
         );
@@ -163,17 +189,41 @@ function App() {
     });
   }
 
+  function receivedInvitation() {
+    try {
+      return parseInvitation(code);
+    } catch (cause) {
+      throw new ApiError(400, (cause as Error).message);
+    }
+  }
+
+  async function connectFriend(
+    current: { server: string; token: string },
+    inviteCode: string,
+  ) {
+    const friend = await request(current, "POST /invites/accept", {
+      code: inviteCode,
+    });
+    setCode("");
+    setNotice(`${friend.name} 님과 친구가 되었어요.`);
+    setPanel("friends");
+    setState(
+      parseSidebarState(await request(current, "GET /state", undefined)),
+    );
+    setConnection("online");
+  }
+
   function acceptInvite(event: FormEvent) {
     event.preventDefault();
     if (!session) return;
     void action(async () => {
-      const friend = await request(session, "POST /invites/accept", {
-        code: code.trim(),
-      });
-      setCode("");
-      setNotice(`${friend.name} 님과 친구가 되었어요.`);
-      setPanel("friends");
-      await refresh();
+      const received = receivedInvitation();
+      if (received.server && received.server !== session.server)
+        throw new ApiError(
+          400,
+          "다른 서버의 초대장이에요. 현재 프로필과 같은 서버의 초대장을 받아 주세요.",
+        );
+      await connectFriend(session, received.code);
     });
   }
 
@@ -404,6 +454,7 @@ function App() {
             {(
               [
                 ["create", "처음이에요"],
+                ["join", "초대받았어요"],
                 ["recover", "다시 돌아왔어요"],
               ] as const
             ).map(([id, label]) => (
@@ -433,6 +484,23 @@ function App() {
               initial={emptyProfile}
               busy={busy}
               onSave={saveProfile}
+              beforeProfile={
+                onboarding === "join" && (
+                  <InviteField
+                    value={code}
+                    onChange={(value) => {
+                      setCode(value);
+                      try {
+                        const destination = parseInvitation(value).server;
+                        if (destination) setServer(destination);
+                      } catch {
+                        /* Validate on submit. */
+                      }
+                    }}
+                    server={server}
+                  />
+                )
+              }
             >
               <details className="server-settings">
                 <summary>연결할 서버</summary>
@@ -445,7 +513,10 @@ function App() {
                     onChange={(event) => setServer(event.target.value)}
                   />
                 </label>
-                <p className="hint">친구와 같은 서버 주소를 사용해 주세요.</p>
+                <p className="hint">
+                  코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
+                  붙여넣으면 초대장의 서버를 사용해요.
+                </p>
               </details>
             </ProfileForm>
           )}
@@ -670,7 +741,7 @@ function App() {
                 <p className="eyebrow">BETTER TOGETHER</p>
                 <h1>작은 초대, 큰 반가움.</h1>
                 <p className="muted">
-                  같이 있고 싶은 친구에게 코드를 보내세요.
+                  같이 있고 싶은 친구에게 초대장을 보내세요.
                 </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
@@ -684,11 +755,11 @@ function App() {
                   {invite && (
                     <>
                       <label className="field">
-                        친구에게 보낼 코드
-                        <input
-                          className="invite-code"
+                        친구에게 보낼 초대장
+                        <textarea
                           readOnly
-                          value={invite.code}
+                          rows={5}
+                          value={formatInvitation(session.server, invite.code)}
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
@@ -699,27 +770,69 @@ function App() {
                       <button
                         className="primary"
                         onClick={async () => {
+                          setError("");
                           try {
-                            await navigator.clipboard.writeText(invite.code);
-                            setNotice("초대 코드를 복사했어요.");
+                            await navigator.clipboard.writeText(
+                              formatInvitation(session.server, invite.code),
+                            );
+                            setNotice(
+                              "서버 주소와 초대 코드를 함께 복사했어요.",
+                            );
                           } catch {
                             setError(
-                              "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
+                              "초대장 입력란을 선택한 뒤 직접 복사해 주세요.",
                             );
                           }
                         }}
                       >
-                        초대 코드 복사 <span aria-hidden="true">↗</span>
+                        초대장 복사 <span aria-hidden="true">↗</span>
                       </button>
+                      <p className="hint">
+                        친구가 첫 화면의 ‘초대받았어요’에 붙여넣으면 바로 시작할
+                        수 있어요.
+                      </p>
+                      <details className="server-settings">
+                        <summary>코드만 따로 보내기</summary>
+                        <label className="field">
+                          친구에게 보낼 코드
+                          <input
+                            className="invite-code"
+                            readOnly
+                            value={invite.code}
+                            onFocus={(event) => event.target.select()}
+                          />
+                        </label>
+                        <button
+                          className="primary"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(invite.code);
+                              setNotice("초대 코드를 복사했어요.");
+                            } catch {
+                              setError(
+                                "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
+                              );
+                            }
+                          }}
+                        >
+                          초대 코드 복사 <span aria-hidden="true">↗</span>
+                        </button>
+                      </details>
                     </>
                   )}
                   <button
                     className={invite ? "text-button regenerate" : "primary"}
                     disabled={busy}
                     onClick={() =>
-                      void action(async () =>
-                        setInvite(await request(session, "POST /invites", {})),
-                      )
+                      void action(async () => {
+                        const created = await request(
+                          session,
+                          "POST /invites",
+                          {},
+                        );
+                        formatInvitation(session.server, created.code);
+                        setInvite(created);
+                      })
                     }
                   >
                     {busy
@@ -733,22 +846,21 @@ function App() {
                     <br />
                     <strong>{session.server}</strong>
                   </p>
+                  {isLocalServer(session.server) && (
+                    <p className="hint">
+                      현재 주소는 이 컴퓨터 안에서만 사용할 수 있어요. 다른
+                      기기의 친구와 함께하려면 둘 다 접속할 수 있는 서버에서
+                      시작해 주세요.
+                    </p>
+                  )}
                 </section>
                 <form onSubmit={acceptInvite} className="accept-form">
                   <h2>초대를 받았나요?</h2>
-                  <label className="field">
-                    친구의 초대 코드
-                    <input
-                      required
-                      maxLength={128}
-                      autoCapitalize="none"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="코드를 붙여넣어 주세요"
-                      value={code}
-                      onChange={(event) => setCode(event.target.value)}
-                    />
-                  </label>
+                  <InviteField
+                    value={code}
+                    onChange={setCode}
+                    server={session.server}
+                  />
                   <button
                     className="secondary"
                     disabled={busy || !code.trim()}

@@ -13,11 +13,13 @@ export function ProfileForm({
   busy,
   onSave,
   children,
+  beforeProfile,
 }: {
   initial: ProfileInput;
   busy: boolean;
   onSave: (profile: ProfileInput) => void;
   children?: ReactNode;
+  beforeProfile?: ReactNode;
 }) {
   const [profile, setProfile] = useState(initial);
   function submit(event: FormEvent) {
@@ -32,6 +34,7 @@ export function ProfileForm({
     <form onSubmit={submit} className="profile-form">
       <fieldset disabled={busy}>
         <legend>나를 닮은 친구를 골라요</legend>
+        {beforeProfile}
         <div className="character-picker">
           {CHARACTERS.map((kind) => (
             <label
