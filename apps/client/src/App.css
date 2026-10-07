@@ -635,7 +635,61 @@
   margin-left: 5px;
   color: #68745e;
 }
+.compact-friends {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.compact-friends > div {
+  margin: 10px 0;
+}
+.compact-sidebar .character {
+  width: 54px;
+  margin: auto;
+}
+.desktop-controls {
+  padding: 13px;
+  margin-bottom: 18px;
+  background: #edf2e6;
+  border-radius: 12px;
+}
+.desktop-controls p {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #68745e;
+}
+.desktop-motion-reduced {
+  display: none;
+}
+.desktop-controls > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.desktop-controls button:disabled {
+  cursor: default;
+}
+.compact-sidebar .desktop-controls {
+  margin: 0;
+  padding: 6px;
+  width: 100%;
+}
+.compact-sidebar .desktop-controls p {
+  display: none;
+}
+.compact-sidebar .desktop-controls button {
+  font-size: 15px;
+}
 @media (prefers-reduced-motion: reduce) {
+  .desktop-motion-active {
+    display: none;
+  }
+  .desktop-motion-reduced {
+    display: inline;
+  }
   *,
   *::before,
   *::after {

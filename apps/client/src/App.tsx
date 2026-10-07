@@ -17,7 +17,7 @@ import {
   serverUrl,
 } from "./api";
 import { Character } from "./Character";
-import { CharacterPark } from "./CharacterPark";
+import { useDesktopSync } from "./desktop";
 import { ProfileForm } from "./ProfileForm";
 import "./App.css";
 
@@ -41,8 +41,15 @@ function App() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
   const [motionPaused, setMotionPaused] = useState(false);
+  const [charactersVisible, setCharactersVisible] = useState(true);
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
+  const desktopError = useDesktopSync({
+    state,
+    connected: connection === "online",
+    paused: motionPaused,
+    visible: charactersVisible,
+  });
 
   useEffect(() => {
     if (!session) return;
@@ -176,6 +183,63 @@ function App() {
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
 
+  const desktopControls = (
+    <section className="desktop-controls" aria-label="바탕화면 캐릭터 설정">
+      <p>
+        {desktop ? (
+          <>
+            <span className="desktop-motion-active">
+              캐릭터들이 바탕화면을 산책해요.
+            </span>
+            <span className="desktop-motion-reduced">
+              시스템의 ‘동작 줄이기’ 설정으로 캐릭터가 쉬고 있어요.
+            </span>
+          </>
+        ) : (
+          "데스크톱 앱에서 바탕화면 산책을 시작하세요."
+        )}
+      </p>
+      <div>
+        <button
+          className="text-button"
+          disabled={!desktop}
+          onClick={() => setMotionPaused(!motionPaused)}
+          aria-label={
+            motionPaused ? "캐릭터 움직임 다시 시작" : "캐릭터 움직임 멈추기"
+          }
+          aria-pressed={motionPaused}
+        >
+          {compact
+            ? motionPaused
+              ? "▶"
+              : "Ⅱ"
+            : motionPaused
+              ? "다시 걷기"
+              : "잠깐 쉬기"}
+        </button>
+        <button
+          className="text-button"
+          disabled={!desktop}
+          onClick={() => setCharactersVisible(!charactersVisible)}
+          aria-label={
+            charactersVisible
+              ? "바탕화면 캐릭터 숨기기"
+              : "바탕화면 캐릭터 표시"
+          }
+          aria-pressed={charactersVisible}
+        >
+          {compact
+            ? charactersVisible
+              ? "◉"
+              : "○"
+            : charactersVisible
+              ? "캐릭터 숨기기"
+              : "캐릭터 표시"}
+        </button>
+      </div>
+    </section>
+  );
+
   if (compact && state)
     return (
       <main className="sidebar compact-sidebar">
@@ -186,18 +250,28 @@ function App() {
           title="사이드바 펼치기"
         >
           <span className="wordmark">w.</span>
+          <Character kind={state.self.character} />
           <span
             className={`online-dot ${connection !== "online" ? "offline" : ""}`}
           />
           <span className="compact-count">{onlineCount}</span>
         </button>
-        <CharacterPark
-          state={state}
-          connected={connection === "online"}
-          paused={motionPaused}
-          onTogglePause={() => setMotionPaused(!motionPaused)}
-          compact
-        />
+        <div className="compact-friends">
+          {state.friends.map((friend) => (
+            <div key={friend.id} title={friend.name}>
+              <Character
+                kind={friend.character}
+                asleep={!friend.online || connection !== "online"}
+              />
+            </div>
+          ))}
+        </div>
+        {desktopControls}
+        {desktopError && (
+          <p className="error" role="alert">
+            {desktopError}
+          </p>
+        )}
         {error && (
           <p className="error" role="alert">
             {error}
@@ -378,6 +452,11 @@ function App() {
             ))}
           </nav>
           <div className="scroll-area content">
+            {desktopError && (
+              <p className="error" role="alert">
+                {desktopError}
+              </p>
+            )}
             {error && (
               <p className="error" role="alert">
                 {error}
@@ -401,12 +480,7 @@ function App() {
                   </h1>
                   <span className="count-badge">{onlineCount} online</span>
                 </div>
-                <CharacterPark
-                  state={state}
-                  connected={connection === "online"}
-                  paused={motionPaused}
-                  onTogglePause={() => setMotionPaused(!motionPaused)}
-                />
+                {desktopControls}
                 {state.friends.length === 0 ? (
                   <div className="empty-state invitation-empty">
                     <h2>옆자리를 비워뒀어요.</h2>

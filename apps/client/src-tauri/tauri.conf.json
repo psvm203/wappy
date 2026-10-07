@@ -26,6 +26,27 @@
         "backgroundThrottling": "disabled",
         "visibleOnAllWorkspaces": true,
         "visible": false
+      },
+      {
+        "label": "desktop",
+        "title": "Wappy Characters",
+        "url": "index.html?view=desktop",
+        "decorations": false,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "shadow": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "focusable": false,
+        "dragDropEnabled": false,
+        "noRedirectionBitmap": true,
+        "backgroundThrottling": "disabled",
+        "visibleOnAllWorkspaces": true,
+        "visible": false
       }
     ],
     "security": {
