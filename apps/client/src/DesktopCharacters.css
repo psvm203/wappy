@@ -4,35 +4,47 @@
   pointer-events: none;
   overflow: hidden;
 }
-.edge-walker {
+.desktop-resident {
   position: absolute;
   top: 0;
   left: 0;
-  width: 76px;
+  width: 84px;
+  height: 84px;
   margin: 0;
-  /* Rounded corners turn gravity smoothly. Viewport lengths keep even paused
-     characters positioned correctly on first paint and monitor changes. */
-  offset-path: rect(20px calc(100vw - 20px) calc(100vh - 20px) 20px round 64px);
-  offset-anchor: 50% 92%;
-  offset-rotate: auto 180deg;
-  offset-distance: var(--start);
-  animation: edge-walk var(--duration) linear infinite;
-  filter: drop-shadow(0 2px 3px #0002);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
 }
-.edge-facing {
+.desktop-resident[data-motion="drag"] {
+  cursor: grabbing;
+  z-index: 1;
+}
+.resident-rotation {
+  transform: rotate(var(--angle));
+}
+.resident-facing {
   transform: scaleX(var(--facing));
 }
-.edge-walker .character {
-  transform-origin: 50% 92%;
-  animation: edge-step 0.7s infinite;
+.desktop-resident .character {
+  width: 76px;
+  height: 84px;
+  margin: auto;
+  filter: drop-shadow(0 2px 3px #0002);
 }
-.edge-walker .character-body {
+.desktop-resident .character-body {
   animation: none;
 }
-.edge-walker figcaption {
+.desktop-resident[data-motion="walk"]:not(.is-resting) .character {
+  animation: edge-step 0.7s infinite;
+}
+.desktop-resident figcaption {
   position: absolute;
-  bottom: calc(100% + 2px);
-  width: 100%;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) translate(var(--name-x), var(--name-y));
+  width: 84px;
   padding: 3px 4px;
   border-radius: 6px;
   background: #fbfbf7e8;
@@ -42,25 +54,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
-.desktop-characters.is-paused *,
-.edge-walker.is-resting,
-.edge-walker.is-resting * {
+.desktop-characters.is-paused * {
   animation-play-state: paused;
 }
-.edge-walker.is-resting .character {
-  animation: none;
-}
-@keyframes edge-walk {
-  from {
-    offset-distance: var(--start);
-  }
-  to {
-    offset-distance: var(--finish);
-  }
-}
-/* A small hop slows against gravity, then accelerates back toward the edge.
-   The parent rotates this local downward direction onto each wall/ceiling. */
 @keyframes edge-step {
   0%,
   100% {

@@ -42,6 +42,22 @@ fn set_sidebar_compact(window: WebviewWindow, compact: bool) -> Result<(), Strin
     place_sidebar(&window, compact).map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> {
+    if window.label() != "desktop" {
+        return Err("Only the character window can track the cursor".into());
+    }
+    let cursor = window
+        .cursor_position()
+        .map_err(|error| error.to_string())?;
+    let origin = window.inner_position().map_err(|error| error.to_string())?;
+    let scale = window.scale_factor().map_err(|error| error.to_string())?;
+    Ok((
+        (cursor.x - origin.x as f64) / scale,
+        (cursor.y - origin.y as f64) / scale,
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -49,7 +65,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window, false)?;
                 if let Some(desktop) = app.get_webview_window("desktop") {
-                    // The entire desktop surface must pass clicks through to other apps.
+                    // Start click-through; the character view enables input only on pets.
                     desktop.set_ignore_cursor_events(true)?;
                     place_desktop(&window)?;
                     desktop.show()?;
@@ -74,7 +90,10 @@ pub fn run() {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![set_sidebar_compact])
+        .invoke_handler(tauri::generate_handler![
+            set_sidebar_compact,
+            desktop_cursor_position
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

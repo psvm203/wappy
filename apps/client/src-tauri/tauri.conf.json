@@ -42,6 +42,7 @@
         "skipTaskbar": true,
         "focus": false,
         "focusable": false,
+        "acceptFirstMouse": true,
         "dragDropEnabled": false,
         "noRedirectionBitmap": true,
         "backgroundThrottling": "disabled",

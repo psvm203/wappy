@@ -40,7 +40,9 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
-  const [motionPaused, setMotionPaused] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   const [charactersVisible, setCharactersVisible] = useState(true);
   const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
@@ -50,6 +52,13 @@ function App() {
     paused: motionPaused,
     visible: charactersVisible,
   });
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setMotionPaused(preference.matches);
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -186,18 +195,11 @@ function App() {
   const desktopControls = (
     <section className="desktop-controls" aria-label="바탕화면 캐릭터 설정">
       <p>
-        {desktop ? (
-          <>
-            <span className="desktop-motion-active">
-              캐릭터들이 화면 가장자리를 따라 걸어요.
-            </span>
-            <span className="desktop-motion-reduced">
-              시스템의 ‘동작 줄이기’ 설정으로 캐릭터가 쉬고 있어요.
-            </span>
-          </>
-        ) : (
-          "데스크톱 앱에서 바탕화면 산책을 시작하세요."
-        )}
+        {desktop
+          ? motionPaused
+            ? "캐릭터가 쉬고 있어요. ‘다시 걷기’로 자동 이동을 시작하세요."
+            : "가장자리를 따라 걷는 캐릭터를 잡아서 던져보세요."
+          : "데스크톱 앱에서 바탕화면 산책을 시작하세요."}
       </p>
       <div>
         <button

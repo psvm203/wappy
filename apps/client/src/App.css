@@ -661,9 +661,6 @@
   line-height: 1.7;
   color: #68745e;
 }
-.desktop-motion-reduced {
-  display: none;
-}
 .desktop-controls > div {
   display: flex;
   justify-content: space-between;
@@ -684,12 +681,6 @@
   font-size: 15px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .desktop-motion-active {
-    display: none;
-  }
-  .desktop-motion-reduced {
-    display: inline;
-  }
   *,
   *::before,
   *::after {
