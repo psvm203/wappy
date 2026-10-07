@@ -31,9 +31,10 @@ function draw({ body, element }: Resident) {
     46,
     Math.min(innerWidth - 46, body.x + Math.sin(body.angle) * 92),
   );
+  const labelInset = element.dataset.wave === "true" ? 24 : 12;
   const nameY = Math.max(
-    12,
-    Math.min(innerHeight - 12, body.y - Math.cos(body.angle) * 68),
+    labelInset,
+    Math.min(innerHeight - labelInset, body.y - Math.cos(body.angle) * 68),
   );
   element.style.setProperty("--name-x", `${nameX - body.x}px`);
   element.style.setProperty("--name-y", `${nameY - body.y}px`);
@@ -56,7 +57,7 @@ export function DesktopCharacters({
   pausedRef.current = paused;
   // The local pet keeps walking even if the presence server is temporarily unreachable.
   const residents = [
-    { ...state.self, online: true },
+    { ...state.self, online: true, wave: undefined },
     ...state.friends.map((friend) => ({
       ...friend,
       online: connected && friend.online,
@@ -223,6 +224,7 @@ export function DesktopCharacters({
           <figure
             key={resident.id}
             className={`desktop-resident ${resident.online ? "" : "is-resting"}`}
+            data-wave={!!resident.wave}
             ref={(element) => {
               if (!element) return;
               const entry = {
@@ -251,7 +253,17 @@ export function DesktopCharacters({
                 />
               </div>
             </div>
-            <figcaption>{name}</figcaption>
+            <figcaption className={resident.wave ? "has-wave" : undefined}>
+              {resident.wave && (
+                <span
+                  className="resident-wave"
+                  aria-label={`${resident.name} 님의 인사`}
+                >
+                  👋 안녕!
+                </span>
+              )}
+              <span className="resident-name">{name}</span>
+            </figcaption>
           </figure>
         );
       })}

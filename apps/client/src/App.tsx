@@ -30,6 +30,7 @@ import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
+import { FriendGreeting } from "./FriendGreeting";
 import {
   forgetSavedSession,
   loadSavedSessions,
@@ -321,6 +322,7 @@ function App() {
     connection === "online"
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
+  const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
 
   const desktopControls = (
     <section className="desktop-controls" aria-label="바탕화면 캐릭터 설정">
@@ -414,11 +416,22 @@ function App() {
         </button>
         <div className="compact-friends">
           {state.friends.map((friend) => (
-            <div key={friend.id} title={friend.name}>
+            <div
+              key={friend.id}
+              title={`${friend.name}${friend.wave ? " · 새 인사" : ""}`}
+            >
               <Character
                 kind={friend.character}
                 asleep={!friend.online || connection !== "online"}
               />
+              {friend.wave && (
+                <span
+                  className="compact-wave"
+                  aria-label={`${friend.name} 님의 새 인사`}
+                >
+                  👋
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -693,6 +706,14 @@ function App() {
                 }}
               >
                 {label}
+                {id === "friends" && waveCount > 0 && (
+                  <span
+                    className="wave-count"
+                    aria-label={`새 인사 ${waveCount}개`}
+                  >
+                    {waveCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -726,6 +747,12 @@ function App() {
                   <span className="count-badge">{onlineCount} online</span>
                 </div>
                 {desktopControls}
+                {state.friends.length > 0 && (
+                  <p className="hint greeting-hint">
+                    손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
+                    전까지 최근 인사 하나를 하루 동안 보관해요.
+                  </p>
+                )}
                 {state.friends.length === 0 ? (
                   <div className="empty-state invitation-empty">
                     <h2>옆자리를 비워뒀어요.</h2>
@@ -772,6 +799,29 @@ function App() {
                                   ? "지금 함께 있어요"
                                   : "잠시 쉬고 있어요"}
                             </small>
+                            <FriendGreeting
+                              friend={friend}
+                              disabled={busy || connection !== "online"}
+                              onSend={() =>
+                                void action(async () => {
+                                  await request(session, "POST /friends/wave", {
+                                    friendId: friend.id,
+                                  });
+                                  setNotice(
+                                    `${friend.name} 님에게 인사를 보냈어요.`,
+                                  );
+                                })
+                              }
+                              onRead={() =>
+                                void action(async () => {
+                                  if (!friend.wave) return;
+                                  await request(session, "POST /waves/read", {
+                                    waveId: friend.wave.id,
+                                  });
+                                  await refresh();
+                                })
+                              }
+                            />
                           </div>
                           <button
                             className="remove-button"

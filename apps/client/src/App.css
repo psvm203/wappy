@@ -204,6 +204,44 @@
   color: #68745e;
   font-size: 9px;
 }
+.greeting-hint {
+  margin: -6px 0 16px;
+}
+.wave-send {
+  min-height: 32px;
+  margin-top: 4px;
+}
+.received-wave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  background: #e3edd3;
+  border-radius: 9px;
+}
+.received-wave p {
+  margin: 0;
+  color: #435d38;
+}
+.received-wave time {
+  display: block;
+  color: #68745e;
+  font-size: 9px;
+}
+.received-wave button {
+  min-height: 32px;
+  flex-shrink: 0;
+}
+.wave-count {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #e3edd3;
+  font-size: 10px;
+}
 .remove-button {
   position: absolute;
   top: 5px;
@@ -723,6 +761,13 @@
 }
 .compact-friends > div {
   margin: 10px 0;
+  position: relative;
+}
+.compact-wave {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 14px;
 }
 .compact-sidebar .character {
   width: 54px;

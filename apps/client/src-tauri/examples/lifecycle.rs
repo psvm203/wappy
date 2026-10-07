@@ -94,6 +94,32 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .map_err(|error| error.to_string())
 }
 
+fn wave_rendered(desktop: &tauri::WebviewWindow, present: bool) -> Result<(), String> {
+    let (sent, received) = mpsc::channel();
+    let listener = desktop
+        .app_handle()
+        .listen_any("wappy:lifecycle-wave", move |_| {
+            let _ = sent.send(());
+        });
+    desktop.eval(format!(r#"(() => {{
+      const check = () => {{
+        const bubble = document.querySelector('.resident-wave');
+        if (!!bubble === {present} && (!bubble || bubble.textContent.includes('안녕!'))) {{
+          observer.disconnect();
+          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-wave', payload: null }});
+        }}
+      }};
+      const observer = new MutationObserver(check);
+      observer.observe(document.body, {{ childList: true, subtree: true }});
+      check();
+    }})()"#)).map_err(|error| error.to_string())?;
+    let result = received
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|error| format!("Desktop greeting did not render (present={present}): {error}"));
+    desktop.app_handle().unlisten(listener);
+    result
+}
+
 fn presence_server() -> Result<(String, Receiver<String>), String> {
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
     let base = format!(
@@ -123,7 +149,7 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
                 break;
             }
             let status = if index == 1 { 503 } else { 200 };
-            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"friends":[]}"#;
+            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#;
             let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }
     });
@@ -224,10 +250,13 @@ fn main() -> Result<(), String> {
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
                 .map_err(|error| error.to_string())?;
             for connected in [true, false, true] {
-                snapshot(&received, |value| {
+                let update = snapshot(&received, |value| {
                     value["state"]["self"]["id"] == "presence-check"
                         && value["connected"] == connected
                 })?;
+                if update["state"]["friends"][0]["wave"]["id"] != "native-wave" {
+                    return Err("The native connection dropped an incoming greeting".into());
+                }
                 if sidebar.is_visible().unwrap_or(true) {
                     return Err("The presence check unexpectedly showed the sidebar".into());
                 }
@@ -240,10 +269,19 @@ fn main() -> Result<(), String> {
                     return Err("Background presence used the wrong request or credential".into());
                 }
             }
+            handle
+                .emit_to("main", "wappy:tray-control", "toggle-visible")
+                .map_err(|error| error.to_string())?;
+            snapshot(&received, |value| value["visible"] == true)?;
+            wave_rendered(&desktop, true)?;
+            if sidebar.is_visible().unwrap_or(true) {
+                return Err("An incoming greeting unexpectedly opened the sidebar".into());
+            }
             // Exercise the real UI handlers without relying on WebView timers.
             click_button(&sidebar, "내 모습")?;
             click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
             snapshot(&received, |value| value["state"].is_null())?;
+            wave_rendered(&desktop, false)?;
             if !matches!(
                 requests.recv_timeout(Duration::from_secs(6)),
                 Err(mpsc::RecvTimeoutError::Timeout)
@@ -289,7 +327,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, hidden presence with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, hidden presence and greeting bubbles with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);

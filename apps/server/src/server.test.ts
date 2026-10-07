@@ -10,9 +10,12 @@ import { request as httpRequest } from "node:http";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
+  WAVE_COOLDOWN_MS,
+  WAVE_TTL_MS,
   type Session,
   type SidebarState,
   type Invite,
+  type Wave,
 } from "@wappy/api";
 import { createApp } from "./server.ts";
 
@@ -465,6 +468,204 @@ test("recovery preserves existing profiles, retries safely and revokes stale cre
     assert.equal((await call("GET", "/state", bob.token)).status, 200);
     time += 60_000;
     assert.equal((await recover(replacement)).status, 200);
+  } finally {
+    if (server.listening) await close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("greetings are private, bounded, durable and acknowledged without losing newer ones", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-waves-"));
+  const databasePath = join(directory, "test.sqlite");
+  let time = Date.now();
+  let server = createApp({ databasePath, now: () => time });
+  let base = "";
+  async function listen() {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    base = `http://127.0.0.1:${address.port}`;
+  }
+  async function close() {
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+  }
+  async function call(path: string, token?: string, body?: unknown) {
+    const response = await fetch(base + path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return {
+      status: response.status,
+      headers: response.headers,
+      body: await response.json(),
+    };
+  }
+  const state = async (user: Session) =>
+    (await call("/state", user.token)).body as SidebarState;
+  const send = (from: Session, to: Session) =>
+    call("/friends/wave", from.token, { friendId: to.profile.id });
+  const read = (user: Session, wave: Wave) =>
+    call("/waves/read", user.token, { waveId: wave.id });
+  async function connect(from: Session, to: Session) {
+    const invite = (await call("/invites", from.token, {})).body as Invite;
+    assert.equal(
+      (await call("/invites/accept", to.token, { code: invite.code })).status,
+      200,
+    );
+  }
+  try {
+    await listen();
+    const people: Session[] = [];
+    for (const name of ["Alice", "Bob", "Carol"]) {
+      const created = await call("/session", undefined, {
+        name,
+        character: "cat",
+        status: "",
+      });
+      assert.equal(created.status, 201);
+      people.push(created.body as Session);
+    }
+    const [alice, bob, carol] = people as [Session, Session, Session];
+    assert.equal(
+      (await call("/friends/wave", undefined, { friendId: bob.profile.id }))
+        .status,
+      401,
+    );
+    assert.equal(
+      (await call("/waves/read", undefined, { waveId: "unknown" })).status,
+      401,
+    );
+    assert.equal(
+      (await call("/friends/wave", alice.token, { friendId: [] })).status,
+      400,
+    );
+    assert.equal((await call("/waves/read", bob.token, {})).status, 400);
+    assert.equal((await send(alice, alice)).status, 404);
+    assert.equal((await send(alice, bob)).status, 404);
+    await connect(alice, bob);
+
+    // Simulate the schema before greetings, preserving established profiles and friends.
+    await close();
+    const oldDatabase = new DatabaseSync(databasePath);
+    oldDatabase.exec("DROP TABLE waves");
+    oldDatabase.close();
+    server = createApp({ databasePath, now: () => time });
+    await listen();
+    assert.equal((await state(alice)).friends[0]?.id, bob.profile.id);
+    assert.equal((await state(alice)).friends[0]?.online, false);
+
+    const results = await Promise.all([send(alice, bob), send(alice, bob)]);
+    assert.deepEqual(results.map((result) => result.status).sort(), [201, 429]);
+    assert.equal(
+      results
+        .find((result) => result.status === 429)
+        ?.headers.get("Retry-After"),
+      "30",
+    );
+    const first = results.find((result) => result.status === 201)!.body as Wave;
+    assert.equal(first.sentAt, time);
+    assert.equal(
+      (await state(alice)).friends[0]?.wave,
+      undefined,
+      "outgoing greetings are not incoming greetings",
+    );
+    assert.deepEqual((await state(bob)).friends[0]?.wave, first);
+    assert.deepEqual(
+      (await state(bob)).friends[0]?.wave,
+      first,
+      "reading state does not consume a greeting",
+    );
+    assert.deepEqual((await state(carol)).friends, []);
+    assert.equal((await send(carol, bob)).status, 404);
+    await read(alice, first);
+    await read(carol, first);
+    assert.deepEqual(
+      (await state(bob)).friends[0]?.wave,
+      first,
+      "only the recipient can acknowledge",
+    );
+    assert.equal((await read(bob, first)).status, 200);
+    assert.equal((await read(bob, first)).status, 200);
+    assert.equal((await state(bob)).friends[0]?.wave, undefined);
+    time += WAVE_COOLDOWN_MS - 1;
+    assert.equal(
+      (await send(alice, bob)).status,
+      429,
+      "acknowledging does not reset the cooldown",
+    );
+    time += 1;
+    const secondResponse = await send(alice, bob);
+    assert.equal(secondResponse.status, 201);
+    const second = secondResponse.body as Wave;
+    time += WAVE_COOLDOWN_MS;
+    const third = (await send(alice, bob)).body as Wave;
+    assert.notEqual(third.id, second.id);
+    await read(bob, second);
+    assert.deepEqual(
+      (await state(bob)).friends[0]?.wave,
+      third,
+      "a stale acknowledgement cannot erase the latest greeting",
+    );
+    const reverse = (await send(bob, alice)).body as Wave;
+    assert.deepEqual((await state(alice)).friends[0]?.wave, reverse);
+    const recovery = (await call("/recovery-code", bob.token, {})).body as {
+      code: string;
+    };
+
+    await close();
+    const database = new DatabaseSync(databasePath);
+    assert.equal(
+      database.prepare("SELECT count(*) AS count FROM waves").get()!.count,
+      2,
+      "at most one greeting per direction",
+    );
+    database.close();
+    server = createApp({ databasePath, now: () => time });
+    await listen();
+    assert.deepEqual((await state(bob)).friends[0]?.wave, third);
+    assert.equal(
+      (await send(alice, bob)).status,
+      429,
+      "server restarts do not reset cooldowns",
+    );
+    const recovered = (await call("/session/recover", undefined, recovery))
+      .body as Session;
+    assert.equal((await call("/state", bob.token)).status, 401);
+    assert.equal((await read(bob, third)).status, 401);
+    assert.deepEqual((await state(recovered)).friends[0]?.wave, third);
+
+    time += WAVE_TTL_MS - 1;
+    assert.deepEqual((await state(recovered)).friends[0]?.wave, third);
+    time += 1;
+    assert.equal((await state(recovered)).friends[0]?.wave, undefined);
+    assert.equal((await state(alice)).friends[0]?.wave, undefined);
+    assert.equal((await send(alice, recovered)).status, 201);
+    assert.equal((await send(recovered, alice)).status, 201);
+    assert.equal(
+      (
+        await call("/friends/remove", recovered.token, {
+          friendId: alice.profile.id,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await send(alice, recovered)).status, 404);
+    assert.deepEqual((await state(alice)).friends, []);
+    await connect(alice, recovered);
+    assert.equal((await state(alice)).friends[0]?.wave, undefined);
+    assert.equal(
+      (await state(recovered)).friends[0]?.wave,
+      undefined,
+      "reconnecting must not restore removed greetings",
+    );
   } finally {
     if (server.listening) await close();
     rmSync(directory, { recursive: true, force: true });

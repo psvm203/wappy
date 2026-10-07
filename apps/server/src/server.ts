@@ -8,12 +8,15 @@ import { DatabaseSync } from "node:sqlite";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
+  WAVE_COOLDOWN_MS,
+  WAVE_TTL_MS,
   isRecord,
   parseProfile,
   type ApiErrorBody,
   type Output,
   type Profile,
   type Route,
+  type Wave,
 } from "@wappy/api";
 
 class HttpError extends Error {
@@ -101,6 +104,14 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS recovery_codes (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS waves (
+      id TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL, friend_id TEXT NOT NULL, sender_id TEXT NOT NULL,
+      sent_at INTEGER NOT NULL, acknowledged INTEGER NOT NULL CHECK (acknowledged IN (0, 1)),
+      PRIMARY KEY (user_id, friend_id, sender_id),
+      CHECK (sender_id = user_id OR sender_id = friend_id),
+      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
+    ) STRICT;
   `);
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
@@ -125,6 +136,7 @@ export function createApp(options: {
     for (const [ip, limit] of limits)
       if (limit.until <= time) limits.delete(ip);
     db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
+    db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
   }, 60_000);
   housekeeping.unref();
 
@@ -239,21 +251,36 @@ export function createApp(options: {
           break;
         }
         case "GET /state": {
-          lastSeen.set(self!.id, now());
+          const time = now();
+          lastSeen.set(self!.id, time);
           const rows = db
             .prepare(
-              `SELECT u.id, u.name, u.character, u.status FROM friendships f
+              `SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at
+            FROM friendships f
             JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+            LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
+              AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
             WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id`,
             )
-            .all(self!.id, self!.id, self!.id) as unknown as Profile[];
+            .all(
+              self!.id,
+              time - WAVE_TTL_MS,
+              self!.id,
+              self!.id,
+            ) as unknown as (Profile & {
+            wave_id: string | null;
+            wave_sent_at: number | null;
+          })[];
           reply(res, route, {
             self: self!,
-            friends: rows.map((friend) => ({
+            friends: rows.map(({ wave_id, wave_sent_at, ...friend }) => ({
               ...friend,
               online:
                 lastSeen.has(friend.id) &&
-                now() - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+                time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+              ...(wave_id && wave_sent_at !== null
+                ? { wave: { id: wave_id, sentAt: wave_sent_at } }
+                : {}),
             })),
           });
           break;
@@ -321,6 +348,62 @@ export function createApp(options: {
           db.prepare(
             "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
           ).run(pair[0]!, pair[1]!);
+          reply(res, route, { ok: true });
+          break;
+        }
+        case "POST /friends/wave": {
+          const pair = [self!.id, field(body, "friendId")].sort();
+          const time = now();
+          // One row per direction keeps only the latest greeting. The guarded upsert
+          // also enforces cooldown across restarts and simultaneous requests.
+          const wave = db
+            .prepare(
+              `
+            INSERT INTO waves (id, user_id, friend_id, sender_id, sent_at, acknowledged)
+            SELECT ?, user_id, friend_id, ?, ?, 0 FROM friendships
+            WHERE user_id = ? AND friend_id = ?
+            ON CONFLICT(user_id, friend_id, sender_id) DO UPDATE SET
+              id = excluded.id, sent_at = excluded.sent_at, acknowledged = 0
+            WHERE waves.sent_at <= ?
+            RETURNING id, sent_at AS sentAt
+          `,
+            )
+            .get(
+              randomUUID(),
+              self!.id,
+              time,
+              pair[0]!,
+              pair[1]!,
+              time - WAVE_COOLDOWN_MS,
+            ) as unknown as Wave | undefined;
+          if (!wave) {
+            if (
+              !db
+                .prepare(
+                  "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
+                )
+                .get(pair[0]!, pair[1]!)
+            )
+              throw new HttpError(
+                404,
+                "연결된 친구에게만 인사를 보낼 수 있어요.",
+              );
+            res.setHeader("Retry-After", String(WAVE_COOLDOWN_MS / 1000));
+            throw new HttpError(
+              429,
+              "방금 인사를 보냈어요. 같은 친구에게는 30초에 한 번 보낼 수 있어요.",
+            );
+          }
+          reply(res, route, wave, 201);
+          break;
+        }
+        case "POST /waves/read": {
+          // Match the exact greeting: a late acknowledgement must not hide a newer one.
+          // Only the recipient may acknowledge it; retries and stale ids are safe no-ops.
+          db.prepare(
+            `UPDATE waves SET acknowledged = 1 WHERE id = ?
+            AND sender_id != ? AND (user_id = ? OR friend_id = ?)`,
+          ).run(field(body, "waveId"), self!.id, self!.id, self!.id);
           reply(res, route, { ok: true });
           break;
         }

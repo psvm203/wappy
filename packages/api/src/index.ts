@@ -11,6 +11,8 @@ export const ONLINE_TIMEOUT_MS = 30_000;
 export const INVITE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const MAX_NAME_LENGTH = 24;
 export const MAX_STATUS_LENGTH = 60;
+export const WAVE_COOLDOWN_MS = 30_000;
+export const WAVE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 export interface ProfileInput {
   name: string;
@@ -22,6 +24,11 @@ export interface Profile extends ProfileInput {
 }
 export interface Friend extends Profile {
   online: boolean;
+  wave?: Wave;
+}
+export interface Wave {
+  id: string;
+  sentAt: number;
 }
 export interface SidebarState {
   self: Profile;
@@ -52,6 +59,8 @@ export interface ApiRoutes {
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/accept": { input: { code: string }; output: Profile };
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
+  "POST /friends/wave": { input: { friendId: string }; output: Wave };
+  "POST /waves/read": { input: { waveId: string }; output: { ok: true } };
 }
 export type Route = keyof ApiRoutes;
 export type Input<R extends Route> = ApiRoutes[R]["input"];
@@ -102,13 +111,32 @@ export function parseSidebarState(value: unknown): SidebarState {
     throw new Error("잘못된 친구 목록 응답입니다.");
   const self = profile(value.self);
   const ids = new Set([self.id]);
+  const waveIds = new Set<string>();
   const friends = value.friends.map((friend): Friend => {
     if (!isRecord(friend) || typeof friend.online !== "boolean")
       throw new Error("잘못된 접속 상태 응답입니다.");
     const parsed = profile(friend);
     if (ids.has(parsed.id)) throw new Error("중복된 친구 응답입니다.");
     ids.add(parsed.id);
-    return { ...parsed, online: friend.online };
+    let wave: Wave | undefined;
+    if (friend.wave !== undefined) {
+      const input = friend.wave;
+      if (
+        !isRecord(input) ||
+        typeof input.id !== "string" ||
+        !input.id ||
+        input.id.length > 128 ||
+        waveIds.has(input.id) ||
+        typeof input.sentAt !== "number" ||
+        !Number.isSafeInteger(input.sentAt) ||
+        input.sentAt <= 0 ||
+        input.sentAt > 8_640_000_000_000_000
+      )
+        throw new Error("잘못된 인사 응답입니다.");
+      waveIds.add(input.id);
+      wave = { id: input.id, sentAt: input.sentAt };
+    }
+    return { ...parsed, online: friend.online, ...(wave ? { wave } : {}) };
   });
   return { self, friends };
 }

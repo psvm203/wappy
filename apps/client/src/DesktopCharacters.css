@@ -56,6 +56,22 @@
   text-overflow: ellipsis;
   pointer-events: none;
 }
+.desktop-resident figcaption.has-wave {
+  background: #e9f2d9;
+  box-shadow: 0 2px 6px #23311a26;
+}
+.resident-wave {
+  display: block;
+  color: #3f5932;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.resident-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .desktop-characters.is-paused * {
   animation-play-state: paused;
 }
