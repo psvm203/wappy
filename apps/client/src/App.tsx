@@ -44,6 +44,7 @@ import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
+import { ServerCheck } from "./ServerCheck";
 import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
@@ -880,6 +881,7 @@ function App() {
                   코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
                   붙여넣으면 초대장의 서버를 사용해요.
                 </p>
+                <ServerCheck key={server} server={server} busy={busy} />
               </details>
             </ProfileForm>
           )}
@@ -1395,6 +1397,11 @@ function App() {
                   <p className="hint server-address">
                     현재 서버: <strong>{session.server}</strong>
                   </p>
+                  <ServerCheck
+                    key={session.server}
+                    server={session.server}
+                    busy={busy}
+                  />
                   <p>
                     현재 프로필을 이 기기에 보관하고 첫 화면으로 돌아갑니다.
                     다른 서버에서 새로 시작하거나, 보관한 프로필로 다시 돌아올

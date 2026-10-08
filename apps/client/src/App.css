@@ -725,6 +725,9 @@
   cursor: pointer;
   padding: 5px 0;
 }
+.server-check {
+  margin: 12px 0;
+}
 .hint {
   font-size: 10px;
   color: #68745e;

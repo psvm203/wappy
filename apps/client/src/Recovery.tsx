@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { errorMessage, request, type SavedSession } from "./api";
+import { ServerCheck } from "./ServerCheck";
 
 export function RecoveryForm({
   server,
@@ -30,6 +31,7 @@ export function RecoveryForm({
             onChange={(event) => onServerChange(event.target.value)}
           />
         </label>
+        <ServerCheck key={server} server={server} busy={busy} />
         <label className="field">
           보관한 복구 코드
           <input

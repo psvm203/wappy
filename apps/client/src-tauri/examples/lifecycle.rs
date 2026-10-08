@@ -191,7 +191,8 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
     );
     let (sent, requests) = mpsc::channel();
     thread::spawn(move || {
-        for (index, socket) in listener.incoming().enumerate() {
+        let mut state_requests = 0;
+        for socket in listener.incoming() {
             let Ok(mut socket) = socket else {
                 break;
             };
@@ -208,12 +209,24 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
                 }
                 request.push_str(&line);
             }
+            let health = request.starts_with("GET /health ");
             if sent.send(request).is_err() {
                 break;
             }
-            let status = if index == 1 { 503 } else { 200 };
-            let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#;
-            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            let status = if !health && state_requests == 1 {
+                503
+            } else {
+                200
+            };
+            if !health {
+                state_requests += 1;
+            }
+            let body = if health {
+                r#"{"ok":true}"#
+            } else {
+                r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#
+            };
+            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }
     });
     Ok((base, requests))
@@ -366,6 +379,22 @@ fn main() -> Result<(), String> {
             click_button(&sidebar, "체험 끝내고 시작하기")?;
             snapshot(&received, |value| value["state"] == serde_json::Value::Null)
                 .map_err(|error| format!("Local preview did not stop: {error}"))?;
+            text_rendered(&desktop, ".desktop-resident", "", false)?;
+            println!("CHECK: public server connection check without profile credentials");
+            sidebar
+                .eval("document.querySelector('.server-settings').open = true;")
+                .map_err(|error| error.to_string())?;
+            click_button(&sidebar, "서버 연결 확인")?;
+            let health = requests
+                .recv_timeout(Duration::from_secs(5))
+                .map_err(|error| format!("Server check was not sent: {error}"))?;
+            if !health.starts_with("GET /health ")
+                || health.to_ascii_lowercase().contains("authorization:")
+                || health.to_ascii_lowercase().contains("cookie:")
+            {
+                return Err("Server check sent an unexpected request or credentials".into());
+            }
+            text_rendered(&sidebar, ".server-check", "서버 응답을 확인했어요", true)?;
             text_rendered(&desktop, ".desktop-resident", "", false)?;
             click_button(&sidebar, "서버 없이 체험하기")?;
             snapshot(&received, |value| {
