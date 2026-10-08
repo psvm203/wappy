@@ -35,6 +35,15 @@ export const MAX_NAME_LENGTH = 24;
 export const MAX_STATUS_LENGTH = 60;
 export const WAVE_COOLDOWN_MS = 30_000;
 export const WAVE_TTL_MS = 24 * 60 * 60 * 1_000;
+export const ATTACK_COOLDOWN_MS = 2_000;
+export const ATTACK_TTL_MS = 15_000;
+export const ATTACK_HISTORY_LIMIT = 50;
+export interface AttackEvent {
+  id: number;
+  attackerId: string;
+  targetId: string;
+  sentAt: number;
+}
 export const MAX_CHAT_LENGTH = 200;
 export const CHAT_HISTORY_LIMIT = 50;
 export const CHAT_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -103,6 +112,8 @@ export interface SidebarState {
   blocking?: BlockingSettings;
   /** Absent on older servers; false when the operator has paused new reports. */
   chatReporting?: boolean;
+  /** Recent attacks involving self; absent on servers without online attacks. */
+  attacks?: AttackEvent[];
 }
 export type BlockedProfile = Pick<Profile, "id" | "name" | "character">;
 export interface BlockingSettings {
@@ -181,6 +192,7 @@ export interface ApiRoutes {
     output: BlockingSettings;
   };
   "POST /friends/wave": { input: { friendId: string }; output: Wave };
+  "POST /friends/attack": { input: { friendId: string }; output: AttackEvent };
   "POST /waves/read": { input: { waveId: string }; output: { ok: true } };
 }
 export type Route = keyof ApiRoutes;
@@ -189,6 +201,31 @@ export type Output<R extends Route> = ApiRoutes[R]["output"];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseAttackEvent(value: unknown): AttackEvent {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.id) ||
+    (value.id as number) <= 0 ||
+    typeof value.attackerId !== "string" ||
+    !value.attackerId ||
+    value.attackerId.length > 128 ||
+    typeof value.targetId !== "string" ||
+    !value.targetId ||
+    value.targetId.length > 128 ||
+    value.attackerId === value.targetId ||
+    !Number.isSafeInteger(value.sentAt) ||
+    (value.sentAt as number) <= 0 ||
+    (value.sentAt as number) > 8_640_000_000_000_000
+  )
+    throw new Error("잘못된 공격 응답입니다.");
+  return {
+    id: value.id as number,
+    attackerId: value.attackerId,
+    targetId: value.targetId,
+    sentAt: value.sentAt as number,
+  };
 }
 
 export function parseChatReportInput(value: unknown): ChatReportInput {
@@ -474,9 +511,31 @@ export function parseSidebarState(value: unknown): SidebarState {
       : parseBlockingSettings(value.blocking);
   if (blocking?.profiles.some((profile) => ids.has(profile.id)))
     throw new Error("차단한 프로필이 친구 목록에 포함되어 있습니다.");
+  let attacks: AttackEvent[] | undefined;
+  if (value.attacks !== undefined) {
+    if (
+      !Array.isArray(value.attacks) ||
+      value.attacks.length > ATTACK_HISTORY_LIMIT
+    )
+      throw new Error("잘못된 공격 목록입니다.");
+    let previousId = 0;
+    attacks = value.attacks.map((input) => {
+      const attack = parseAttackEvent(input);
+      if (
+        attack.id <= previousId ||
+        !ids.has(attack.attackerId) ||
+        !ids.has(attack.targetId) ||
+        (attack.attackerId !== self.id && attack.targetId !== self.id)
+      )
+        throw new Error("잘못된 공격 참여자 또는 순서입니다.");
+      previousId = attack.id;
+      return attack;
+    });
+  }
   return {
     self,
     friends,
+    ...(attacks === undefined ? {} : { attacks }),
     ...(messages === undefined ? {} : { messages }),
     ...(value.directChat === true ? { directChat: true as const } : {}),
     ...(value.chatReporting === undefined

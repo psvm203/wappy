@@ -14,6 +14,7 @@ import {
   parseChatMessage,
   parseChatMessageIds,
   parseBlockingSettings,
+  parseAttackEvent,
   CHAT_HISTORY_LIMIT,
   isRecord,
   type Invite,
@@ -79,6 +80,7 @@ import {
   parseInvitation,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
+import { useDesktopAttackRequests } from "./attack-bridge";
 import "./App.css";
 
 const emptyProfile: ProfileInput = {
@@ -179,11 +181,44 @@ function App() {
     visible: charactersVisible,
     hiddenIds: selection.hiddenIds,
   });
+  const attackError = useDesktopAttackRequests(profileKey, async (friendId) => {
+    if (
+      !session ||
+      currentSession.current !== session ||
+      connection !== "online" ||
+      !state ||
+      state.attacks === undefined
+    )
+      throw new ApiError(503, "온라인 공격을 지원하는 서버에 연결해 주세요.");
+    if (
+      !state.friends.some(
+        (friend) => friend.id === friendId && friend.online,
+      ) ||
+      state.presence?.sharing === false
+    )
+      throw new ApiError(
+        409,
+        "두 캐릭터가 접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
+      );
+    const active = session;
+    const event = parseAttackEvent(
+      await request(active, "POST /friends/attack", { friendId }),
+    );
+    if (event.attackerId !== state.self.id || event.targetId !== friendId)
+      throw new ApiError(502, "공격 전송 결과를 확인하지 못했어요.");
+    if (currentSession.current !== active)
+      throw new ApiError(
+        409,
+        "프로필이 바뀌었어요. 현재 프로필에서 다시 시도해 주세요.",
+      );
+    return event;
+  });
   const desktopError =
     preferencesError ||
     selection.error ||
     greetingError ||
     chatError ||
+    attackError ||
     syncError;
 
   useEffect(() => {

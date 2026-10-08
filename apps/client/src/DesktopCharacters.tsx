@@ -9,11 +9,23 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
-import type { ChatMessage } from "@wappy/api";
+import {
+  ATTACK_COOLDOWN_MS,
+  type AttackEvent,
+  type ChatMessage,
+} from "@wappy/api";
 import { Character } from "./Character";
 import { OPEN_CHAT_EVENT, OPEN_GREETING_EVENT } from "./desktop";
 import { ChatBubble } from "./ChatPanel";
 import { latestChat, movedForDrag } from "./chat";
+import { requestDesktopAttack } from "./attack-bridge";
+import { collectAttacks, nextAttack, type AttackInbox } from "./online-attacks";
+import {
+  advanceAttack,
+  cancelAttack,
+  createAttack,
+  type Attack,
+} from "./desktop-attack";
 import {
   advanceBody,
   CHARACTER_SIZE,
@@ -53,7 +65,11 @@ function moveHeldBody(body: Body, held: Drag) {
   );
 }
 
-function draw({ body, element, walking }: Resident) {
+function draw({ body, element, walking }: Resident, attack: Attack | null) {
+  element.dataset.attack = attack?.attacker === body ? attack.phase : "";
+  element.dataset.hit = String(
+    attack?.target === body && attack.phase === "impact",
+  );
   element.style.transform = `translate3d(${body.x - CHARACTER_SIZE / 2}px, ${body.y - CHARACTER_SIZE / 2}px, 0)`;
   element.style.setProperty("--angle", `${body.angle}rad`);
   element.style.setProperty("--facing", `${-body.direction}`);
@@ -100,24 +116,70 @@ export function DesktopCharacters({
   paused,
   profileKey,
   messages,
+  attacks,
+  attackInbox,
+  connected,
 }: {
   residents: DesktopResident[];
   paused: boolean;
   profileKey: string | null;
   messages?: ChatMessage[];
+  attacks?: AttackEvent[];
+  attackInbox: AttackInbox;
+  connected: boolean;
 }) {
   const [failedGreeting, setFailedGreeting] = useState<string | null>(null);
   const [failedChat, setFailedChat] = useState<string | null>(null);
+  const [attackNotice, setAttackNotice] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
+  const lastAttackAt = useRef(-Infinity);
+  const attack = useRef<
+    (Attack & { attackerId: string; targetId: string }) | null
+  >(null);
   const wakeAnimation = useRef(() => {});
+
+  useEffect(() => {
+    if (!attackNotice) return;
+    const timer = setTimeout(() => setAttackNotice(null), 3200);
+    return () => clearTimeout(timer);
+  }, [attackNotice]);
 
   useLayoutEffect(() => {
     const ids = new Set(residents.map((profile) => profile.id));
     for (const id of entries.current.keys())
       if (!ids.has(id)) entries.current.delete(id);
     if (drag.current && !ids.has(drag.current.id)) drag.current = null;
+    const active = attack.current;
+    if (active && (!ids.has(active.attackerId) || !ids.has(active.targetId)))
+      stopAttack();
   }, [residents]);
+
+  useLayoutEffect(() => {
+    const online = new Set(
+      residents
+        .filter((resident) => resident.online)
+        .map((resident) => resident.id),
+    );
+    collectAttacks(
+      attackInbox,
+      attacks ?? [],
+      online,
+      connected && !paused,
+      performance.now(),
+    );
+    const active = attack.current;
+    if (
+      active &&
+      (!connected ||
+        paused ||
+        !online.has(active.attackerId) ||
+        !online.has(active.targetId))
+    )
+      stopAttack();
+    startNextAttack();
+    wakeAnimation.current();
+  }, [attacks, residents, connected, paused, attackInbox]);
 
   useEffect(() => {
     let frame: number | null = null;
@@ -126,6 +188,10 @@ export function DesktopCharacters({
       needsAnimation(resident.body, resident.walking);
     const schedule = () => {
       if (paused) return;
+      if (attack.current) {
+        frame = requestAnimationFrame(animate);
+        return;
+      }
       for (const resident of entries.current.values()) {
         if (moving(resident)) {
           frame = requestAnimationFrame(animate);
@@ -137,7 +203,15 @@ export function DesktopCharacters({
       frame = null;
       const elapsed = (now - previous) / 1000;
       previous = now;
+      startNextAttack();
       for (const resident of entries.current.values()) {
+        const active = attack.current;
+        if (
+          active &&
+          (resident.body === active.attacker ||
+            (resident.body === active.target && active.phase === "impact"))
+        )
+          continue;
         if (!moving(resident)) continue;
         advanceBody(
           resident.body,
@@ -147,9 +221,29 @@ export function DesktopCharacters({
           resident.walking,
         );
         const held = drag.current;
-        if (held && entries.current.get(held.id) === resident)
+        if (held?.moved && entries.current.get(held.id) === resident)
           moveHeldBody(resident.body, held);
-        draw(resident);
+        draw(resident, attack.current);
+      }
+      const active = attack.current;
+      if (active) {
+        const attacker = entries.current.get(active.attackerId);
+        const target = entries.current.get(active.targetId);
+        if (!attacker || !target) stopAttack();
+        else {
+          if (
+            advanceAttack(
+              active,
+              elapsed,
+              innerWidth,
+              innerHeight,
+              target.walking,
+            ) === "done"
+          )
+            attack.current = null;
+          draw(attacker, attack.current);
+          draw(target, attack.current);
+        }
       }
       schedule();
     };
@@ -167,7 +261,7 @@ export function DesktopCharacters({
           innerWidth,
           innerHeight,
         );
-        draw(resident);
+        draw(resident, attack.current);
       }
       wake();
     };
@@ -179,7 +273,7 @@ export function DesktopCharacters({
       window.removeEventListener("resize", resize);
       wakeAnimation.current = () => {};
     };
-  }, [paused]);
+  }, [paused, connected, attackInbox]);
 
   useEffect(() => {
     // Presence changes can wake an idle scene without resetting a running frame clock.
@@ -244,7 +338,7 @@ export function DesktopCharacters({
     if (
       event.button !== 0 ||
       drag.current ||
-      (event.target as Element).closest("button")
+      (event.target as Element).closest("button, .chat-bubble")
     )
       return;
     const resident = entries.current.get(id)!;
@@ -262,9 +356,6 @@ export function DesktopCharacters({
     }
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    body.mode = "drag";
-    body.vx = body.vy = 0;
-    body.dragTilt = 0;
     const dx = event.clientX - body.x,
       dy = event.clientY - body.y;
     const cos = Math.cos(body.angle),
@@ -281,8 +372,6 @@ export function DesktopCharacters({
       startY: event.clientY,
       moved: false,
     };
-    draw(resident);
-    wakeAnimation.current();
   }
 
   function moveDrag(event: PointerEvent<HTMLElement>) {
@@ -290,12 +379,24 @@ export function DesktopCharacters({
     if (!current || current.pointerId !== event.pointerId) return;
     const resident = entries.current.get(current.id);
     if (!resident) return;
-    current.moved ||= movedForDrag(
+    const moved = movedForDrag(
       current.startX,
       current.startY,
       event.clientX,
       event.clientY,
     );
+    if (!current.moved) {
+      if (!moved) return;
+      const active = attack.current;
+      if (
+        active &&
+        (active.attackerId === current.id || active.targetId === current.id)
+      )
+        stopAttack();
+      current.moved = true;
+      resident.body.mode = "drag";
+      resident.body.vx = resident.body.vy = resident.body.dragTilt = 0;
+    }
     current.pointerX = event.clientX;
     current.pointerY = event.clientY;
     moveHeldBody(resident.body, current);
@@ -310,7 +411,7 @@ export function DesktopCharacters({
     });
     const { vx } = releaseVelocity(current.samples, event.timeStamp);
     resident.body.dragTilt = Math.max(-0.4, Math.min(0.4, vx / 2500));
-    draw(resident);
+    draw(resident, attack.current);
     wakeAnimation.current();
   }
 
@@ -319,7 +420,7 @@ export function DesktopCharacters({
     if (!current || current.pointerId !== event.pointerId) return;
     if (!cancelled) moveDrag(event);
     const resident = entries.current.get(current.id);
-    if (resident) {
+    if (resident && current.moved) {
       Object.assign(
         resident.body,
         cancelled || !resident.walking
@@ -329,13 +430,89 @@ export function DesktopCharacters({
       resident.body.mode = "air";
       resident.body.angle += resident.body.dragTilt;
       resident.body.dragTilt = 0;
-      draw(resident);
+      draw(resident, attack.current);
       wakeAnimation.current();
     }
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
-    if (!cancelled && !current.moved) void openChat(current.id);
+    if (!cancelled && !current.moved) activateResident(current.id);
+  }
+
+  function stopAttack() {
+    const active = attack.current;
+    if (!active) return;
+    cancelAttack(active);
+    attack.current = null;
+    for (const id of [active.attackerId, active.targetId]) {
+      const resident = entries.current.get(id);
+      if (resident) draw(resident, null);
+    }
+  }
+
+  function startAttack(attackerId: string, targetId: string): boolean {
+    const attacker = entries.current.get(attackerId);
+    const target = entries.current.get(targetId);
+    if (!attacker?.walking || !target?.walking) return false;
+    const next = createAttack(attacker.body, target.body);
+    if (!next) return false;
+    attack.current = { ...next, attackerId, targetId };
+    draw(attacker, attack.current);
+    return true;
+  }
+
+  function startNextAttack() {
+    if (attack.current || drag.current || paused || !connected) return;
+    let event: AttackEvent | undefined;
+    while ((event = nextAttack(attackInbox, performance.now())))
+      if (startAttack(event.attackerId, event.targetId)) break;
+  }
+
+  async function activateResident(id: string) {
+    const targetProfile = residents.find((resident) => resident.id === id);
+    if (!targetProfile) return;
+    if (targetProfile.isSelf) {
+      void openChat(id);
+      return;
+    }
+    if (paused) {
+      setAttackNotice("움직임을 다시 시작하면 공격할 수 있어요.");
+      return;
+    }
+    if (!profileKey || !connected || attacks === undefined) {
+      setAttackNotice("온라인 공격을 지원하는 서버에 연결해 주세요.");
+      return;
+    }
+    if (!targetProfile.online) {
+      setAttackNotice("접속 중인 친구에게 공격할 수 있어요.");
+      return;
+    }
+    const self = residents.find((resident) => resident.isSelf);
+    if (!self) {
+      setAttackNotice("내 캐릭터를 표시하면 공격할 수 있어요.");
+      return;
+    }
+    if (attack.current || drag.current) return;
+    const now = performance.now();
+    if (now - lastAttackAt.current < ATTACK_COOLDOWN_MS) {
+      setAttackNotice("공격은 2초에 한 번 보낼 수 있어요.");
+      return;
+    }
+    if (!startAttack(self.id, id)) return;
+    lastAttackAt.current = now;
+    wakeAnimation.current();
+    setAttackNotice(null);
+    try {
+      const event = await requestDesktopAttack(profileKey, id);
+      if (event.attackerId !== self.id)
+        throw new Error("공격한 캐릭터를 확인하지 못했어요.");
+    } catch (cause) {
+      setAttackNotice(
+        cause instanceof Error
+          ? cause.message
+          : "공격을 보내지 못했어요. 다시 시도해 주세요.",
+      );
+    }
   }
 
   async function openChat(id: string) {
@@ -353,6 +530,11 @@ export function DesktopCharacters({
       className={`desktop-characters ${paused ? "is-paused" : ""}`}
       aria-label="바탕화면 캐릭터"
     >
+      {attackNotice && (
+        <p className="attack-notice" role="status">
+          {attackNotice}
+        </p>
+      )}
       {residents.map((resident) => {
         const name = `${resident.name}${resident.isSelf ? " (나)" : ""}`;
         const chat = latestChat(messages, resident.id);
@@ -373,9 +555,9 @@ export function DesktopCharacters({
               };
               entries.current.set(resident.id, entry);
               if (!resident.online) entry.body.vx = entry.body.vy = 0;
-              draw(entry);
+              draw(entry, attack.current);
             }}
-            title={`${name} · 클릭해서 채팅 · 드래그해서 이동`}
+            title={`${name} · ${resident.isSelf ? "클릭해서 채팅" : "클릭해서 공격"} · 드래그해서 이동`}
             onPointerDown={(event) => startDrag(event, resident.id)}
             onPointerMove={moveDrag}
             onPointerUp={(event) => endDrag(event)}
@@ -385,13 +567,19 @@ export function DesktopCharacters({
           >
             <div
               className="resident-rotation"
-              role={profileKey ? "button" : undefined}
-              tabIndex={profileKey ? 0 : undefined}
-              aria-label={profileKey ? `${name} 캐릭터로 채팅 열기` : undefined}
+              role={!resident.isSelf || profileKey ? "button" : undefined}
+              tabIndex={!resident.isSelf || profileKey ? 0 : undefined}
+              aria-label={
+                resident.isSelf
+                  ? profileKey
+                    ? `${name} 캐릭터로 채팅 열기`
+                    : undefined
+                  : `내 캐릭터로 ${name} 공격하기`
+              }
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  void openChat(resident.id);
+                  if (!event.repeat) activateResident(resident.id);
                 }
               }}
             >
@@ -402,11 +590,21 @@ export function DesktopCharacters({
                 />
               </div>
             </div>
-            <figcaption className={resident.wave ? "has-wave" : undefined}>
+            <span className="resident-impact" aria-hidden="true">
+              팡!
+            </span>
+            <figcaption
+              className={resident.wave ? "has-wave" : undefined}
+              onClick={(event) => {
+                if ((event.target as Element).closest(".chat-bubble"))
+                  void openChat(resident.id);
+              }}
+            >
               <ChatBubble message={chat} />
               {failedChat === resident.id && (
                 <span role="alert">
-                  채팅을 열지 못했어요. 다시 클릭해 주세요.
+                  채팅을 열지 못했어요. 말풍선이나 친구 목록에서 다시 열어
+                  주세요.
                 </span>
               )}
               {resident.wave && (

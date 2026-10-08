@@ -21,6 +21,14 @@ export function applyBlockingSettings(
     ...state,
     blocking,
     friends,
+    ...(state.attacks === undefined
+      ? {}
+      : {
+          attacks: state.attacks.filter(
+            (attack) =>
+              visible.has(attack.attackerId) && visible.has(attack.targetId),
+          ),
+        }),
     ...(messages === undefined ? {} : { messages }),
     ...(state.unreadChatIds === undefined
       ? {}

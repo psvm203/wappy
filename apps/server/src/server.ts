@@ -14,6 +14,10 @@ import {
   ONLINE_TIMEOUT_MS,
   WAVE_COOLDOWN_MS,
   WAVE_TTL_MS,
+  ATTACK_COOLDOWN_MS,
+  ATTACK_TTL_MS,
+  ATTACK_HISTORY_LIMIT,
+  type AttackEvent,
   CHAT_COOLDOWN_MS,
   CHAT_HISTORY_LIMIT,
   CHAT_TTL_MS,
@@ -178,6 +182,17 @@ export function createApp(options: {
       recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       text TEXT NOT NULL, sent_at INTEGER NOT NULL
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS attack_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
+      attacker_id TEXT NOT NULL, target_id TEXT NOT NULL, sent_at INTEGER NOT NULL,
+      CHECK ((attacker_id = user_id AND target_id = friend_id) OR
+        (attacker_id = friend_id AND target_id = user_id)),
+      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS attacks_sender ON attack_events(attacker_id, sent_at);
+    CREATE INDEX IF NOT EXISTS attacks_target ON attack_events(target_id, sent_at);
+    CREATE INDEX IF NOT EXISTS attacks_expiry ON attack_events(sent_at);
     CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
     CREATE INDEX IF NOT EXISTS chat_expiry ON chat_messages(sent_at);
     CREATE TABLE IF NOT EXISTS chat_recipients (
@@ -293,6 +308,10 @@ export function createApp(options: {
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
     ) AND sent_at > ? ORDER BY id DESC LIMIT ?
   `);
+  const selectAttacks =
+    db.prepare(`SELECT id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt
+    FROM attack_events WHERE (attacker_id = ? OR target_id = ?) AND sent_at > ?
+    ORDER BY id DESC LIMIT ?`);
   const acknowledgeChat = db.prepare(`
     UPDATE chat_recipients SET acknowledged = 1
     WHERE message_id = ? AND (user_id = ? OR friend_id = ?)
@@ -315,6 +334,9 @@ export function createApp(options: {
       if (attempt.expiresAt <= time) kakaoAttempts.delete(state);
     db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
     db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
+    db.prepare("DELETE FROM attack_events WHERE sent_at <= ?").run(
+      time - ATTACK_TTL_MS,
+    );
     db.prepare("DELETE FROM chat_messages WHERE sent_at <= ?").run(
       time - CHAT_TTL_MS,
     );
@@ -703,6 +725,14 @@ export function createApp(options: {
           ).reverse();
           const state: Output<"GET /state"> = {
             self: self!,
+            attacks: (
+              selectAttacks.all(
+                self!.id,
+                self!.id,
+                time - ATTACK_TTL_MS,
+                ATTACK_HISTORY_LIMIT,
+              ) as unknown as AttackEvent[]
+            ).reverse(),
             blocking: blocking(self!.id),
             directChat: true,
             chatReporting: options.reportsEnabled === true,
@@ -747,6 +777,8 @@ export function createApp(options: {
           }
           for (const message of state.messages!)
             validUntil = Math.min(validUntil, message.sentAt + CHAT_TTL_MS);
+          for (const attack of state.attacks!)
+            validUntil = Math.min(validUntil, attack.sentAt + ATTACK_TTL_MS);
           if (!validators.has(self!.id) && validators.size >= 1024)
             validators.delete(validators.keys().next().value!);
           validators.set(self!.id, {
@@ -1089,6 +1121,54 @@ export function createApp(options: {
             throw error;
           }
           reply(res, route, blocking(self!.id));
+          break;
+        }
+        case "POST /friends/attack": {
+          const friendId = field(body, "friendId");
+          const pair = [self!.id, friendId].sort();
+          if (
+            blockedPair.get(self!.id, friendId, friendId, self!.id) ||
+            !db
+              .prepare(
+                "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
+              )
+              .get(pair[0]!, pair[1]!)
+          )
+            throw new HttpError(404, "연결된 친구에게만 공격할 수 있어요.");
+          const time = now();
+          for (const id of [self!.id, friendId]) {
+            if (
+              selectPresence.get(id)?.sharing === 0 ||
+              !lastSeen.has(id) ||
+              time - lastSeen.get(id)! >= ONLINE_TIMEOUT_MS
+            )
+              throw new HttpError(
+                409,
+                "두 캐릭터가 접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
+              );
+          }
+          // A single guarded insert enforces the sender cooldown across all targets and restarts.
+          const attack = db
+            .prepare(
+              `INSERT INTO attack_events (user_id, friend_id, attacker_id, target_id, sent_at)
+            SELECT user_id, friend_id, ?, ?, ? FROM friendships WHERE user_id = ? AND friend_id = ?
+            AND NOT EXISTS (SELECT 1 FROM attack_events WHERE attacker_id = ? AND sent_at > ?)
+            RETURNING id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt`,
+            )
+            .get(
+              self!.id,
+              friendId,
+              time,
+              pair[0]!,
+              pair[1]!,
+              self!.id,
+              time - ATTACK_COOLDOWN_MS,
+            ) as unknown as AttackEvent | undefined;
+          if (!attack) {
+            res.setHeader("Retry-After", String(ATTACK_COOLDOWN_MS / 1000));
+            throw new HttpError(429, "공격은 2초에 한 번 보낼 수 있어요.");
+          }
+          reply(res, route, attack, 201);
           break;
         }
         case "POST /friends/wave": {

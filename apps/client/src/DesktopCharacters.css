@@ -66,6 +66,69 @@
 .desktop-resident[data-motion="drag"] .character-shadow {
   opacity: 0;
 }
+.desktop-resident[data-attack="dash"] .character .character-body {
+  transform-origin: 50px 55px;
+  animation: attack-dash 0.18s ease-in-out infinite alternate;
+}
+.desktop-resident[data-attack="dash"],
+.desktop-resident[data-attack="impact"] {
+  z-index: 1;
+}
+.desktop-resident[data-hit="true"] {
+  z-index: 2;
+}
+.desktop-resident[data-attack="dash"] .character-flight-trail {
+  opacity: 0.7;
+}
+.desktop-resident[data-attack="impact"] .character .character-body {
+  transform-origin: 50px 55px;
+  animation: attack-strike 0.38s ease-out both;
+}
+.desktop-resident[data-hit="true"] .character .character-body {
+  animation: attack-shake 0.1s ease-in-out 3;
+}
+.resident-impact {
+  display: none;
+  position: absolute;
+  z-index: 2;
+  left: 7px;
+  top: -13px;
+  width: 70px;
+  height: 70px;
+  align-items: center;
+  justify-content: center;
+  color: #754925;
+  font-size: 17px;
+  font-weight: 900;
+  pointer-events: none;
+}
+.resident-impact::before {
+  content: "✹";
+  position: absolute;
+  z-index: -1;
+  color: #ffe294;
+  font-size: 76px;
+  text-shadow:
+    1px 1px #bd7c3f,
+    -1px -1px #bd7c3f;
+}
+.desktop-resident[data-hit="true"] .resident-impact {
+  display: flex;
+  animation: attack-pop 0.38s ease-out both;
+}
+.attack-notice {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 9px 14px;
+  border-radius: 18px;
+  background: #fbfbf7ef;
+  color: #536447;
+  font-size: 12px;
+  pointer-events: none;
+}
 .desktop-resident figcaption {
   position: absolute;
   left: 50%;
@@ -138,6 +201,9 @@
   .desktop-resident .character-flight-trail {
     display: none;
   }
+  .desktop-characters .desktop-resident .resident-impact {
+    animation: none;
+  }
 }
 .resident-wave {
   display: block;
@@ -164,8 +230,53 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.desktop-characters.is-paused .desktop-resident .character * {
+.desktop-characters.is-paused .desktop-resident .character *,
+.desktop-characters.is-paused .desktop-resident .resident-impact {
   animation-play-state: paused;
+}
+@keyframes attack-dash {
+  from {
+    transform: scale(0.92, 1.08) rotate(-4deg);
+  }
+  to {
+    transform: scale(0.88, 1.16) rotate(4deg);
+  }
+}
+@keyframes attack-strike {
+  25% {
+    transform: translateY(-10px) scale(1.13, 0.9);
+  }
+  70% {
+    transform: translateY(3px) scale(0.97, 1.04);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes attack-shake {
+  25% {
+    transform: translateX(-5px) rotate(-7deg);
+  }
+  75% {
+    transform: translateX(5px) rotate(7deg);
+  }
+}
+@keyframes attack-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) rotate(-12deg);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.1) rotate(5deg);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(1);
+  }
 }
 @keyframes character-waddle {
   0%,
