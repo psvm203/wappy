@@ -8,7 +8,7 @@ import {
 
 const session = { server: "https://example.test", token: "a".repeat(43) };
 const state = {
-  self: { id: "self", name: "Alice", character: "cat", status: "" },
+  self: { id: "self", name: "Alice", character: "hachiware", status: "" },
   friends: [],
 };
 

@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import {
+  CHARACTERS,
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
   WAVE_COOLDOWN_MS,
@@ -102,7 +103,11 @@ test("public invitation previews are read-only, bounded and reveal only invitati
       inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
     );
   try {
-    const input = { name: "Alice", character: "cat", status: "private status" };
+    const input = {
+      name: "Alice",
+      character: "rakko",
+      status: "private status",
+    };
     const alice = (await call("/session", input)).body as Session;
     const bob = (await call("/session", { ...input, name: "Bob" }))
       .body as Session;
@@ -120,7 +125,7 @@ test("public invitation previews are read-only, bounded and reveal only invitati
         status: 200,
         body: {
           name: "Alice",
-          character: "cat",
+          character: "rakko",
           expiresAt: available.expiresAt,
         },
       });
@@ -139,13 +144,13 @@ test("public invitation previews are read-only, bounded and reveal only invitati
     await call("/presence", { sharing: false }, alice.token, "PATCH");
     await call(
       "/profile",
-      { ...input, name: "Alicia", character: "bear" },
+      { ...input, name: "Alicia", character: "chiikawa" },
       alice.token,
       "PATCH",
     );
     assert.deepEqual((await preview(available.code)).body, {
       name: "Alicia",
-      character: "bear",
+      character: "chiikawa",
       expiresAt: available.expiresAt,
     });
     assert.equal(
@@ -254,7 +259,7 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   }
   const input = (name: string) => ({
     name,
-    character: "bunny",
+    character: "usagi",
     status: "함께 작업해요",
   });
   try {
@@ -337,19 +342,21 @@ test("profiles, invitations, presence and friendship persist safely end to end",
     assert.equal(state.friends[0]?.online, true);
     assert.ok(!JSON.stringify(state).includes("token"));
 
-    assert.equal(
-      (
-        await call("PATCH", "/profile", bob.token, {
-          ...input("Bobby"),
-          character: "frog",
-        })
-      ).status,
-      200,
-    );
-    const updated = (await call("GET", "/state", alice.token))
-      .body as SidebarState;
-    assert.equal(updated.friends[0]?.character, "frog");
-    assert.equal(updated.friends[0]?.name, "Bobby");
+    for (const character of CHARACTERS) {
+      assert.equal(
+        (
+          await call("PATCH", "/profile", bob.token, {
+            ...input("Bobby"),
+            character,
+          })
+        ).status,
+        200,
+      );
+      const updated = (await call("GET", "/state", alice.token))
+        .body as SidebarState;
+      assert.equal(updated.friends[0]?.character, character);
+      assert.equal(updated.friends[0]?.name, "Bobby");
+    }
     const duplicate = (await call("POST", "/invites", alice.token, {}))
       .body as Invite;
     assert.equal(
@@ -493,7 +500,7 @@ test("recovery preserves existing profiles, retries safely and revokes stale cre
       "original-user",
       createHash("sha256").update(originalToken).digest("hex"),
       "Alice",
-      "cat",
+      "hachiware",
       "친구들과 함께",
     );
   legacy.close();
@@ -542,7 +549,7 @@ test("recovery preserves existing profiles, retries safely and revokes stale cre
     const bob = (
       await call("POST", "/session", undefined, {
         name: "Bob",
-        character: "frog",
+        character: "shisa",
         status: "안녕",
       })
     ).body as Session;
@@ -725,7 +732,7 @@ test("greetings are private, bounded, durable and acknowledged without losing ne
     for (const name of ["Alice", "Bob", "Carol"]) {
       const created = await call("/session", undefined, {
         name,
-        character: "cat",
+        character: "hachiware",
         status: "",
       });
       assert.equal(created.status, 201);
@@ -914,14 +921,14 @@ test("presence sharing stays private and hidden through polling, profile edits, 
     const alice = (
       await call("POST", "/session", undefined, {
         name: "Alice",
-        character: "cat",
+        character: "hachiware",
         status: "",
       })
     ).body as Session;
     const bob = (
       await call("POST", "/session", undefined, {
         name: "Bob",
-        character: "frog",
+        character: "shisa",
         status: "",
       })
     ).body as Session;
@@ -995,7 +1002,7 @@ test("presence sharing stays private and hidden through polling, profile edits, 
     }
     const updated = await call("PATCH", "/profile", alice.token, {
       name: "Alicia",
-      character: "bear",
+      character: "chiikawa",
       status: "쉬는 중",
       sharing: true,
     });
@@ -1124,7 +1131,7 @@ test("profile deletion is authenticated, atomic, durable and limited to the conf
       (
         await call("POST", "/session", undefined, {
           name,
-          character: "cat",
+          character: "hachiware",
           status: "",
         })
       ).body as Session;

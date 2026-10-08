@@ -66,7 +66,7 @@ test("report boundaries validate reasons, limits, receipts and explicit server s
   ])
     assert.throws(() => parseChatReportReceipts(invalid));
   const state = {
-    self: { id: "self", name: "나", character: "cat", status: "" },
+    self: { id: "self", name: "나", character: "hachiware", status: "" },
     friends: [],
   };
   assert.equal(parseSidebarState(state).chatReporting, undefined);

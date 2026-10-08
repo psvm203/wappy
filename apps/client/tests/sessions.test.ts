@@ -33,7 +33,7 @@ test("confirmed profile deletion removes only that identity and reports partial 
     profile: {
       id: "alice",
       name: "Alice",
-      character: "cat" as const,
+      character: "hachiware" as const,
       status: "",
     },
   };
@@ -141,7 +141,12 @@ test("server switching preserves distinct profiles and updates only the recovere
   const alice: SavedProfile = {
     server: "https://one.test",
     token: "a".repeat(43),
-    profile: { id: "alice", name: "Alice", character: "cat", status: "hello" },
+    profile: {
+      id: "alice",
+      name: "Alice",
+      character: "hachiware",
+      status: "hello",
+    },
   };
   const bob: SavedProfile = {
     ...alice,

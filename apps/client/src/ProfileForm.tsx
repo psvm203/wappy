@@ -49,6 +49,7 @@ export function ProfileForm({
               <input
                 type="radio"
                 name="character"
+                aria-label={CHARACTER_NAMES[kind]}
                 value={kind}
                 checked={profile.character === kind}
                 onChange={() => setProfile({ ...profile, character: kind })}

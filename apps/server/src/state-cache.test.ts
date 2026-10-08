@@ -53,12 +53,12 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   }
   const alice = await write("/session", {
     name: "Alice",
-    character: "cat",
+    character: "hachiware",
     status: "",
   });
   const bob = await write("/session", {
     name: "Bob",
-    character: "cat",
+    character: "hachiware",
     status: "",
   });
   let a = await state(alice.token);
@@ -96,7 +96,7 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   a = next;
   await write(
     "/profile",
-    { name: "Robert", character: "bear", status: "hi" },
+    { name: "Robert", character: "chiikawa", status: "hi" },
     bob.token,
     "PATCH",
   );

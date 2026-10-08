@@ -227,14 +227,14 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
     },
     body: JSON.stringify({
       name: "내가 고른 이름",
-      character: "frog",
+      character: "shisa",
       status: "산책 중",
     }),
   });
   assert.equal(changed.status, 200);
   await changed.body?.cancel();
   const friend = (
-    await call("/session", { name: "친구", character: "cat", status: "" })
+    await call("/session", { name: "친구", character: "hachiware", status: "" })
   ).body;
   const invite = (await call("/invites", {}, friend.token)).body;
   assert.equal(
@@ -254,7 +254,7 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   const renewed = (await poll(second)).body.session;
   assert.equal(renewed.profile.id, original.profile.id);
   assert.equal(renewed.profile.name, "내가 고른 이름");
-  assert.equal(renewed.profile.character, "frog");
+  assert.equal(renewed.profile.character, "shisa");
   assert.equal((await call("/state", undefined, original.token)).status, 401);
   const state = (await call("/state", undefined, renewed.token)).body;
   assert.equal(state.friends[0].id, friend.profile.id);

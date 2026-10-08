@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { CHARACTERS, CHARACTER_NAMES } from "@wappy/api";
 import ts from "typescript";
 
 if (process.platform !== "darwin") {
@@ -17,30 +18,45 @@ if (process.platform !== "darwin") {
 } else {
   const directory = mkdtempSync(join(tmpdir(), "wappy-public-overlay-"));
   try {
-    const source = readFileSync(
-      new URL("../src/Character.tsx", import.meta.url),
-      "utf8",
-    );
-    const compiled = ts
-      .transpileModule(source, {
-        compilerOptions: {
-          module: ts.ModuleKind.ESNext,
-          jsx: ts.JsxEmit.ReactJSX,
-          target: ts.ScriptTarget.ES2022,
-        },
-      })
-      .outputText.replace(
-        '"react/jsx-runtime"',
-        JSON.stringify(import.meta.resolve("react/jsx-runtime")),
-      )
-      .replace(
-        '"@wappy/api"',
-        JSON.stringify(import.meta.resolve("@wappy/api")),
+    for (const name of [
+      "ChiikawaTrio",
+      "ChiikawaFriends",
+      "ChiikawaGuardians",
+      "Character",
+    ]) {
+      const source = readFileSync(
+        new URL(`../src/${name}.tsx`, import.meta.url),
+        "utf8",
       );
-    const component = join(directory, "Character.mjs");
-    writeFileSync(component, compiled);
-    const { Character } = await import(pathToFileURL(component).href);
-    for (const kind of ["bunny", "cat", "bear", "frog"])
+      const compiled = ts
+        .transpileModule(source, {
+          compilerOptions: {
+            module: ts.ModuleKind.ESNext,
+            jsx: ts.JsxEmit.ReactJSX,
+            target: ts.ScriptTarget.ES2022,
+          },
+        })
+        .outputText.replace(
+          '"react/jsx-runtime"',
+          JSON.stringify(import.meta.resolve("react/jsx-runtime")),
+        )
+        .replace(
+          '"@wappy/api"',
+          JSON.stringify(import.meta.resolve("@wappy/api")),
+        )
+        .replace(/"(\.\/Chiikawa\w+)"/g, '"$1.mjs"');
+      writeFileSync(join(directory, `${name}.mjs`), compiled);
+    }
+    const { Character } = await import(
+      pathToFileURL(join(directory, "Character.mjs")).href
+    );
+    writeFileSync(
+      join(directory, "characters.json"),
+      JSON.stringify(
+        CHARACTERS.map((kind) => ({ kind, name: CHARACTER_NAMES[kind] })),
+      ),
+    );
+    for (const kind of CHARACTERS)
       for (const asleep of [false, true]) {
         const svg = renderToStaticMarkup(
           createElement(Character, { kind, asleep }),

@@ -45,10 +45,62 @@ test("offline characters freeze in place, including mid-flight, and wake when on
   );
   body.mode = "drag";
   body.angle = Math.PI;
-  assert.equal(needsAnimation(body, false), false);
+  assert.equal(
+    needsAnimation(body, false),
+    true,
+    "manual dragging can turn a sleeping character upright",
+  );
   assert.equal(needsAnimation(body, true), true);
   for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, true);
   assert.equal(needsAnimation(body, true), false);
+});
+
+test("a held character settles upright and its drag lean decays without auto-walking", () => {
+  for (const online of [true, false]) {
+    const body = createBody("held", width, height);
+    Object.assign(body, {
+      mode: "drag",
+      x: 600,
+      y: 400,
+      angle: -Math.PI / 2,
+      dragTilt: 0.4,
+    });
+    assert.equal(needsAnimation(body, online), true);
+    advanceBody(body, 1 / 60, width, height, online);
+    assert.ok(body.dragTilt > 0 && body.dragTilt < 0.4);
+    for (let frame = 0; frame < 120; frame++)
+      advanceBody(body, 1 / 60, width, height, online);
+    assert.ok(Math.abs(body.angle) < 0.001);
+    assert.ok(Math.abs(body.dragTilt) < 0.001);
+    assert.deepEqual({ x: body.x, y: body.y }, { x: 600, y: 400 });
+    assert.equal(needsAnimation(body, online), false);
+  }
+});
+
+test("fast flight turns the head toward travel in every direction", () => {
+  for (const [vx, vy] of [
+    [1200, 0],
+    [-1200, 0],
+    [0, 1200],
+    [0, -1200],
+  ]) {
+    const body = createBody("flying", width, height);
+    Object.assign(body, {
+      mode: "air",
+      x: width / 2,
+      y: height / 2,
+      vx,
+      vy,
+      angle: 0,
+    });
+    for (let frame = 0; frame < 8; frame++)
+      advanceBody(body, 1 / 60, width, height, true);
+    const speed = Math.hypot(body.vx, body.vy);
+    const alignment =
+      (Math.sin(body.angle) * body.vx - Math.cos(body.angle) * body.vy) / speed;
+    assert.ok(alignment > 0.75, "the head should lead the flying body");
+    assert.equal(body.mode, "air");
+  }
 });
 
 test("automatic walking covers all four edges without leaving the screen", (t) => {

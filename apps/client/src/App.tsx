@@ -81,7 +81,11 @@ import {
 import { subscribeState } from "./state-sync";
 import "./App.css";
 
-const emptyProfile: ProfileInput = { name: "", character: "bunny", status: "" };
+const emptyProfile: ProfileInput = {
+  name: "",
+  character: "chiikawa",
+  status: "",
+};
 
 function App() {
   const [session, setSession] = useState(loadSession);
@@ -967,8 +971,8 @@ function App() {
       ) : !session ? (
         <div className="onboarding scroll-area">
           <div className="intro-art">
-            <Character kind="bunny" />
-            <Character kind="frog" />
+            <Character kind="chiikawa" />
+            <Character kind="hachiware" />
             <span className="sparkle" aria-hidden="true">
               ✧
             </span>

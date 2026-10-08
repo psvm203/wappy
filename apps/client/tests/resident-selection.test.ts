@@ -46,12 +46,12 @@ test("character selections isolate profiles and servers without changing friends
     ["bob"],
   );
   const state: SidebarState = {
-    self: { id: "alice", name: "Alice", character: "cat", status: "" },
+    self: { id: "alice", name: "Alice", character: "hachiware", status: "" },
     friends: [
       {
         id: "bob",
         name: "Bob",
-        character: "frog",
+        character: "shisa",
         status: "",
         online: true,
         wave: { id: "greeting", sentAt: 1_800_000_000_000 },
@@ -59,7 +59,7 @@ test("character selections isolate profiles and servers without changing friends
       {
         id: "carol",
         name: "Carol",
-        character: "bear",
+        character: "chiikawa",
         status: "",
         online: false,
       },

@@ -32,16 +32,46 @@ type Drag = {
   pointerId: number;
   offsetX: number;
   offsetY: number;
+  pointerX: number;
+  pointerY: number;
   samples: DragSample[];
   startX: number;
   startY: number;
   moved: boolean;
 };
 
+function moveHeldBody(body: Body, held: Drag) {
+  // Keep the grip under the pointer as a wall or ceiling character turns upright.
+  const cos = Math.cos(body.angle),
+    sin = Math.sin(body.angle);
+  moveBody(
+    body,
+    held.pointerX - held.offsetX * cos + held.offsetY * sin,
+    held.pointerY - held.offsetX * sin - held.offsetY * cos,
+    innerWidth,
+    innerHeight,
+  );
+}
+
 function draw({ body, element, walking }: Resident) {
   element.style.transform = `translate3d(${body.x - CHARACTER_SIZE / 2}px, ${body.y - CHARACTER_SIZE / 2}px, 0)`;
   element.style.setProperty("--angle", `${body.angle}rad`);
   element.style.setProperty("--facing", `${-body.direction}`);
+  element.style.setProperty(
+    "--drag-tilt",
+    `${-body.direction * body.dragTilt}rad`,
+  );
+  element.style.setProperty(
+    "--step-duration",
+    `${Math.max(0.32, Math.min(0.85, 28 / Math.max(1, body.walkSpeed)))}s`,
+  );
+  const flight = Math.min(1, Math.hypot(body.vx, body.vy) / 1600);
+  element.style.setProperty("--flight-x", `${1 - flight * 0.08}`);
+  element.style.setProperty("--flight-y", `${1 + flight * 0.14}`);
+  element.style.setProperty(
+    "--trail-opacity",
+    `${Math.max(0, flight - 0.12) * 0.8}`,
+  );
   const hasChat = element.dataset.chat === "true";
   const nameInset = hasChat ? 96 : 46;
   const nameX = Math.max(
@@ -55,11 +85,14 @@ function draw({ body, element, walking }: Resident) {
   );
   element.style.setProperty("--name-x", `${nameX - body.x}px`);
   element.style.setProperty("--name-y", `${nameY - body.y}px`);
-  element.dataset.motion = !walking
-    ? "sleep"
-    : body.mode === "walk" && body.restTime > 0
-      ? "idle"
-      : body.mode;
+  element.dataset.motion =
+    body.mode === "drag"
+      ? "drag"
+      : !walking
+        ? "sleep"
+        : body.mode === "walk" && body.restTime > 0
+          ? "idle"
+          : body.mode;
 }
 
 export function DesktopCharacters({
@@ -113,6 +146,9 @@ export function DesktopCharacters({
           innerHeight,
           resident.walking,
         );
+        const held = drag.current;
+        if (held && entries.current.get(held.id) === resident)
+          moveHeldBody(resident.body, held);
         draw(resident);
       }
       schedule();
@@ -213,16 +249,34 @@ export function DesktopCharacters({
       return;
     const resident = entries.current.get(id)!;
     const body = resident.body;
+    const svg = resident.element.querySelector(
+      "svg.character",
+    ) as SVGSVGElement;
+    const matrix = svg.getScreenCTM();
+    if (matrix) {
+      const grip = new DOMPoint(event.clientX, event.clientY).matrixTransform(
+        matrix.inverse(),
+      );
+      resident.element.style.setProperty("--grip-x", `${grip.x}px`);
+      resident.element.style.setProperty("--grip-y", `${grip.y}px`);
+    }
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     body.mode = "drag";
     body.vx = body.vy = 0;
+    body.dragTilt = 0;
+    const dx = event.clientX - body.x,
+      dy = event.clientY - body.y;
+    const cos = Math.cos(body.angle),
+      sin = Math.sin(body.angle);
     drag.current = {
       id,
       pointerId: event.pointerId,
-      offsetX: event.clientX - body.x,
-      offsetY: event.clientY - body.y,
-      samples: [{ x: body.x, y: body.y, time: event.timeStamp }],
+      offsetX: dx * cos + dy * sin,
+      offsetY: -dx * sin + dy * cos,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      samples: [{ x: event.clientX, y: event.clientY, time: event.timeStamp }],
       startX: event.clientX,
       startY: event.clientY,
       moved: false,
@@ -242,22 +296,22 @@ export function DesktopCharacters({
       event.clientX,
       event.clientY,
     );
-    moveBody(
-      resident.body,
-      event.clientX - current.offsetX,
-      event.clientY - current.offsetY,
-      innerWidth,
-      innerHeight,
-    );
+    current.pointerX = event.clientX;
+    current.pointerY = event.clientY;
+    moveHeldBody(resident.body, current);
     current.samples = current.samples.filter(
       (sample) => event.timeStamp - sample.time <= 100,
     );
+    // Turning upright moves the body, but only pointer movement should cause a throw.
     current.samples.push({
-      x: resident.body.x,
-      y: resident.body.y,
+      x: event.clientX,
+      y: event.clientY,
       time: event.timeStamp,
     });
+    const { vx } = releaseVelocity(current.samples, event.timeStamp);
+    resident.body.dragTilt = Math.max(-0.4, Math.min(0.4, vx / 2500));
     draw(resident);
+    wakeAnimation.current();
   }
 
   function endDrag(event: PointerEvent<HTMLElement>, cancelled = false) {
@@ -273,6 +327,8 @@ export function DesktopCharacters({
           : releaseVelocity(current.samples, event.timeStamp),
       );
       resident.body.mode = "air";
+      resident.body.angle += resident.body.dragTilt;
+      resident.body.dragTilt = 0;
       draw(resident);
       wakeAnimation.current();
     }

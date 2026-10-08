@@ -31,13 +31,13 @@ if (process.argv.includes("--server")) {
     "self",
     createHash("sha256").update(token).digest("hex"),
     "나",
-    "cat",
+    "hachiware",
     "",
   );
   const friendship = db.prepare("INSERT INTO friendships VALUES (?, ?)");
   for (let i = 0; i < 100; i++) {
     const id = `friend-${i}`;
-    user.run(id, id, `친구 ${i}`, "cat", "함께 이야기해요".repeat(4));
+    user.run(id, id, `친구 ${i}`, "hachiware", "함께 이야기해요".repeat(4));
     friendship.run(id, "self");
   }
   const chat = db.prepare(
@@ -48,7 +48,7 @@ if (process.argv.includes("--server")) {
   // within the real 50-message retention limit; no artificial oversized user.
   for (let i = 0; i < 2000; i++) {
     const id = `unrelated-${i}`;
-    user.run(id, id, id, "cat", "");
+    user.run(id, id, id, "hachiware", "");
     for (let j = 0; j < 50; j++) chat.run(id, "다른 대화", time);
   }
   db.exec("COMMIT");

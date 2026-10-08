@@ -8,6 +8,7 @@ export interface Body {
   vx: number;
   vy: number;
   angle: number;
+  dragTilt: number;
   phase: number;
   direction: number;
   speed: number;
@@ -54,6 +55,7 @@ export function createBody(id: string, width: number, height: number): Body {
     vx: 0,
     vy: 0,
     angle: 0,
+    dragTilt: 0,
     phase: (seed % 100) / 100,
     direction: seed % 2 === 0 ? 1 : -1,
     speed,
@@ -96,9 +98,12 @@ function angleDifference(angle: number, target: number) {
 }
 
 export function needsAnimation(body: Body, walking: boolean) {
-  if (!walking) return false;
   if (body.mode === "drag")
-    return Math.abs(angleDifference(body.angle, 0)) > 0.001;
+    return (
+      Math.abs(angleDifference(body.angle, 0)) > 0.001 ||
+      Math.abs(body.dragTilt) > 0.001
+    );
+  if (!walking) return false;
   return true; // Online pets still need their rest/wake timer and flight physics.
 }
 
@@ -118,7 +123,7 @@ export function advanceBody(
   const { left, top, right, bottom, w, h } = track(width, height);
   const perimeter = Math.max(1, 2 * (w + h));
   moveBody(body, body.x, body.y, width, height);
-  if (!walking) {
+  if (!walking && body.mode !== "drag") {
     body.vx = body.vy = 0;
     return;
   }
@@ -127,6 +132,7 @@ export function advanceBody(
     remaining -= dt;
     if (body.mode === "drag") {
       turn(body, 0, dt);
+      body.dragTilt *= Math.exp(-8 * dt);
       continue;
     }
     if (body.mode === "walk") {
@@ -176,7 +182,14 @@ export function advanceBody(
     body.vy = (body.vy + ny * GRAVITY * dt) * Math.exp(-0.25 * dt);
     body.x += body.vx * dt;
     body.y += body.vy * dt;
-    turn(body, Math.atan2(ny, nx) - Math.PI / 2, dt);
+    const flying = Math.hypot(body.vx, body.vy) > 180;
+    turn(
+      body,
+      flying
+        ? Math.atan2(body.vy, body.vx) + Math.PI / 2
+        : Math.atan2(ny, nx) - Math.PI / 2,
+      dt,
+    );
     const hit =
       body.y < top
         ? 0

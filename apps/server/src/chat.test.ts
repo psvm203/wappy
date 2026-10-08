@@ -49,8 +49,9 @@ test("chat reaches only friends at send time, persists, expires and is removed w
     return { status: response.status, body: await response.json() };
   }
   async function create(name: string) {
-    return (await call("/session", { name, character: "cat", status: "" }))
-      .body;
+    return (
+      await call("/session", { name, character: "hachiware", status: "" })
+    ).body;
   }
   async function connect(a: string, b: string) {
     const invite = (await call("/invites", {}, a)).body;

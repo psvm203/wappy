@@ -64,7 +64,11 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   }
   async function create(name: string) {
     return (
-      await call("/session", undefined, { name, character: "cat", status: "" })
+      await call("/session", undefined, {
+        name,
+        character: "hachiware",
+        status: "",
+      })
     ).body;
   }
   async function invite(token: string) {
@@ -155,7 +159,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   assert.equal(blocked.status, 200);
   assert.deepEqual(blocked.body, {
     revision: 1,
-    profiles: [{ id: bob.profile.id, name: "Bob", character: "cat" }],
+    profiles: [{ id: bob.profile.id, name: "Bob", character: "hachiware" }],
   });
   const afterAlice = await state(alice.token),
     afterBob = await state(bob.token);
@@ -218,7 +222,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   await call(
     "/profile",
     bob.token,
-    { name: "Changed", character: "frog", status: "private update" },
+    { name: "Changed", character: "shisa", status: "private update" },
     "PATCH",
   );
   assert.deepEqual(

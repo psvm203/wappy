@@ -72,7 +72,11 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
   }
   async function create(name: string) {
     return (
-      await call("/session", undefined, { name, character: "cat", status: "" })
+      await call("/session", undefined, {
+        name,
+        character: "hachiware",
+        status: "",
+      })
     ).body;
   }
   async function connect(a: string, b: string) {

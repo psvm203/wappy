@@ -10,7 +10,7 @@ import {
 test("invitation previews validate display data and discard private fields", () => {
   const preview = {
     name: "Alice",
-    character: "cat",
+    character: "hachiware",
     expiresAt: 1_800_000_000_000,
   };
   assert.deepEqual(

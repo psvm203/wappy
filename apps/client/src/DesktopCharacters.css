@@ -33,11 +33,38 @@
   margin: auto;
   filter: drop-shadow(0 2px 3px #0002);
 }
-.desktop-resident .character-body {
+.desktop-resident .character .character-body {
+  transform-origin: 50px 96px;
   animation: none;
 }
-.desktop-resident[data-motion="walk"]:not(.is-resting) .character {
-  animation: edge-step 0.7s infinite;
+.desktop-resident .character-pose {
+  transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
+}
+.desktop-resident[data-motion="walk"] .character .character-body {
+  animation: character-waddle var(--step-duration, 0.7s) linear infinite;
+}
+.desktop-resident[data-motion="walk"] .character-shadow {
+  transform-origin: 50px 101px;
+  animation: step-shadow var(--step-duration, 0.7s) linear infinite;
+}
+.desktop-resident[data-motion="drag"] .character-pose {
+  transform: rotate(var(--drag-tilt, 0rad));
+}
+.desktop-resident[data-motion="drag"] .character .character-body {
+  transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
+  animation: character-dangle 1.25s ease-in-out infinite;
+}
+.desktop-resident[data-motion="air"] .character .character-body {
+  transform-origin: 50px 55px;
+  animation: character-fly 0.32s ease-in-out infinite alternate;
+}
+.desktop-resident[data-motion="air"] .character-flight-trail {
+  opacity: var(--trail-opacity, 0);
+  animation: flight-trail 0.24s linear infinite;
+}
+.desktop-resident[data-motion="air"] .character-shadow,
+.desktop-resident[data-motion="drag"] .character-shadow {
+  opacity: 0;
 }
 .desktop-resident figcaption {
   position: absolute;
@@ -75,7 +102,7 @@
   outline: 2px solid #73985c;
   border-radius: 12px;
 }
-.desktop-resident.is-resting .character-body {
+.desktop-resident[data-motion="sleep"] .character .character-body {
   transform-origin: 50px 96px;
   animation: sleeping-breathe 3s ease-in-out infinite;
 }
@@ -93,9 +120,23 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .desktop-resident.is-resting .character-body,
-  .desktop-resident .sleep-marks {
+  .desktop-characters .desktop-resident[data-motion] .character .character-body,
+  .desktop-characters
+    .desktop-resident[data-motion]
+    .character
+    .character-shadow,
+  .desktop-characters
+    .desktop-resident[data-motion]
+    .character
+    .character-flight-trail,
+  .desktop-characters .desktop-resident[data-motion] .character .sleep-marks {
     animation: none;
+  }
+  .desktop-resident .character .character-pose {
+    transform: none;
+  }
+  .desktop-resident .character-flight-trail {
+    display: none;
   }
 }
 .resident-wave {
@@ -123,17 +164,48 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.desktop-characters.is-paused * {
+.desktop-characters.is-paused .desktop-resident .character * {
   animation-play-state: paused;
 }
-@keyframes edge-step {
+@keyframes character-waddle {
   0%,
   100% {
-    transform: translateY(0);
-    animation-timing-function: cubic-bezier(0.33, 0.67, 0.67, 1);
+    transform: translateY(0) rotate(-6deg) scale(1.03, 0.97);
+  }
+  25%,
+  75% {
+    transform: translateY(-4px) rotate(0deg) scale(0.98, 1.03);
   }
   50% {
-    transform: translateY(-4px);
-    animation-timing-function: cubic-bezier(0.33, 0, 0.67, 0.33);
+    transform: translateY(0) rotate(6deg) scale(1.03, 0.97);
+  }
+}
+@keyframes step-shadow {
+  25%,
+  75% {
+    transform: scaleX(0.8);
+    opacity: 0.06;
+  }
+}
+@keyframes character-dangle {
+  0%,
+  100% {
+    transform: rotate(-9deg) scale(0.96, 1.05);
+  }
+  50% {
+    transform: rotate(9deg) scale(0.98, 1.03);
+  }
+}
+@keyframes character-fly {
+  from {
+    transform: rotate(-3deg) scale(var(--flight-x, 1), var(--flight-y, 1));
+  }
+  to {
+    transform: rotate(3deg) scale(var(--flight-x, 1), var(--flight-y, 1));
+  }
+}
+@keyframes flight-trail {
+  to {
+    transform: translateY(7px);
   }
 }

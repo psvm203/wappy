@@ -61,7 +61,11 @@ test("chat acknowledgements are recipient-private, atomic, durable, bounded and 
   }
   async function create(name: string) {
     return (
-      await call("/session", undefined, { name, character: "cat", status: "" })
+      await call("/session", undefined, {
+        name,
+        character: "hachiware",
+        status: "",
+      })
     ).body;
   }
   async function connect(a: string, b: string) {

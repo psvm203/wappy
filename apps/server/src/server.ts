@@ -10,6 +10,7 @@ import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
 import { createReports, ReportError } from "./reports.ts";
 import {
   INVITE_TTL_MS,
+  REMOVED_CHARACTERS,
   ONLINE_TIMEOUT_MS,
   WAVE_COOLDOWN_MS,
   WAVE_TTL_MS,
@@ -208,6 +209,12 @@ export function createApp(options: {
     db.exec(
       "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
     );
+  for (const table of ["users", "profile_blocks"]) {
+    db.prepare(
+      `UPDATE ${table} SET character = 'chiikawa'
+       WHERE character IN (${REMOVED_CHARACTERS.map(() => "?").join(",")})`,
+    ).run(...REMOVED_CHARACTERS);
+  }
   const now = options.now ?? Date.now;
   const reports = createReports(db, now);
   // ponytail: single-process presence; use shared TTL storage before running replicas.
@@ -560,7 +567,7 @@ export function createApp(options: {
               user = {
                 id: randomUUID(),
                 name: identity.name,
-                character: "bunny",
+                character: "chiikawa",
                 status: "",
               };
               db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)").run(

@@ -21,6 +21,11 @@ struct Resident {
   var center: NSPoint
 }
 
+struct CharacterAsset: Decodable {
+  let kind: String
+  let name: String
+}
+
 @MainActor
 final class OverlayView: NSView {
   var residents: [Resident]
@@ -30,9 +35,9 @@ final class OverlayView: NSView {
   override var isFlipped: Bool { true }
   override var isOpaque: Bool { false }
 
-  init(residents: [Resident]) {
+  init(residents: [Resident], size: NSSize) {
     self.residents = residents
-    super.init(frame: NSRect(x: 0, y: 0, width: 600, height: 340))
+    super.init(frame: NSRect(origin: .zero, size: size))
   }
   required init?(coder: NSCoder) { nil }
 
@@ -105,22 +110,31 @@ final class OverlayView: NSView {
 func runCheck(directory: URL) throws {
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
-  let names = ["bunny": "토끼", "cat": "고양이", "bear": "곰", "frog": "개구리"]
+  let characters = try JSONDecoder().decode(
+    [CharacterAsset].self,
+    from: Data(contentsOf: directory.appendingPathComponent("characters.json")))
+  try check(!characters.isEmpty, "No character assets were generated")
+  let columns = min(7, characters.count)
+  let rows = (characters.count * 2 + columns - 1) / columns
   var residents: [Resident] = []
-  for (row, state) in ["awake", "asleep"].enumerated() {
-    for (column, kind) in ["bunny", "cat", "bear", "frog"].enumerated() {
-      let url = directory.appendingPathComponent("\(kind)-\(state).svg")
+  for (stateIndex, state) in ["awake", "asleep"].enumerated() {
+    for (index, character) in characters.enumerated() {
+      let position = stateIndex * characters.count + index
+      let column = position % columns
+      let row = position / columns
+      let url = directory.appendingPathComponent("\(character.kind)-\(state).svg")
       guard let image = NSImage(contentsOf: url) else {
         throw CheckFailure.failed("AppKit could not decode \(url.lastPathComponent)")
       }
       residents.append(
         Resident(
-          image: image, name: "\(names[kind]!) · \(row == 0 ? "접속 중" : "쉬는 중")",
+          image: image, name: "\(character.name) · \(stateIndex == 0 ? "접속 중" : "쉬는 중")",
           angle: CGFloat(column) * .pi / 2, facing: column.isMultiple(of: 2) ? 1 : -1,
           center: NSPoint(x: 85 + column * 140, y: 75 + row * 165)))
     }
   }
-  let view = OverlayView(residents: residents)
+  let view = OverlayView(
+    residents: residents, size: NSSize(width: columns * 140 + 40, height: rows * 165 + 10))
   let window = OverlayWindow(
     contentRect: view.bounds, styleMask: .borderless, backing: .buffered, defer: false)
   // NSWindow/NSView transparency is public; WKWebView transparency is the current blocker.
@@ -188,7 +202,7 @@ func runCheck(directory: URL) throws {
   func alpha(at point: NSPoint) -> CGFloat {
     bitmap.colorAt(x: Int(point.x * scaleX), y: Int(point.y * scaleY))?.alphaComponent ?? -1
   }
-  for point in [NSPoint(x: 1, y: 1), NSPoint(x: 10, y: 150), NSPoint(x: 595, y: 335)] {
+  for point in [NSPoint(x: 1, y: 1), NSPoint(x: 10, y: 150), NSPoint(x: view.bounds.maxX - 5, y: view.bounds.maxY - 5)] {
     try check(alpha(at: point) == 0, "Transparent space was painted opaque")
   }
   for item in residents { try check(alpha(at: item.center) > 0.9, "A character did not render") }

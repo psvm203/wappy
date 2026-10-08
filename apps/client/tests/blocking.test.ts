@@ -11,7 +11,7 @@ test("blocking responses validate private snapshots without allowing a blocked f
   const self = {
     id: "alice",
     name: "Alice",
-    character: "cat" as const,
+    character: "hachiware" as const,
     status: "",
   };
   const bob = { ...self, id: "bob", name: "Bob", online: true };

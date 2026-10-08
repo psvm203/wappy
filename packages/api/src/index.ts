@@ -1,10 +1,32 @@
-export const CHARACTERS = ["bunny", "cat", "bear", "frog"] as const;
+/** Retained only to migrate old profiles; these characters are no longer selectable. */
+export const REMOVED_CHARACTERS: readonly string[] = [
+  "bunny",
+  "cat",
+  "bear",
+  "frog",
+  "penguin",
+  "otter",
+];
+export const CHARACTERS = [
+  "chiikawa",
+  "hachiware",
+  "usagi",
+  "momonga",
+  "kurimanju",
+  "rakko",
+  "shisa",
+  "furuhonya",
+] as const;
 export type Character = (typeof CHARACTERS)[number];
 export const CHARACTER_NAMES: Record<Character, string> = {
-  bunny: "토끼",
-  cat: "고양이",
-  bear: "곰",
-  frog: "개구리",
+  chiikawa: "치이카와",
+  hachiware: "가르마",
+  usagi: "토끼",
+  momonga: "하늘다람쥐",
+  kurimanju: "밤만쥬",
+  rakko: "해달",
+  shisa: "시사",
+  furuhonya: "헌책방",
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
@@ -307,7 +329,7 @@ export function parseBlockingSettings(value: unknown): BlockingSettings {
       ids.has(input.id)
     )
       throw new Error("잘못된 차단 프로필입니다.");
-    const { name, character } = parseProfile({ ...input, status: "" });
+    const { name, character } = parseProfileSnapshot({ ...input, status: "" });
     ids.add(input.id);
     return { id: input.id, name, character };
   });
@@ -339,6 +361,17 @@ export function parseProfile(value: unknown): ProfileInput {
   return { name, status, character: value.character as Character };
 }
 
+/** Old server responses and saved profiles remain readable; new writes stay strict. */
+function parseProfileSnapshot(value: unknown): ProfileInput {
+  return parseProfile(
+    isRecord(value) &&
+      typeof value.character === "string" &&
+      REMOVED_CHARACTERS.includes(value.character)
+      ? { ...value, character: "chiikawa" }
+      : value,
+  );
+}
+
 export function parseInvitePreview(value: unknown): InvitePreview {
   if (
     !isRecord(value) ||
@@ -348,7 +381,7 @@ export function parseInvitePreview(value: unknown): InvitePreview {
     value.expiresAt > 8_640_000_000_000_000
   )
     throw new Error("잘못된 초대 응답입니다.");
-  const { name, character } = parseProfile({ ...value, status: "" });
+  const { name, character } = parseProfileSnapshot({ ...value, status: "" });
   return { name, character, expiresAt: value.expiresAt };
 }
 
@@ -362,7 +395,7 @@ export function parseSidebarState(value: unknown): SidebarState {
       input.id.length > 128
     )
       throw new Error("잘못된 프로필 응답입니다.");
-    return { id: input.id, ...parseProfile(input) };
+    return { id: input.id, ...parseProfileSnapshot(input) };
   }
   if (!isRecord(value) || !Array.isArray(value.friends))
     throw new Error("잘못된 친구 목록 응답입니다.");
