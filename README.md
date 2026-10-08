@@ -54,7 +54,9 @@ pnpm desktop
 
 데스크톱 앱의 첫 화면 또는 **내 모습 → 다음에도 함께 시작해요**에서 **컴퓨터 로그인 시 Wappy 실행**을 켤 수 있습니다. 최초 실행만으로 등록하지 않으며, 사용자가 선택할 때 현재 OS 사용자에게만 등록합니다. 자동으로 시작할 때는 사이드바를 숨기고 트레이와 캐릭터 창을 실행합니다. 캐릭터의 움직임·표시 설정과 마지막에 선택한 프로필은 유지됩니다. 자동 실행이 중복 요청되어도 숨긴 사이드바를 열지 않으며, 직접 앱을 실행하거나 트레이를 선택하면 다시 열립니다.
 
-설정 화면을 열거나 앱으로 돌아오면 OS의 등록 상태를 다시 읽습니다. 변경이 실패해도 상태를 다시 확인하며, 상태를 읽지 못하면 선택을 잠그고 **자동 실행 상태 다시 확인**을 제공합니다. 앱을 사용할 위치에 설치한 뒤 켜고, 앱을 옮기거나 삭제하기 전에는 꺼 주세요. macOS에서는 사용자 `Library/LaunchAgents/com.wappy.client.plist`에 등록하며 OS의 백그라운드 실행 허용은 별도로 적용될 수 있습니다. Windows에서는 현재 사용자의 `Run` 항목에 경로를 따옴표로 감싸 등록하고, 작업 관리자의 해당 앱 시작 허용 상태도 확인합니다. 컴퓨터 전체의 시작 설정은 변경하지 않습니다. [Apple Launch Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html), [Microsoft Run 키](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)
+설정 화면을 열거나 앱으로 돌아오면 OS의 등록 상태를 다시 읽습니다. 변경이 실패해도 상태를 다시 확인하며, 상태를 읽지 못하면 선택을 잠그고 **자동 실행 상태 다시 확인**을 제공합니다. 앱을 사용할 위치에 설치한 뒤 켜고, 앱을 옮기기 전에는 꺼 주세요. macOS에서는 사용자 `Library/LaunchAgents/com.wappy.client.plist`에 등록하며 OS의 백그라운드 실행 허용은 별도로 적용될 수 있습니다. Windows에서는 현재 사용자의 `Run` 항목에 경로를 따옴표로 감싸 등록하고, 작업 관리자의 해당 앱 시작 허용 상태도 확인합니다. 컴퓨터 전체의 시작 설정은 변경하지 않습니다. [Apple Launch Agents](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html), [Microsoft Run 키](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)
+
+Windows 제거 프로그램은 삭제하는 앱의 실행 경로를 가리키는 자동 실행 등록과 작업 관리자 설정을 함께 정리합니다. 업데이트 중에는 기존 설정을 유지하며, 다른 설치 경로를 가리키는 등록은 지우지 않습니다. macOS에서 앱을 삭제할 때는 자동 실행을 먼저 꺼 주세요.
 
 캐릭터 창은 사이드바와 일반 앱 창보다 앞에 표시됩니다. 사이드바를 클릭하거나 고정 설정을 바꿔도 캐릭터가 그 뒤로 가려지지 않습니다.
 
@@ -144,7 +146,7 @@ cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked
 pnpm --filter client tauri build
 ```
 
-Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows/check.yml`은 macOS·Windows 각각에서 타입 검사, 빌드, API 통합 테스트, Rust 테스트와 실제 창·트레이·백그라운드 연결 검사를 실행한 뒤 설치 프로그램을 만듭니다. 한 운영체제의 실패가 다른 운영체제의 검사를 취소하지 않습니다.
+Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows/check.yml`은 macOS·Windows 각각에서 타입 검사, 빌드, API 통합 테스트, Rust 테스트와 실제 창·트레이·백그라운드 연결 검사를 실행한 뒤 설치 프로그램을 만듭니다. Windows에서는 이어서 공백·한글 경로에 실제 설치하고 배포용 앱의 창이 열리는지 확인합니다. 설치만으로 자동 실행을 켜지 않는지, 업데이트·재설치 시 작업 관리자 설정을 유지하는지, 제거 시 해당 설치의 자동 실행 항목만 정리하는지도 검사합니다. 이 설치 검사는 폐기되는 GitHub 호스팅 Windows 러너에서만 실행합니다. 한 운영체제의 실패가 다른 운영체제의 검사를 취소하지 않습니다.
 
 GitHub Actions의 **Check Wappy → Artifacts**에서 해당 커밋의 테스트용 설치 파일을 받을 수 있습니다. macOS는 Apple Silicon·Intel을 모두 담은 **universal DMG**, Windows는 **x64 NSIS 설치 프로그램**입니다. Windows 설치는 현재 사용자에게 적용하고 한국어·영어를 선택할 수 있습니다. WebView2가 없으면 설치 과정에서 내려받으므로 인터넷 연결이 필요합니다. 아티팩트는 7일 동안 보관하며, 워크플로를 수동으로 다시 실행할 수도 있습니다. [Tauri Windows 설치 프로그램](https://v2.tauri.app/distribute/windows-installer/), [macOS DMG](https://v2.tauri.app/distribute/dmg/)
 

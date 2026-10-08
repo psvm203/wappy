@@ -50,6 +50,11 @@ jobs:
           fi
       - name: Build preview installer
         run: pnpm --filter client tauri build --ci --target ${{ matrix.target }}
+      - name: Check Windows install, launch, update and removal
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./.github/scripts/check-windows-installer.ps1 -Installer (Get-Item 'apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe').FullName
       - uses: actions/upload-artifact@v7
         with:
           name: wappy-preview-${{ matrix.artifact }}-${{ github.sha }}
