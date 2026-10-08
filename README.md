@@ -247,4 +247,15 @@ cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle -
 
 macOS의 투명 창은 `macOSPrivateApi` 설정과 `macos-private-api` Cargo 기능을 사용하므로 현재 빌드는 직접 배포를 전제로 합니다. Tauri 문서는 이 방식의 Mac App Store 수용 불가를 명시하고, Apple 심사 지침 2.5.1은 공개 API만 허용합니다. Mac App Store용으로 출시하려면 바탕화면 캐릭터 경험을 유지할 수 있는 공개 API 렌더링 방식을 별도로 구현·검증해야 합니다. 설정 하나를 끄거나 사이드바만 남긴 빌드로 같은 기능을 제공한다고 볼 수 없습니다. [Tauri 투명 창 설정](https://v2.tauri.app/reference/config/#transparent), [Apple 소프트웨어 요구사항](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
 
+macOS에서 아래 명령은 공개 AppKit API로 대체 렌더링이 가능한지 검사합니다. 기존 `Character.tsx`에서 네 캐릭터의 접속·오프라인 SVG 8개를 생성하고, 별도 Swift 검사 프로그램이 이를 실제 투명 `NSWindow`/`NSView`에 그립니다. 새 그림 파일을 따로 유지하지 않으며 기존 캐릭터를 그대로 사용합니다. 잠시 나타나는 검사 창은 키보드 초점을 가져가지 않습니다. 프로필이나 WebView 저장소를 읽지 않고 화면 녹화·손쉬운 사용 권한도 요청하지 않습니다.
+
+```sh
+pnpm --filter @wappy/api build
+pnpm --filter client check-public-overlay
+```
+
+검사는 네 방향 회전·좌우 반전·한글 이름표, 창의 투명 설정과 렌더링 결과의 알파 값, 캐릭터 영역 판정, 해당 창에 직접 전달한 클릭·드래그 이벤트, 클릭 통과 설정 전환을 확인합니다. 성공하면 출력한 임시 디렉터리에 `public-overlay.png`와 `result.json`을 남깁니다. Node 의존성과 macOS Xcode Command Line Tools가 필요합니다.
+
+이 검증용 렌더러는 아직 앱의 바탕화면 창에 연결하지 않았습니다. 실제 적용에는 기존 이동·던지기 물리, 말풍선·친구 상태·선택 동기화, 접근성, 여러 모니터 및 다른 앱으로의 실제 클릭 통과 검증이 남아 있습니다. 현재 앱의 비공개 API 사용이나 Mac App Store 출시 제약은 이 검사 통과만으로 해결되지 않습니다.
+
 채팅을 제공하는 공개 서비스에는 사용자 차단 외에도 부적절한 콘텐츠 필터링, 신고 접수와 적시 대응, 공개 연락처가 필요합니다. 메시지 신고·검토·삭제 도구는 제공하지만, 현재 콘텐츠 게시 전 필터링·운영 담당자·대응 시간·공개 연락처는 준비되어 있지 않습니다. GitHub 문제 신고는 제품 오류 제보용이며 콘텐츠 신고 운영을 대신하지 않습니다. 스토어 심사 통과나 순위 확률은 현재 기능 검사 결과로 입증되지 않습니다. [Apple 사용자 생성 콘텐츠 지침](https://developer.apple.com/app-store/review/guidelines/#user-generated-content)
