@@ -5,13 +5,11 @@ export function latestChat(
   senderId: string,
   now = Date.now(),
 ) {
-  return messages
-    ?.slice()
-    .reverse()
-    .find(
-      (message) =>
-        message.senderId === senderId && message.sentAt + CHAT_BUBBLE_MS > now,
-    );
+  for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
+    const message = messages![i];
+    if (message.senderId === senderId && message.sentAt + CHAT_BUBBLE_MS > now)
+      return message;
+  }
 }
 
 export const CHAT_CLICK_SLOP = 6;

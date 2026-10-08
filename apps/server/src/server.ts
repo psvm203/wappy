@@ -168,10 +168,28 @@ export function createApp(options: {
       PRIMARY KEY (message_id, user_id, friend_id),
       FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
+    CREATE INDEX IF NOT EXISTS friendships_friend ON friendships(friend_id, user_id);
+    CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
+    CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
   `);
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
+  let presenceRevision = 0;
+  // Keep only small validators, never per-profile JSON bodies. The fixed cap
+  // bounds memory even if many different profiles poll between cleanups.
+  // ponytail: writes invalidate all validators; use per-profile revisions if write-heavy traffic warrants it.
+  const validators = new Map<
+    string,
+    {
+      etag: string;
+      changes: number;
+      dataVersion: number;
+      presenceRevision: number;
+      createdAt: number;
+      validUntil: number;
+    }
+  >();
   const limits = new Map<string, { count: number; until: number }>();
   // ponytail: pending logins share this single server process; use shared TTL storage before replicas.
   const kakaoAttempts = new Map<string, KakaoAttempt>();
@@ -183,12 +201,41 @@ export function createApp(options: {
     "http://127.0.0.1:1420",
     ...(options.origins ?? []),
   ]);
-  const profile = (id: string) =>
-    db
-      .prepare("SELECT id, name, character, status FROM users WHERE id = ?")
-      .get(id) as unknown as Profile;
+  // Reuse the hot statements rather than allocating native SQL resources per poll.
+  const selectProfile = db.prepare(
+    "SELECT id, name, character, status FROM users WHERE id = ?",
+  );
+  const authenticate = db.prepare(
+    "SELECT id, name, character, status FROM users WHERE token_hash = ?",
+  );
+  const selectFriends = db.prepare(`
+    SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at,
+      COALESCE(p.sharing, 1) AS sharing
+    FROM friendships f
+    JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+    LEFT JOIN presence_settings p ON p.user_id = u.id
+    LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
+      AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
+    WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id
+  `);
+  const selectPresence = db.prepare(
+    "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
+  );
+  const selectMessages = db.prepare(`
+    SELECT id, sender_id AS senderId, text, sent_at AS sentAt FROM chat_messages
+    WHERE id IN (
+      SELECT id FROM chat_messages WHERE sender_id = ?
+      UNION ALL SELECT message_id FROM chat_recipients WHERE user_id = ?
+      UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
+    ) AND sent_at > ? ORDER BY id DESC LIMIT ?
+  `);
+  const selectChanges = db.prepare("SELECT total_changes() AS changes");
+  const selectDataVersion = db.prepare("PRAGMA data_version");
+  const profile = (id: string) => selectProfile.get(id) as unknown as Profile;
   const housekeeping = setInterval(() => {
     const time = now();
+    for (const [id, validator] of validators)
+      if (validator.validUntil <= time) validators.delete(id);
     for (const [id, seen] of lastSeen)
       if (time - seen >= ONLINE_TIMEOUT_MS) lastSeen.delete(id);
     for (const [ip, limit] of limits)
@@ -217,12 +264,14 @@ export function createApp(options: {
         throw new HttpError(403, "허용되지 않은 앱 주소입니다.");
       if (origin) {
         res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Expose-Headers", "ETag");
         res.setHeader("Vary", "Origin");
       }
       if (req.method === "OPTIONS") {
         res.writeHead(204, {
           "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization, If-None-Match",
           "Access-Control-Max-Age": "600",
         });
         res.end();
@@ -366,17 +415,13 @@ export function createApp(options: {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
-        const user =
-          token &&
-          db
-            .prepare("SELECT id FROM users WHERE token_hash = ?")
-            .get(hash(token));
+        const user = token && authenticate.get(hash(token));
         if (!user)
           throw new HttpError(
             401,
             "프로필 인증에 실패했습니다. 서버 주소를 확인해 주세요.",
           );
-        self = profile(user.id as string);
+        self = user as unknown as Profile;
       }
       switch (route) {
         case "POST /auth/kakao/start": {
@@ -530,55 +575,56 @@ export function createApp(options: {
         }
         case "GET /state": {
           const time = now();
+          if (
+            !lastSeen.has(self!.id) ||
+            time - lastSeen.get(self!.id)! >= ONLINE_TIMEOUT_MS
+          )
+            presenceRevision++;
           lastSeen.set(self!.id, time);
-          const rows = db
-            .prepare(
-              `SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at,
-              COALESCE(p.sharing, 1) AS sharing
-            FROM friendships f
-            JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
-            LEFT JOIN presence_settings p ON p.user_id = u.id
-            LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
-              AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
-            WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id`,
-            )
-            .all(
-              self!.id,
-              time - WAVE_TTL_MS,
-              self!.id,
-              self!.id,
-            ) as unknown as (Profile & {
+          const changes = Number(selectChanges.get()!.changes);
+          const dataVersion = Number(selectDataVersion.get()!.data_version);
+          const matches = (etag: string) =>
+            req.headers["if-none-match"]
+              ?.split(",")
+              .some((tag) => [etag, `W/${etag}`, "*"].includes(tag.trim()));
+          const cached = validators.get(self!.id);
+          if (
+            cached &&
+            cached.changes === changes &&
+            cached.dataVersion === dataVersion &&
+            cached.presenceRevision === presenceRevision &&
+            time >= cached.createdAt &&
+            time < cached.validUntil &&
+            matches(cached.etag)
+          ) {
+            res.writeHead(304, {
+              "Cache-Control": "private, no-store",
+              ETag: cached.etag,
+            });
+            res.end();
+            break;
+          }
+          const rows = selectFriends.all(
+            self!.id,
+            time - WAVE_TTL_MS,
+            self!.id,
+            self!.id,
+          ) as unknown as (Profile & {
             wave_id: string | null;
             wave_sent_at: number | null;
             sharing: number;
           })[];
-          const presence = db
-            .prepare(
-              "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
-            )
-            .get(self!.id);
-          reply(res, route, {
+          const presence = selectPresence.get(self!.id);
+          const state: Output<"GET /state"> = {
             self: self!,
             messages: (
-              db
-                .prepare(
-                  `
-              SELECT m.id, m.sender_id AS senderId, m.text, m.sent_at AS sentAt
-              FROM chat_messages m WHERE m.sent_at > ? AND (
-                m.sender_id = ? OR EXISTS (
-                  SELECT 1 FROM chat_recipients r WHERE r.message_id = m.id
-                  AND (r.user_id = ? OR r.friend_id = ?)
-                )
-              ) ORDER BY m.id DESC LIMIT ?
-            `,
-                )
-                .all(
-                  time - CHAT_TTL_MS,
-                  self!.id,
-                  self!.id,
-                  self!.id,
-                  CHAT_HISTORY_LIMIT,
-                ) as unknown as ChatMessage[]
+              selectMessages.all(
+                self!.id,
+                self!.id,
+                self!.id,
+                time - CHAT_TTL_MS,
+                CHAT_HISTORY_LIMIT,
+              ) as unknown as ChatMessage[]
             ).reverse(),
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
@@ -596,7 +642,43 @@ export function createApp(options: {
                   : {}),
               }),
             ),
+          };
+          const body = JSON.stringify(state);
+          const etag = `"${hash(body)}"`;
+          let validUntil = time + ONLINE_TIMEOUT_MS;
+          for (const friend of state.friends) {
+            if (friend.online)
+              validUntil = Math.min(
+                validUntil,
+                lastSeen.get(friend.id)! + ONLINE_TIMEOUT_MS,
+              );
+            if (friend.wave)
+              validUntil = Math.min(
+                validUntil,
+                friend.wave.sentAt + WAVE_TTL_MS,
+              );
+          }
+          for (const message of state.messages!)
+            validUntil = Math.min(validUntil, message.sentAt + CHAT_TTL_MS);
+          if (!validators.has(self!.id) && validators.size >= 1024)
+            validators.delete(validators.keys().next().value!);
+          validators.set(self!.id, {
+            etag,
+            changes,
+            dataVersion,
+            presenceRevision,
+            createdAt: time,
+            validUntil,
           });
+          // Authenticate and refresh presence before validating. Hash the current
+          // representation so TTL/offline transitions cannot leave a stale cache.
+          const unchanged = matches(etag);
+          res.writeHead(unchanged ? 304 : 200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "private, no-store",
+            ETag: etag,
+          });
+          res.end(unchanged ? undefined : body);
           break;
         }
         case "POST /chat": {
@@ -687,6 +769,7 @@ export function createApp(options: {
             throw error;
           }
           lastSeen.delete(self!.id);
+          validators.delete(self!.id);
           reply(res, route, { ok: true });
           break;
         }

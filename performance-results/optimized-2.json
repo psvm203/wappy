@@ -1,0 +1,35 @@
+{
+  "node": "v26.11.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "fixture": {
+    "friends": 100,
+    "unrelatedMessages": 100000,
+    "ownMessages": 50,
+    "warmup": 200,
+    "polls": 2000
+  },
+  "budgets": {
+    "idleResponseBytes": 512,
+    "p95Milliseconds": 10,
+    "retainedHeapBytes": 1048576,
+    "retainedRssBytes": 8388608
+  },
+  "metrics": {
+    "idleResponseBytes": 221,
+    "p95Milliseconds": 0.08604200000002038,
+    "retainedHeapBytes": 377560,
+    "retainedRssBytes": 6455872
+  },
+  "points": {
+    "idleResponseBytes": 25,
+    "p95Milliseconds": 25,
+    "retainedHeapBytes": 25,
+    "retainedRssBytes": 25
+  },
+  "firstResponseBytes": 50551,
+  "totalIdleBodyBytes": 0,
+  "notModifiedResponses": 2000,
+  "score": 100,
+  "passed": true
+}

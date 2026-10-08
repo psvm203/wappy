@@ -6,6 +6,7 @@
     "dev": "turbo run dev",
     "desktop": "turbo run desktop --filter=client",
     "test": "turbo run test",
+    "performance": "pnpm --filter @wappy/api build && node apps/server/scripts/performance.mjs",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"

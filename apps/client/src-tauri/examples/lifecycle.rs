@@ -210,23 +210,30 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
                 request.push_str(&line);
             }
             let health = request.starts_with("GET /health ");
+            let unchanged = request
+                .to_lowercase()
+                .contains("if-none-match: \"lifecycle-v1\"");
             if sent.send(request).is_err() {
                 break;
             }
             let status = if !health && state_requests == 1 {
                 503
+            } else if !health && unchanged {
+                304
             } else {
                 200
             };
             if !health {
                 state_requests += 1;
             }
-            let body = if health {
+            let body = if status == 304 {
+                ""
+            } else if health {
                 r#"{"ok":true}"#
             } else {
                 r#"{"self":{"id":"presence-check","name":"Presence","character":"cat","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"frog","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#
             };
-            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nETag: \"lifecycle-v1\"\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }
     });
     Ok((base, requests))
@@ -496,7 +503,7 @@ fn main() -> Result<(), String> {
             let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
                 .map_err(|error| error.to_string())?;
-            for connected in [true, false, true] {
+            for (index, connected) in [true, false, true].into_iter().enumerate() {
                 let update = snapshot(&received, |value| {
                     value["state"]["self"]["id"] == "presence-check"
                         && value["connected"] == connected
@@ -517,6 +524,13 @@ fn main() -> Result<(), String> {
                     || !request.contains(&format!("Bearer {}", "a".repeat(43)))
                 {
                     return Err("Background presence used the wrong request or credential".into());
+                }
+                if index > 0
+                    && !request
+                        .to_lowercase()
+                        .contains("if-none-match: \"lifecycle-v1\"")
+                {
+                    return Err("Background presence did not reuse its state validator".into());
                 }
             }
             handle
