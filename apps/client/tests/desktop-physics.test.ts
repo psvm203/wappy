@@ -11,28 +11,44 @@ import {
 const width = 1470,
   height = 923;
 
-test("idle bodies sleep, but resize, rotation, flight and online rest keep needed frames", () => {
+test("offline characters freeze in place, including mid-flight, and wake when online", () => {
   const body = createBody("idle", width, height);
-  assert.equal(needsAnimation(body, width, height, false), false);
-  assert.equal(needsAnimation(body, width, height, true), true);
+  assert.equal(needsAnimation(body, false), false);
+  assert.equal(needsAnimation(body, true), true);
   body.restTime = 1;
-  assert.equal(needsAnimation(body, width, height, true), true);
-  body.angle += 2 * Math.PI;
-  assert.equal(needsAnimation(body, width, height, false), false);
-  assert.equal(needsAnimation(body, 640, 480, false), true);
-  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, 640, 480, false);
-  assert.equal(needsAnimation(body, 640, 480, false), false);
+  assert.equal(needsAnimation(body, true), true);
+  Object.assign(body, { mode: "air", x: 700, y: 400, vx: 1400, vy: 200 });
+  const position = {
+    x: body.x,
+    y: body.y,
+    angle: body.angle,
+    phase: body.phase,
+  };
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, false);
+  assert.deepEqual(
+    { x: body.x, y: body.y, angle: body.angle, phase: body.phase },
+    position,
+  );
+  assert.equal(body.vx, 0);
+  assert.equal(body.vy, 0);
+  assert.equal(needsAnimation(body, false), false);
+  assert.equal(needsAnimation(body, true), true);
+  advanceBody(body, 1 / 60, width, height, true);
+  assert.notDeepEqual(
+    { x: body.x, y: body.y },
+    { x: position.x, y: position.y },
+  );
+  advanceBody(body, 1 / 60, 640, 480, false);
+  assert.ok(
+    body.x <= 580 && body.y <= 420,
+    "resizing still keeps a sleeping character on screen",
+  );
   body.mode = "drag";
   body.angle = Math.PI;
-  assert.equal(needsAnimation(body, width, height, false), true);
-  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, false);
-  assert.equal(needsAnimation(body, width, height, false), false);
-  Object.assign(body, { mode: "air", x: 700, y: 400, vx: 1400, vy: 200 });
-  assert.equal(needsAnimation(body, width, height, false), true);
-  for (let i = 0; i < 1200 && needsAnimation(body, width, height, false); i++)
-    advanceBody(body, 1 / 60, width, height, false);
-  assert.equal(body.mode, "walk");
-  assert.equal(needsAnimation(body, width, height, false), false);
+  assert.equal(needsAnimation(body, false), false);
+  assert.equal(needsAnimation(body, true), true);
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, true);
+  assert.equal(needsAnimation(body, true), false);
 });
 
 test("automatic walking covers all four edges without leaving the screen", (t) => {
@@ -102,7 +118,7 @@ test("gravity pulls toward each nearest edge", () => {
   ]) {
     const body = createBody("fall", width, height);
     Object.assign(body, { x, y, mode: "air", vx: 0, vy: 0 });
-    advanceBody(body, 1 / 60, width, height, false);
+    advanceBody(body, 1 / 60, width, height, true);
     assert.ok(body.vx * nx + body.vy * ny > 0);
   }
 });

@@ -91,6 +91,111 @@
   gap: 18px;
   flex-shrink: 0;
 }
+.character-chat {
+  padding: 0;
+  background: transparent;
+  flex-shrink: 0;
+}
+.chat-bubble,
+.friend-info .chat-bubble,
+.self-card .chat-bubble {
+  margin: 6px 0 0;
+  padding: 7px 9px;
+  border-radius: 10px 10px 10px 2px;
+  background: #e6efda;
+  color: #35462d;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.chat-messages {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 14px 0;
+  padding: 0 4px 0 0;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.chat-messages li {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.chat-messages .character {
+  width: 30px;
+  height: 34px;
+  flex-shrink: 0;
+}
+.chat-messages li > div {
+  min-width: 0;
+  flex: 1;
+}
+.chat-messages header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.chat-messages strong {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.chat-messages time {
+  font-size: 9px;
+  color: #7b8772;
+  flex-shrink: 0;
+}
+.chat-messages p {
+  margin: 5px 0 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: #f0f2e9;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-messages .chat-mine p {
+  background: #e1edcf;
+}
+.chat-panel textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid #d8dfce;
+  border-radius: 8px;
+  color: inherit;
+  background: #fffefa;
+  font: inherit;
+}
+.character.asleep .character-body {
+  transform-origin: 50px 96px;
+  animation: sleeping-breathe 3s ease-in-out infinite;
+}
+.sleep-marks {
+  animation: sleeping-marks 3s ease-in-out infinite;
+}
+@keyframes sleeping-breathe {
+  50% {
+    transform: scaleY(0.97);
+  }
+}
+@keyframes sleeping-marks {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .character.asleep .character-body,
+  .sleep-marks {
+    animation: none;
+  }
+}
 .tabs button {
   padding: 11px 0;
   border-radius: 0;
@@ -681,6 +786,25 @@
   font-size: 12px;
   padding: 13px 14px;
   font-weight: 600;
+}
+.kakao-login {
+  margin: 18px 0;
+}
+.kakao-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 45px;
+  border-radius: 12px;
+  background: #fee500;
+  color: rgb(0 0 0 / 85%);
+  font-size: 14px;
+  font-weight: 600;
+}
+.kakao-login .hint {
+  margin: 8px 0;
 }
 .primary {
   display: flex;

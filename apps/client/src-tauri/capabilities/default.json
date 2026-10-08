@@ -11,7 +11,13 @@
     "core:window:allow-close",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://github.com/psvm203/wappy/issues/new" }]
+      "allow": [
+        { "url": "https://github.com/psvm203/wappy/issues/new" },
+        { "url": "https://*/auth/kakao/authorize[?]state=*" },
+        { "url": "http://localhost:*/auth/kakao/authorize[?]state=*" },
+        { "url": "http://127.0.0.1:*/auth/kakao/authorize[?]state=*" },
+        { "url": "http://[[]::1[]]:*/auth/kakao/authorize[?]state=*" }
+      ]
     }
   ]
 }

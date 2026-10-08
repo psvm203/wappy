@@ -60,6 +60,44 @@
   background: #e9f2d9;
   box-shadow: 0 2px 6px #23311a26;
 }
+.desktop-resident figcaption:has(.chat-bubble) {
+  width: 184px;
+  white-space: normal;
+  overflow: visible;
+}
+.desktop-resident .chat-bubble {
+  margin: 0 0 4px;
+  font-size: 11px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.resident-rotation:focus-visible {
+  outline: 2px solid #73985c;
+  border-radius: 12px;
+}
+.desktop-resident.is-resting .character-body {
+  transform-origin: 50px 96px;
+  animation: sleeping-breathe 3s ease-in-out infinite;
+}
+.desktop-resident .sleep-marks {
+  animation: sleeping-marks 3s ease-in-out infinite;
+}
+@keyframes sleeping-breathe {
+  50% {
+    transform: scaleY(0.97);
+  }
+}
+@keyframes sleeping-marks {
+  50% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-resident.is-resting .character-body,
+  .desktop-resident .sleep-marks {
+    animation: none;
+  }
+}
 .resident-wave {
   display: block;
   width: 100%;

@@ -45,6 +45,7 @@ export function DesktopOverlay() {
       residents={residents}
       paused={snapshot.paused}
       profileKey={snapshot.profileKey}
+      messages={snapshot.state.messages}
     />
   );
 }
