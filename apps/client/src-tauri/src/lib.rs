@@ -1,5 +1,12 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+pub mod startup;
+mod state_sync;
+mod tray;
+pub use tray::{open_sidebar, show_sidebar};
+
+const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
+
 fn raise_desktop(desktop: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     return desktop.with_webview(|webview| unsafe {
@@ -99,13 +106,43 @@ fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> 
     ))
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
+/// Shared by the desktop entry point and the native lifecycle smoke check.
+pub fn app_builder() -> tauri::Builder<tauri::Wry> {
+    let builder = tauri::Builder::default();
+    #[cfg(any(target_os = "macos", windows))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _| {
+        // An OS login launch must not interrupt an already running, hidden app.
+        if args.iter().any(|arg| arg == AUTOSTART_ARGUMENT) {
+            return;
+        }
+        if let Err(error) = show_sidebar(app) {
+            eprintln!("Could not restore the running Wappy instance: {error}");
+        }
+    }));
+    builder
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
+        .manage(state_sync::StatePolling::default())
+        .on_page_load(|webview, payload| {
+            if webview.label() == "main"
+                && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
+            {
+                // Navigation destroys JS subscriptions even when React cleanup cannot run.
+                if let Err(error) = webview.state::<state_sync::StatePolling>().stop(None) {
+                    eprintln!("Could not stop the previous session connection: {error}");
+                }
+            }
+        })
         .setup(|app| {
+            tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window, false)?;
-                window.show()?;
+                if !std::env::args().any(|arg| arg == AUTOSTART_ARGUMENT) {
+                    window.show()?;
+                }
                 if let Some(desktop) = app.get_webview_window("desktop") {
                     // Start click-through; the character view enables input only on pets.
                     desktop.set_ignore_cursor_events(true)?;
@@ -129,6 +166,12 @@ pub fn run() {
                 return;
             }
             match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    if let Err(error) = window.hide() {
+                        eprintln!("Could not hide the sidebar: {error}");
+                    }
+                }
                 WindowEvent::Destroyed => window.app_handle().exit(0),
                 WindowEvent::Moved(_)
                 | WindowEvent::ScaleFactorChanged { .. }
@@ -148,10 +191,29 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            tray::open_sidebar,
             set_sidebar_compact,
             set_sidebar_pinned,
-            desktop_cursor_position
+            desktop_cursor_position,
+            tray::sync_tray_controls,
+            state_sync::start_state_polling,
+            state_sync::stop_state_polling,
+            startup::startup_status,
+            startup::set_startup_enabled
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    app_builder()
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if matches!(_event, tauri::RunEvent::Reopen { .. }) {
+                if let Err(error) = tray::show_sidebar(_app) {
+                    eprintln!("Could not reopen the sidebar: {error}");
+                }
+            }
+        });
 }

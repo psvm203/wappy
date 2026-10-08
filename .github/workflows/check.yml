@@ -2,11 +2,42 @@ name: Check Wappy
 on:
   push:
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
+  server-container:
+    name: Check server container and HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node .github/scripts/check-server-container.mjs
   check:
+    name: Check ${{ matrix.artifact }}
+    env:
+      VITE_BUILD_ID: ${{ github.sha }}
+    timeout-minutes: 45
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+            artifact: macos-universal
+            installer: dmg/*.dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust-targets: x86_64-pc-windows-msvc
+            artifact: windows-x64
+            installer: nsis/*-setup.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +46,31 @@ jobs:
           node-version: 24
       - uses: pnpm/action-setup@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build check-types test lint
       - run: cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
-      - run: pnpm --filter client tauri build --debug --no-bundle
+      - run: cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked
+      - name: Check native windows, tray and background connection
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            caffeinate -du cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked
+          else
+            cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked
+          fi
+      - name: Build preview installer
+        run: pnpm --filter client tauri build --ci --target ${{ matrix.target }}
+      - name: Check Windows install, launch, update and removal
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./.github/scripts/check-windows-installer.ps1 -Installer (Get-Item 'apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe').FullName
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wappy-preview-${{ matrix.artifact }}-${{ github.sha }}
+          path: apps/client/src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.installer }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

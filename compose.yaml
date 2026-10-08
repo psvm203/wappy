@@ -1,0 +1,16 @@
+name: wappy
+services:
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    init: true
+    restart: unless-stopped
+    environment:
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    ports:
+      - "127.0.0.1:${WAPPY_PORT:-3001}:3001"
+    volumes:
+      - wappy-data:/data
+volumes:
+  wappy-data:

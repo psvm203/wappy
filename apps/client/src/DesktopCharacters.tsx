@@ -1,13 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, type PointerEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { SidebarState } from "@wappy/api";
+import type { DesktopResident } from "./resident-selection";
 import { Character } from "./Character";
+import { OPEN_GREETING_EVENT } from "./desktop";
 import {
   advanceBody,
   CHARACTER_SIZE,
   createBody,
   moveBody,
+  needsAnimation,
   releaseVelocity,
   type Body,
   type DragSample,
@@ -31,9 +40,10 @@ function draw({ body, element }: Resident) {
     46,
     Math.min(innerWidth - 46, body.x + Math.sin(body.angle) * 92),
   );
+  const labelInset = element.dataset.wave === "true" ? 24 : 12;
   const nameY = Math.max(
-    12,
-    Math.min(innerHeight - 12, body.y - Math.cos(body.angle) * 68),
+    labelInset,
+    Math.min(innerHeight - labelInset, body.y - Math.cos(body.angle) * 68),
   );
   element.style.setProperty("--name-x", `${nameX - body.x}px`);
   element.style.setProperty("--name-y", `${nameY - body.y}px`);
@@ -42,67 +52,84 @@ function draw({ body, element }: Resident) {
 }
 
 export function DesktopCharacters({
-  state,
-  connected,
+  residents,
   paused,
+  profileKey,
 }: {
-  state: SidebarState;
-  connected: boolean;
+  residents: DesktopResident[];
   paused: boolean;
+  profileKey: string | null;
 }) {
+  const [failedGreeting, setFailedGreeting] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
-  const pausedRef = useRef(paused);
-  pausedRef.current = paused;
-  // The local pet keeps walking even if the presence server is temporarily unreachable.
-  const residents = [
-    { ...state.self, online: true },
-    ...state.friends.map((friend) => ({
-      ...friend,
-      online: connected && friend.online,
-    })),
-  ];
+  const wakeAnimation = useRef(() => {});
 
   useLayoutEffect(() => {
-    const ids = new Set([
-      state.self.id,
-      ...state.friends.map((friend) => friend.id),
-    ]);
+    const ids = new Set(residents.map((profile) => profile.id));
     for (const id of entries.current.keys())
       if (!ids.has(id)) entries.current.delete(id);
     if (drag.current && !ids.has(drag.current.id)) drag.current = null;
-  }, [state]);
+  }, [residents]);
 
   useEffect(() => {
-    let frame: number;
+    let frame: number | null = null;
     let previous = performance.now();
+    const moving = (resident: Resident) =>
+      needsAnimation(resident.body, innerWidth, innerHeight, resident.walking);
+    const schedule = () => {
+      if (!paused && [...entries.current.values()].some(moving))
+        frame = requestAnimationFrame(animate);
+    };
     const animate = (now: number) => {
+      frame = null;
       const elapsed = (now - previous) / 1000;
       previous = now;
       for (const resident of entries.current.values()) {
-        if (!pausedRef.current)
-          advanceBody(
-            resident.body,
-            elapsed,
-            innerWidth,
-            innerHeight,
-            resident.walking,
-          );
-        else
-          moveBody(
-            resident.body,
-            resident.body.x,
-            resident.body.y,
-            innerWidth,
-            innerHeight,
-          );
+        if (!moving(resident)) continue;
+        advanceBody(
+          resident.body,
+          elapsed,
+          innerWidth,
+          innerHeight,
+          resident.walking,
+        );
         draw(resident);
       }
-      frame = requestAnimationFrame(animate);
+      schedule();
     };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+    const wake = () => {
+      if (frame !== null) return;
+      previous = performance.now();
+      schedule();
+    };
+    const resize = () => {
+      for (const resident of entries.current.values()) {
+        moveBody(
+          resident.body,
+          resident.body.x,
+          resident.body.y,
+          innerWidth,
+          innerHeight,
+        );
+        draw(resident);
+      }
+      wake();
+    };
+    wakeAnimation.current = wake;
+    wake();
+    window.addEventListener("resize", resize);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", resize);
+      wakeAnimation.current = () => {};
+    };
+  }, [paused]);
+
+  useEffect(() => {
+    // Presence changes can wake an idle scene without resetting a running frame clock.
+    wakeAnimation.current();
+  }, [residents]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -111,7 +138,7 @@ export function DesktopCharacters({
     let timer: ReturnType<typeof setTimeout>;
     let interactive = false;
     // Click-through windows do not receive pointermove. Poll the native cursor to
-    // enable input only over a character, and keep capture until a drag ends.
+    // enable input over a character or greeting, and keep capture until a drag ends.
     const poll = async () => {
       try {
         const [x, y] = await invoke<[number, number]>(
@@ -121,12 +148,16 @@ export function DesktopCharacters({
         const hit =
           !!drag.current ||
           [...entries.current.values()].some(({ element }) => {
-            const rect = element.querySelector("svg")!.getBoundingClientRect();
-            return (
-              x >= rect.left - 6 &&
-              x <= rect.right + 6 &&
-              y >= rect.top - 6 &&
-              y <= rect.bottom + 6
+            return [...element.querySelectorAll("svg, .resident-wave")].some(
+              (target) => {
+                const rect = target.getBoundingClientRect();
+                return (
+                  x >= rect.left - 6 &&
+                  x <= rect.right + 6 &&
+                  y >= rect.top - 6 &&
+                  y <= rect.bottom + 6
+                );
+              },
             );
           });
         if (hit !== interactive) {
@@ -152,7 +183,12 @@ export function DesktopCharacters({
   }, []);
 
   function startDrag(event: PointerEvent<HTMLElement>, id: string) {
-    if (event.button !== 0 || drag.current) return;
+    if (
+      event.button !== 0 ||
+      drag.current ||
+      (event.target as Element).closest("button")
+    )
+      return;
     const resident = entries.current.get(id)!;
     const body = resident.body;
     event.preventDefault();
@@ -167,6 +203,7 @@ export function DesktopCharacters({
       samples: [{ x: body.x, y: body.y, time: event.timeStamp }],
     };
     draw(resident);
+    wakeAnimation.current();
   }
 
   function moveDrag(event: PointerEvent<HTMLElement>) {
@@ -206,6 +243,7 @@ export function DesktopCharacters({
       );
       resident.body.mode = "air";
       draw(resident);
+      wakeAnimation.current();
     }
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -218,11 +256,12 @@ export function DesktopCharacters({
       aria-label="바탕화면 캐릭터"
     >
       {residents.map((resident) => {
-        const name = `${resident.name}${resident.id === state.self.id ? " (나)" : ""}`;
+        const name = `${resident.name}${resident.isSelf ? " (나)" : ""}`;
         return (
           <figure
             key={resident.id}
             className={`desktop-resident ${resident.online ? "" : "is-resting"}`}
+            data-wave={!!resident.wave}
             ref={(element) => {
               if (!element) return;
               const entry = {
@@ -251,7 +290,35 @@ export function DesktopCharacters({
                 />
               </div>
             </div>
-            <figcaption>{name}</figcaption>
+            <figcaption className={resident.wave ? "has-wave" : undefined}>
+              {resident.wave && (
+                <button
+                  type="button"
+                  className="resident-wave"
+                  aria-label={`${resident.name} 님의 인사 보기`}
+                  title={
+                    failedGreeting === resident.id
+                      ? "열지 못했어요. 다시 누르거나 트레이에서 사이드바를 열어 주세요."
+                      : "사이드바에서 인사 보기"
+                  }
+                  onClick={async () => {
+                    if (!profileKey) return;
+                    try {
+                      await emitTo("main", OPEN_GREETING_EVENT, {
+                        profileKey,
+                        friendId: resident.id,
+                      });
+                      setFailedGreeting(null);
+                    } catch {
+                      setFailedGreeting(resident.id);
+                    }
+                  }}
+                >
+                  {failedGreeting === resident.id ? "다시 열기" : "👋 안녕!"}
+                </button>
+              )}
+              <span className="resident-name">{name}</span>
+            </figcaption>
           </figure>
         );
       })}

@@ -5,15 +5,19 @@ import {
   type ServerResponse,
 } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { isIP } from "node:net";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
+  WAVE_COOLDOWN_MS,
+  WAVE_TTL_MS,
   isRecord,
   parseProfile,
   type ApiErrorBody,
   type Output,
   type Profile,
   type Route,
+  type Wave,
 } from "@wappy/api";
 
 class HttpError extends Error {
@@ -78,6 +82,7 @@ function reply<R extends Route>(
 export function createApp(options: {
   databasePath: string;
   origins?: string[];
+  trustProxy?: boolean;
   now?: () => number;
 }) {
   const db = new DatabaseSync(options.databasePath);
@@ -97,6 +102,22 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS invites (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
       expires_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS recovery_codes (
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS presence_settings (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
+      revision INTEGER NOT NULL CHECK (revision >= 1)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS waves (
+      id TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL, friend_id TEXT NOT NULL, sender_id TEXT NOT NULL,
+      sent_at INTEGER NOT NULL, acknowledged INTEGER NOT NULL CHECK (acknowledged IN (0, 1)),
+      PRIMARY KEY (user_id, friend_id, sender_id),
+      CHECK (sender_id = user_id OR sender_id = friend_id),
+      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
   `);
   const now = options.now ?? Date.now;
@@ -122,6 +143,7 @@ export function createApp(options: {
     for (const [ip, limit] of limits)
       if (limit.until <= time) limits.delete(ip);
     db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
+    db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
   }, 60_000);
   housekeeping.unref();
 
@@ -148,15 +170,27 @@ export function createApp(options: {
         json(res, 200, { ok: true });
         return;
       }
+      const publicSession =
+        route === "POST /session" || route === "POST /session/recover";
+      const publicPreview = route === "POST /invites/preview";
       if (req.method !== "GET") {
-        const key = `${req.socket.remoteAddress}:${route === "POST /session" ? "signup" : "write"}`;
+        // Opt in only behind one trusted proxy with no direct access to this port.
+        // Its appended, rightmost address wins over any client-supplied prefix.
+        const forwarded = req.headers["x-forwarded-for"];
+        const address =
+          options.trustProxy && typeof forwarded === "string"
+            ? forwarded.split(",").at(-1)?.trim()
+            : undefined;
+        const ip =
+          address && isIP(address) ? address : req.socket.remoteAddress;
+        const key = `${ip}:${publicSession ? "session" : publicPreview ? "preview" : "write"}`;
         const limit = limits.get(key);
         const current =
           limit && limit.until > now()
             ? limit
             : { count: 0, until: now() + 60_000 };
         limits.set(key, current);
-        if (++current.count > (route === "POST /session" ? 10 : 60)) {
+        if (++current.count > (publicSession ? 10 : 60)) {
           res.setHeader("Retry-After", "60");
           throw new HttpError(
             429,
@@ -164,8 +198,10 @@ export function createApp(options: {
           );
         }
       }
+      const body = req.method === "GET" ? undefined : await readBody(req);
+      // Authenticate after the last await so recovery also revokes in-flight writes.
       let self: Profile | undefined;
-      if (route !== "POST /session") {
+      if (!publicSession && !publicPreview) {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
@@ -181,7 +217,6 @@ export function createApp(options: {
           );
         self = profile(user.id as string);
       }
-      const body = req.method === "GET" ? undefined : await readBody(req);
       switch (route) {
         case "POST /session": {
           let input;
@@ -203,23 +238,82 @@ export function createApp(options: {
           reply(res, route, { token, profile: user }, 201);
           break;
         }
+        case "POST /session/recover": {
+          const code = field(body, "code");
+          if (!/^wappy-recovery-[A-Za-z0-9_-]{43}$/.test(code))
+            throw new HttpError(400, "올바른 복구 코드를 입력해 주세요.");
+          const token = secret();
+          // One atomic statement preserves the profile and revokes the old session.
+          // Keep the recovery key valid: a lost response must remain retryable.
+          const user = db
+            .prepare(
+              `UPDATE users SET token_hash = ?
+               WHERE id = (SELECT owner_id FROM recovery_codes WHERE code_hash = ?)
+               RETURNING id, name, character, status`,
+            )
+            .get(hash(token), hash(code)) as unknown as Profile | undefined;
+          if (!user)
+            throw new HttpError(401, "복구 코드와 서버 주소를 확인해 주세요.");
+          lastSeen.set(user.id, now());
+          reply(res, route, { token, profile: user });
+          break;
+        }
+        case "POST /recovery-code": {
+          const code = `wappy-recovery-${secret()}`;
+          db.prepare(
+            `INSERT INTO recovery_codes VALUES (?, ?) ON CONFLICT(owner_id)
+             DO UPDATE SET code_hash = excluded.code_hash`,
+          ).run(hash(code), self!.id);
+          reply(res, route, { code }, 201);
+          break;
+        }
         case "GET /state": {
-          lastSeen.set(self!.id, now());
+          const time = now();
+          lastSeen.set(self!.id, time);
           const rows = db
             .prepare(
-              `SELECT u.id, u.name, u.character, u.status FROM friendships f
+              `SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at,
+              COALESCE(p.sharing, 1) AS sharing
+            FROM friendships f
             JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+            LEFT JOIN presence_settings p ON p.user_id = u.id
+            LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
+              AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
             WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id`,
             )
-            .all(self!.id, self!.id, self!.id) as unknown as Profile[];
+            .all(
+              self!.id,
+              time - WAVE_TTL_MS,
+              self!.id,
+              self!.id,
+            ) as unknown as (Profile & {
+            wave_id: string | null;
+            wave_sent_at: number | null;
+            sharing: number;
+          })[];
+          const presence = db
+            .prepare(
+              "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
+            )
+            .get(self!.id);
           reply(res, route, {
             self: self!,
-            friends: rows.map((friend) => ({
-              ...friend,
-              online:
-                lastSeen.has(friend.id) &&
-                now() - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
-            })),
+            presence: {
+              sharing: presence ? presence.sharing === 1 : true,
+              revision: presence ? Number(presence.revision) : 0,
+            },
+            friends: rows.map(
+              ({ wave_id, wave_sent_at, sharing, ...friend }) => ({
+                ...friend,
+                online:
+                  sharing === 1 &&
+                  lastSeen.has(friend.id) &&
+                  time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+                ...(wave_id && wave_sent_at !== null
+                  ? { wave: { id: wave_id, sentAt: wave_sent_at } }
+                  : {}),
+              }),
+            ),
           });
           break;
         }
@@ -236,6 +330,53 @@ export function createApp(options: {
           reply(res, route, { ...input, id: self!.id });
           break;
         }
+        case "POST /profile/delete": {
+          if (field(body, "profileId") !== self!.id)
+            throw new HttpError(409, "삭제할 프로필을 다시 확인해 주세요.");
+          // Existing databases use restrictive user foreign keys. Keep removal atomic
+          // without rebuilding their tables; waves already cascade with friendships.
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            db.prepare(
+              "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
+            ).run(self!.id, self!.id);
+            db.prepare("DELETE FROM invites WHERE owner_id = ?").run(self!.id);
+            db.prepare("DELETE FROM recovery_codes WHERE owner_id = ?").run(
+              self!.id,
+            );
+            db.prepare("DELETE FROM presence_settings WHERE user_id = ?").run(
+              self!.id,
+            );
+            db.prepare("DELETE FROM users WHERE id = ?").run(self!.id);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          lastSeen.delete(self!.id);
+          reply(res, route, { ok: true });
+          break;
+        }
+        case "PATCH /presence": {
+          if (!isRecord(body) || typeof body.sharing !== "boolean")
+            throw new HttpError(400, "접속 공개 여부를 확인해 주세요.");
+          const setting = db
+            .prepare(
+              `
+            INSERT INTO presence_settings (user_id, sharing, revision) VALUES (?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET sharing = excluded.sharing,
+              revision = presence_settings.revision + 1
+            RETURNING sharing, revision
+          `,
+            )
+            .get(self!.id, Number(body.sharing))!;
+          lastSeen.set(self!.id, now());
+          reply(res, route, {
+            sharing: setting.sharing === 1,
+            revision: Number(setting.revision),
+          });
+          break;
+        }
         case "POST /invites": {
           const code = secret();
           const expiresAt = now() + INVITE_TTL_MS;
@@ -244,6 +385,23 @@ export function createApp(options: {
             DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at`,
           ).run(hash(code), self!.id, expiresAt);
           reply(res, route, { code, expiresAt }, 201);
+          break;
+        }
+        case "POST /invites/preview": {
+          const invite = db
+            .prepare(
+              `SELECT users.name, users.character, invites.expires_at AS expiresAt
+               FROM invites JOIN users ON users.id = invites.owner_id
+               WHERE invites.code_hash = ? AND invites.expires_at > ?`,
+            )
+            .get(hash(field(body, "code")), now());
+          if (!invite)
+            throw new HttpError(404, "초대 코드가 없거나 만료되었습니다.");
+          reply(res, route, {
+            name: invite.name as string,
+            character: invite.character as Profile["character"],
+            expiresAt: invite.expiresAt as number,
+          });
           break;
         }
         case "POST /invites/accept": {
@@ -286,6 +444,62 @@ export function createApp(options: {
           db.prepare(
             "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
           ).run(pair[0]!, pair[1]!);
+          reply(res, route, { ok: true });
+          break;
+        }
+        case "POST /friends/wave": {
+          const pair = [self!.id, field(body, "friendId")].sort();
+          const time = now();
+          // One row per direction keeps only the latest greeting. The guarded upsert
+          // also enforces cooldown across restarts and simultaneous requests.
+          const wave = db
+            .prepare(
+              `
+            INSERT INTO waves (id, user_id, friend_id, sender_id, sent_at, acknowledged)
+            SELECT ?, user_id, friend_id, ?, ?, 0 FROM friendships
+            WHERE user_id = ? AND friend_id = ?
+            ON CONFLICT(user_id, friend_id, sender_id) DO UPDATE SET
+              id = excluded.id, sent_at = excluded.sent_at, acknowledged = 0
+            WHERE waves.sent_at <= ?
+            RETURNING id, sent_at AS sentAt
+          `,
+            )
+            .get(
+              randomUUID(),
+              self!.id,
+              time,
+              pair[0]!,
+              pair[1]!,
+              time - WAVE_COOLDOWN_MS,
+            ) as unknown as Wave | undefined;
+          if (!wave) {
+            if (
+              !db
+                .prepare(
+                  "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
+                )
+                .get(pair[0]!, pair[1]!)
+            )
+              throw new HttpError(
+                404,
+                "연결된 친구에게만 인사를 보낼 수 있어요.",
+              );
+            res.setHeader("Retry-After", String(WAVE_COOLDOWN_MS / 1000));
+            throw new HttpError(
+              429,
+              "방금 인사를 보냈어요. 같은 친구에게는 30초에 한 번 보낼 수 있어요.",
+            );
+          }
+          reply(res, route, wave, 201);
+          break;
+        }
+        case "POST /waves/read": {
+          // Match the exact greeting: a late acknowledgement must not hide a newer one.
+          // Only the recipient may acknowledge it; retries and stale ids are safe no-ops.
+          db.prepare(
+            `UPDATE waves SET acknowledged = 1 WHERE id = ?
+            AND sender_id != ? AND (user_id = ? OR friend_id = ?)`,
+          ).run(field(body, "waveId"), self!.id, self!.id, self!.id);
           reply(res, route, { ok: true });
           break;
         }

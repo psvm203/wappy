@@ -13,15 +13,22 @@ export function ProfileForm({
   busy,
   onSave,
   children,
+  beforeProfile,
+  canSave = true,
+  submitLabel = "이 모습으로 함께하기",
 }: {
   initial: ProfileInput;
   busy: boolean;
   onSave: (profile: ProfileInput) => void;
   children?: ReactNode;
+  beforeProfile?: ReactNode;
+  canSave?: boolean;
+  submitLabel?: string;
 }) {
   const [profile, setProfile] = useState(initial);
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy || !canSave) return;
     onSave({
       ...profile,
       name: profile.name.trim(),
@@ -32,6 +39,7 @@ export function ProfileForm({
     <form onSubmit={submit} className="profile-form">
       <fieldset disabled={busy}>
         <legend>나를 닮은 친구를 골라요</legend>
+        {beforeProfile}
         <div className="character-picker">
           {CHARACTERS.map((kind) => (
             <label
@@ -77,10 +85,10 @@ export function ProfileForm({
         {children}
         <button
           className="primary"
-          disabled={!profile.name.trim()}
+          disabled={!profile.name.trim() || !canSave}
           type="submit"
         >
-          {busy ? "저장하는 중…" : "이 모습으로 함께하기"}
+          {busy ? "저장하는 중…" : submitLabel}
           <span aria-hidden="true">↗</span>
         </button>
       </fieldset>

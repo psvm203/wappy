@@ -146,6 +146,48 @@
   flex-direction: column;
   gap: 11px;
 }
+.friend-filters {
+  margin-bottom: 16px;
+}
+.friend-filters .field {
+  margin-bottom: 9px;
+}
+.friend-views {
+  display: flex;
+  gap: 5px;
+}
+.friend-views button {
+  flex: 1;
+  padding: 9px 5px;
+  border-radius: 8px;
+  background: #f0f1e9;
+  color: #68745e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.friend-views button[aria-pressed="true"] {
+  background: #e3edd3;
+  color: #374936;
+  font-weight: 700;
+}
+.friend-views span {
+  font-size: 10px;
+}
+.friend-results {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 34px;
+}
+.friend-results p {
+  margin: 0;
+  color: #68745e;
+  font-size: 10px;
+}
+.friend-filter-empty {
+  padding: 20px 10px;
+}
 .friend-card {
   display: flex;
   align-items: center;
@@ -157,6 +199,10 @@
   border: 1px solid #e7e9df;
   gap: 7px;
   flex-wrap: wrap;
+}
+.friend-card:focus {
+  outline: 2px solid #60764e;
+  outline-offset: 2px;
 }
 .friend-card.is-online {
   background: #f4f6ec;
@@ -203,6 +249,44 @@
 .friend-info small {
   color: #68745e;
   font-size: 9px;
+}
+.greeting-hint {
+  margin: -6px 0 16px;
+}
+.wave-send {
+  min-height: 32px;
+  margin-top: 4px;
+}
+.received-wave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  background: #e3edd3;
+  border-radius: 9px;
+}
+.received-wave p {
+  margin: 0;
+  color: #435d38;
+}
+.received-wave time {
+  display: block;
+  color: #68745e;
+  font-size: 9px;
+}
+.received-wave button {
+  min-height: 32px;
+  flex-shrink: 0;
+}
+.wave-count {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #e3edd3;
+  font-size: 10px;
 }
 .remove-button {
   position: absolute;
@@ -447,13 +531,33 @@
   color: #68745e;
   margin-left: 5px;
 }
+.invitation-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #d6dfc9;
+  border-radius: 12px;
+  background: #edf2e6;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.invitation-preview .character {
+  width: 48px;
+  flex-shrink: 0;
+}
+.invitation-preview .hint {
+  margin: 5px 0 0;
+}
 .field {
   display: block;
   font-size: 11px;
   color: #68725d;
   margin: 15px 0;
 }
-.field input {
+.field input,
+.field textarea {
   display: block;
   width: 100%;
   margin-top: 8px;
@@ -463,6 +567,108 @@
   border-radius: 9px;
   font-size: 12px;
   color: #3e4935;
+}
+.field textarea {
+  resize: vertical;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.onboarding-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 24px;
+}
+.local-preview-entry {
+  margin-bottom: 24px;
+  text-align: center;
+}
+.local-preview .desktop-controls {
+  margin-top: 20px;
+  margin-bottom: 24px;
+}
+.onboarding-tabs [aria-current="page"] {
+  color: #374936;
+  border-bottom: 2px solid #678b57;
+  border-radius: 0;
+  font-weight: 700;
+}
+.recovery-panel {
+  margin-top: 28px;
+}
+.server-panel {
+  margin-top: 20px;
+}
+.delete-profile {
+  margin-top: 28px;
+  border-color: #e5ceca;
+}
+.delete-profile-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.startup-panel {
+  margin-top: 20px;
+}
+.setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-top: 15px;
+  cursor: pointer;
+}
+.setting-toggle input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: #678b57;
+}
+.presence-controls {
+  padding: 12px;
+  margin-bottom: 18px;
+  border: 1px solid #dce3d2;
+  border-radius: 12px;
+}
+.presence-controls .setting-toggle {
+  margin-top: 0;
+  min-height: 32px;
+}
+.presence-controls .hint {
+  margin: 6px 0 0;
+}
+.presence-controls .text-button {
+  margin-top: 8px;
+}
+.compact-presence {
+  display: block;
+  font-size: 9px;
+  margin-top: 5px;
+  color: #68745e;
+}
+.saved-profiles {
+  margin: 0 0 26px;
+}
+.saved-profiles h2 {
+  font-size: 14px;
+}
+.saved-profiles ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.saved-profiles li {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #e0e5d8;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.saved-profiles li > .text-button {
+  display: block;
+  margin: 10px auto 0;
 }
 .field input::placeholder {
   color: #68745e;
@@ -519,6 +725,31 @@
   cursor: pointer;
   padding: 5px 0;
 }
+.server-check {
+  margin: 12px 0;
+}
+.support-panel {
+  margin-top: 20px;
+  text-align: left;
+}
+.support-panel summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.support-panel h2 {
+  margin-top: 20px;
+}
+.support-panel textarea {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.support-link {
+  display: block;
+  margin: 12px 0 18px;
+  color: #52683d;
+  font-size: 12px;
+}
 .hint {
   font-size: 10px;
   color: #68745e;
@@ -561,6 +792,9 @@
 }
 .server-address strong {
   font-weight: 500;
+}
+.invitation-destination {
+  overflow-wrap: anywhere;
 }
 .accept-form {
   margin-top: 28px;
@@ -656,6 +890,13 @@
 }
 .compact-friends > div {
   margin: 10px 0;
+  position: relative;
+}
+.compact-wave {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 14px;
 }
 .compact-sidebar .character {
   width: 54px;
@@ -680,6 +921,38 @@
 }
 .desktop-controls button:disabled {
   cursor: default;
+}
+.resident-selection {
+  border-top: 1px solid #d8e0cc;
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 11px;
+  color: #526649;
+}
+.resident-selection summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.resident-selection fieldset {
+  border: 0;
+  padding: 0;
+  margin: 10px 0;
+  min-width: 0;
+}
+.selection-legend {
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.resident-selection .setting-toggle {
+  margin-top: 3px;
+  padding: 5px 0;
+  overflow-wrap: anywhere;
+}
+.selection-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
 }
 .compact-sidebar .desktop-controls {
   margin: 0;

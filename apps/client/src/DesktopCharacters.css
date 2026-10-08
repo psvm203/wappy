@@ -56,6 +56,35 @@
   text-overflow: ellipsis;
   pointer-events: none;
 }
+.desktop-resident figcaption.has-wave {
+  background: #e9f2d9;
+  box-shadow: 0 2px 6px #23311a26;
+}
+.resident-wave {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+  color: #3f5932;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.resident-wave:hover,
+.resident-wave:focus-visible {
+  background: #d5e7bb;
+  outline: 1px solid #60764e;
+}
+.resident-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .desktop-characters.is-paused * {
   animation-play-state: paused;
 }
