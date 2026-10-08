@@ -13,6 +13,7 @@ import {
   parseProfile,
   parseChatMessage,
   parseChatMessageIds,
+  parseBlockingSettings,
   CHAT_HISTORY_LIMIT,
   isRecord,
   type Invite,
@@ -60,6 +61,8 @@ import { SupportPanel } from "./SupportPanel";
 import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
+import { BlockedProfiles } from "./BlockedProfiles";
+import { applyBlockingSettings, reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
@@ -109,6 +112,7 @@ function App() {
   >("connecting");
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const [blockingFriend, setBlockingFriend] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [friendView, setFriendView] = useState<FriendView>("all");
@@ -203,11 +207,15 @@ function App() {
     setFriendQuery("");
     setFriendView("all");
     setChatRecipient(null);
+    setBlockingFriend(null);
   }
 
   function applyState(next: SidebarState) {
     setState((current) =>
-      reconcileChatReads(current, reconcilePresence(current, next)),
+      reconcileChatReads(
+        current,
+        reconcilePresence(current, reconcileBlocking(current, next)),
+      ),
     );
   }
 
@@ -315,6 +323,41 @@ function App() {
             ),
           }
         : current,
+    );
+  }
+
+  async function changeBlocking(friendId: string, blocked: boolean) {
+    if (!session || connection !== "online" || state?.blocking === undefined)
+      throw new ApiError(
+        503,
+        "차단 기능을 지원하는 서버에 연결된 뒤 다시 시도해 주세요.",
+      );
+    const active = session;
+    const result = parseBlockingSettings(
+      await request(
+        active,
+        blocked ? "POST /friends/block" : "POST /friends/unblock",
+        { friendId },
+      ),
+    );
+    if (
+      result.profiles.some((profile) => profile.id === state.self.id) ||
+      result.profiles.some((profile) => profile.id === friendId) !== blocked
+    )
+      throw new ApiError(
+        502,
+        "차단 변경 결과를 확인하지 못했어요. 차단 목록을 다시 확인해 주세요.",
+      );
+    if (currentSession.current !== active) return;
+    setState((current) =>
+      current ? applyBlockingSettings(current, result) : current,
+    );
+    setBlockingFriend(null);
+    setRemoving(null);
+    setNotice(
+      blocked
+        ? "친구를 차단했어요. 내 모습에서 차단을 관리할 수 있어요."
+        : "차단을 해제했어요. 다시 함께하려면 초대로 연결해 주세요.",
     );
   }
 
@@ -967,6 +1010,7 @@ function App() {
             ).map(([id, label]) => (
               <button
                 key={id}
+                id={`sidebar-tab-${id}`}
                 className="text-button"
                 aria-current={onboarding === id ? "page" : undefined}
                 disabled={busy}
@@ -1401,16 +1445,34 @@ function App() {
                               })
                             }
                           />
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            id={`block-friend-${friend.id}`}
+                            aria-label={`${friend.name} 님 차단하기`}
+                            disabled={
+                              busy ||
+                              connection !== "online" ||
+                              state.blocking === undefined
+                            }
+                            onClick={() => {
+                              setBlockingFriend(friend.id);
+                              setRemoving(null);
+                            }}
+                          >
+                            차단하기
+                          </button>
                         </div>
                         <button
                           className="remove-button"
                           aria-label={`${friend.name} 친구 연결 해제`}
                           title="친구 연결 해제"
-                          onClick={() =>
+                          onClick={() => {
+                            setBlockingFriend(null);
                             setRemoving(
                               removing === friend.id ? null : friend.id,
-                            )
-                          }
+                            );
+                          }}
                         >
                           ×
                         </button>
@@ -1440,6 +1502,53 @@ function App() {
                             >
                               연결 해제
                             </button>
+                          </div>
+                        )}
+                        {blockingFriend === friend.id && (
+                          <div
+                            className="block-confirm"
+                            role="group"
+                            aria-label={`${friend.name} 님 차단 확인`}
+                          >
+                            <p>
+                              <strong>{friend.name} 님을 차단할까요?</strong>
+                            </p>
+                            <p>
+                              친구 연결과 둘 사이의 1:1 대화·인사를 삭제하고,
+                              초대로 다시 연결되는 것도 막아요. 차단 해제는 내
+                              모습에서 할 수 있어요.
+                            </p>
+                            <div>
+                              <button
+                                type="button"
+                                className="text-button"
+                                disabled={busy}
+                                autoFocus
+                                onClick={() => {
+                                  setBlockingFriend(null);
+                                  document
+                                    .getElementById(`block-friend-${friend.id}`)
+                                    ?.focus();
+                                }}
+                              >
+                                취소
+                              </button>
+                              <button
+                                type="button"
+                                className="text-button danger"
+                                disabled={busy || connection !== "online"}
+                                onClick={() => {
+                                  document
+                                    .getElementById("sidebar-tab-friends")
+                                    ?.focus();
+                                  void action(() =>
+                                    changeBlocking(friend.id, true),
+                                  );
+                                }}
+                              >
+                                친구 차단
+                              </button>
+                            </div>
                           </div>
                         )}
                       </li>
@@ -1603,6 +1712,13 @@ function App() {
                       onSave={saveProfile}
                     />
                     <RecoveryCode key={session.token} session={session} />
+                    <BlockedProfiles
+                      blocking={state.blocking}
+                      disabled={busy || connection !== "online"}
+                      onUnblock={(id) =>
+                        void action(() => changeBlocking(id, false))
+                      }
+                    />
                     <DeleteProfile
                       key={session.server + session.token}
                       profile={state.self}

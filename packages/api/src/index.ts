@@ -55,6 +55,13 @@ export interface SidebarState {
   directChat?: true;
   /** Unacknowledged received messages in this snapshot; private to self. Absent on older servers. */
   unreadChatIds?: number[];
+  /** The authenticated profile's block list; absent on older servers. */
+  blocking?: BlockingSettings;
+}
+export type BlockedProfile = Pick<Profile, "id" | "name" | "character">;
+export interface BlockingSettings {
+  revision: number;
+  profiles: BlockedProfile[];
 }
 export interface PresenceSettings {
   sharing: boolean;
@@ -117,6 +124,14 @@ export interface ApiRoutes {
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
   "POST /invites/accept": { input: { code: string }; output: Profile };
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
+  "POST /friends/block": {
+    input: { friendId: string };
+    output: BlockingSettings;
+  };
+  "POST /friends/unblock": {
+    input: { friendId: string };
+    output: BlockingSettings;
+  };
   "POST /friends/wave": { input: { friendId: string }; output: Wave };
   "POST /waves/read": { input: { waveId: string }; output: { ok: true } };
 }
@@ -192,6 +207,31 @@ export function parsePresenceSettings(value: unknown): PresenceSettings {
   )
     throw new Error("잘못된 접속 공개 설정입니다.");
   return { sharing: value.sharing, revision: value.revision };
+}
+
+export function parseBlockingSettings(value: unknown): BlockingSettings {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.revision) ||
+    (value.revision as number) < 0 ||
+    !Array.isArray(value.profiles)
+  )
+    throw new Error("잘못된 차단 목록입니다.");
+  const ids = new Set<string>();
+  const profiles = value.profiles.map((input): BlockedProfile => {
+    if (
+      !isRecord(input) ||
+      typeof input.id !== "string" ||
+      !input.id ||
+      input.id.length > 128 ||
+      ids.has(input.id)
+    )
+      throw new Error("잘못된 차단 프로필입니다.");
+    const { name, character } = parseProfile({ ...input, status: "" });
+    ids.add(input.id);
+    return { id: input.id, name, character };
+  });
+  return { revision: value.revision as number, profiles };
 }
 
 /** Runtime validation at the HTTP boundary; TypeScript alone cannot validate JSON. */
@@ -310,12 +350,19 @@ export function parseSidebarState(value: unknown): SidebarState {
     if (!messages || unreadChatIds.some((id) => !received.has(id)))
       throw new Error("잘못된 새 채팅 메시지 응답입니다.");
   }
+  const blocking =
+    value.blocking === undefined
+      ? undefined
+      : parseBlockingSettings(value.blocking);
+  if (blocking?.profiles.some((profile) => ids.has(profile.id)))
+    throw new Error("차단한 프로필이 친구 목록에 포함되어 있습니다.");
   return {
     self,
     friends,
     ...(messages === undefined ? {} : { messages }),
     ...(value.directChat === true ? { directChat: true as const } : {}),
     ...(unreadChatIds === undefined ? {} : { unreadChatIds }),
+    ...(blocking === undefined ? {} : { blocking }),
     ...(value.presence === undefined
       ? {}
       : { presence: parsePresenceSettings(value.presence) }),
