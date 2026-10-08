@@ -1,4 +1,10 @@
-import { isRecord, type Input, type Output, type Route } from "@wappy/api";
+import {
+  isRecord,
+  parseInvitePreview,
+  type Input,
+  type Output,
+  type Route,
+} from "@wappy/api";
 export { serverUrl } from "./invitations";
 export { SESSION_KEY, loadSession, type SavedSession } from "./sessions";
 
@@ -53,4 +59,35 @@ export function errorMessage(error: unknown): string {
   return error instanceof ApiError
     ? error.message
     : "서버에 연결할 수 없습니다. 주소와 네트워크를 확인해 주세요.";
+}
+
+/** Previewing never sends an existing profile's credential or consumes the code. */
+export async function previewInvitation(
+  server: string,
+  code: string,
+  signal?: AbortSignal,
+) {
+  try {
+    const result = await request(
+      { server },
+      "POST /invites/preview",
+      { code },
+      signal,
+    );
+    try {
+      return parseInvitePreview(result);
+    } catch {
+      throw new ApiError(
+        502,
+        "초대 내용을 확인하지 못했습니다. 서버 응답을 확인해 주세요.",
+      );
+    }
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.status === 401)
+      throw new ApiError(
+        401,
+        "이 서버는 초대 확인을 지원하지 않습니다. 서버를 업데이트한 뒤 다시 시도해 주세요.",
+      );
+    throw cause;
+  }
 }

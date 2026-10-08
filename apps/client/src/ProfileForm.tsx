@@ -14,16 +14,19 @@ export function ProfileForm({
   onSave,
   children,
   beforeProfile,
+  canSave = true,
 }: {
   initial: ProfileInput;
   busy: boolean;
   onSave: (profile: ProfileInput) => void;
   children?: ReactNode;
   beforeProfile?: ReactNode;
+  canSave?: boolean;
 }) {
   const [profile, setProfile] = useState(initial);
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (busy || !canSave) return;
     onSave({
       ...profile,
       name: profile.name.trim(),
@@ -80,7 +83,7 @@ export function ProfileForm({
         {children}
         <button
           className="primary"
-          disabled={!profile.name.trim()}
+          disabled={!profile.name.trim() || !canSave}
           type="submit"
         >
           {busy ? "저장하는 중…" : "이 모습으로 함께하기"}

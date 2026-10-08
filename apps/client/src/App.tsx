@@ -22,6 +22,7 @@ import {
   SESSION_KEY,
   errorMessage,
   loadSession,
+  previewInvitation,
   request,
   serverUrl,
 } from "./api";
@@ -78,6 +79,8 @@ function App() {
   );
   const [invite, setInvite] = useState<Invite | null>(null);
   const [code, setCode] = useState("");
+  const [verifiedInvitation, setVerifiedInvitation] = useState("");
+  const invitationSource = JSON.stringify([code, server]);
   const [busy, setBusy] = useState(false);
   const [presenceStatus, setPresenceStatus] = useState<
     "ready" | "pending" | "unknown"
@@ -160,6 +163,7 @@ function App() {
     setSession(next);
     setPresenceStatus("ready");
     setDeleteError("");
+    setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
   }
@@ -385,6 +389,17 @@ function App() {
       } else {
         const received = onboarding === "join" ? receivedInvitation() : null;
         const address = received?.server ?? selectedServer();
+        if (received) {
+          if (verifiedInvitation !== invitationSource)
+            throw new ApiError(400, "초대장을 먼저 확인해 주세요.");
+          try {
+            // A preview does not reserve the code. Check again before creating a profile.
+            await previewInvitation(address, received.code);
+          } catch (cause) {
+            setVerifiedInvitation("");
+            throw cause;
+          }
+        }
         const created = await request(
           { server: address },
           "POST /session",
@@ -743,6 +758,7 @@ function App() {
                 disabled={busy}
                 onClick={() => {
                   setOnboarding(id);
+                  if (onboarding !== id) setVerifiedInvitation("");
                   setError("");
                 }}
               >
@@ -777,6 +793,9 @@ function App() {
               initial={emptyProfile}
               busy={busy}
               onSave={saveProfile}
+              canSave={
+                onboarding !== "join" || verifiedInvitation === invitationSource
+              }
               beforeProfile={
                 onboarding === "join" && (
                   <InviteField
@@ -791,6 +810,10 @@ function App() {
                       }
                     }}
                     server={server}
+                    onVerified={(source) => {
+                      setVerifiedInvitation(source);
+                      if (source) setError("");
+                    }}
                   />
                 )
               }
@@ -1279,6 +1302,8 @@ function App() {
                     value={code}
                     onChange={setCode}
                     server={session.server}
+                    busy={busy}
+                    sameServer
                   />
                   <button
                     className="secondary"

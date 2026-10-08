@@ -531,6 +531,25 @@
   color: #68745e;
   margin-left: 5px;
 }
+.invitation-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #d6dfc9;
+  border-radius: 12px;
+  background: #edf2e6;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.invitation-preview .character {
+  width: 48px;
+  flex-shrink: 0;
+}
+.invitation-preview .hint {
+  margin: 5px 0 0;
+}
 .field {
   display: block;
   font-size: 11px;

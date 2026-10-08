@@ -48,6 +48,11 @@ export interface Invite {
   code: string;
   expiresAt: number;
 }
+export interface InvitePreview {
+  name: string;
+  character: Character;
+  expiresAt: number;
+}
 export interface ApiErrorBody {
   error: string;
 }
@@ -68,6 +73,7 @@ export interface ApiRoutes {
   };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
   "POST /invites": { input: Record<string, never>; output: Invite };
+  "POST /invites/preview": { input: { code: string }; output: InvitePreview };
   "POST /invites/accept": { input: { code: string }; output: Profile };
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
   "POST /friends/wave": { input: { friendId: string }; output: Wave };
@@ -116,6 +122,19 @@ export function parseProfile(value: unknown): ProfileInput {
     );
   }
   return { name, status, character: value.character as Character };
+}
+
+export function parseInvitePreview(value: unknown): InvitePreview {
+  if (
+    !isRecord(value) ||
+    typeof value.expiresAt !== "number" ||
+    !Number.isSafeInteger(value.expiresAt) ||
+    value.expiresAt <= 0 ||
+    value.expiresAt > 8_640_000_000_000_000
+  )
+    throw new Error("잘못된 초대 응답입니다.");
+  const { name, character } = parseProfile({ ...value, status: "" });
+  return { name, character, expiresAt: value.expiresAt };
 }
 
 /** Validate state from a server before using it to render either desktop window. */

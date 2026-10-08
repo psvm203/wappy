@@ -170,8 +170,9 @@ export function createApp(options: {
       }
       const publicSession =
         route === "POST /session" || route === "POST /session/recover";
+      const publicPreview = route === "POST /invites/preview";
       if (req.method !== "GET") {
-        const key = `${req.socket.remoteAddress}:${publicSession ? "session" : "write"}`;
+        const key = `${req.socket.remoteAddress}:${publicSession ? "session" : publicPreview ? "preview" : "write"}`;
         const limit = limits.get(key);
         const current =
           limit && limit.until > now()
@@ -189,7 +190,7 @@ export function createApp(options: {
       const body = req.method === "GET" ? undefined : await readBody(req);
       // Authenticate after the last await so recovery also revokes in-flight writes.
       let self: Profile | undefined;
-      if (!publicSession) {
+      if (!publicSession && !publicPreview) {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
@@ -373,6 +374,23 @@ export function createApp(options: {
             DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at`,
           ).run(hash(code), self!.id, expiresAt);
           reply(res, route, { code, expiresAt }, 201);
+          break;
+        }
+        case "POST /invites/preview": {
+          const invite = db
+            .prepare(
+              `SELECT users.name, users.character, invites.expires_at AS expiresAt
+               FROM invites JOIN users ON users.id = invites.owner_id
+               WHERE invites.code_hash = ? AND invites.expires_at > ?`,
+            )
+            .get(hash(field(body, "code")), now());
+          if (!invite)
+            throw new HttpError(404, "초대 코드가 없거나 만료되었습니다.");
+          reply(res, route, {
+            name: invite.name as string,
+            character: invite.character as Profile["character"],
+            expiresAt: invite.expiresAt as number,
+          });
           break;
         }
         case "POST /invites/accept": {

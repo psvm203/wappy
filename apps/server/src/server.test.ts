@@ -19,6 +19,161 @@ import {
 } from "@wappy/api";
 import { createApp } from "./server.ts";
 
+test("public invitation previews are read-only, bounded and reveal only invitation display data", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-preview-"));
+  const databasePath = join(directory, "test.sqlite");
+  let time = Date.now();
+  const server = createApp({ databasePath, now: () => time });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const base = `http://127.0.0.1:${address.port}`;
+  const inspection = new DatabaseSync(databasePath);
+  async function call(
+    path: string,
+    body?: unknown,
+    token?: string,
+    method = body === undefined ? "GET" : "POST",
+  ) {
+    const response = await fetch(base + path, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  const preview = (code: string) => call("/invites/preview", { code });
+  const snapshot = () =>
+    [
+      "users",
+      "friendships",
+      "invites",
+      "recovery_codes",
+      "presence_settings",
+      "waves",
+    ].map((table) =>
+      inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+    );
+  try {
+    const input = { name: "Alice", character: "cat", status: "private status" };
+    const alice = (await call("/session", input)).body as Session;
+    const bob = (await call("/session", { ...input, name: "Bob" }))
+      .body as Session;
+    const invite = (await call("/invites", {}, alice.token)).body as Invite;
+    assert.equal(
+      (await call("/invites/accept", invite, bob.token)).status,
+      200,
+    );
+    const available = (await call("/invites", {}, alice.token)).body as Invite;
+    await call("/recovery-code", {}, alice.token);
+    time += ONLINE_TIMEOUT_MS;
+    const before = snapshot();
+    for (let i = 0; i < 2; i++)
+      assert.deepEqual(await preview(available.code), {
+        status: 200,
+        body: {
+          name: "Alice",
+          character: "cat",
+          expiresAt: available.expiresAt,
+        },
+      });
+    assert.deepEqual(
+      snapshot(),
+      before,
+      "preview does not consume or change server data",
+    );
+    const state = (await call("/state", undefined, bob.token))
+      .body as SidebarState;
+    assert.equal(
+      state.friends[0]?.online,
+      false,
+      "preview does not keep the inviter online",
+    );
+    await call("/presence", { sharing: false }, alice.token, "PATCH");
+    await call(
+      "/profile",
+      { ...input, name: "Alicia", character: "bear" },
+      alice.token,
+      "PATCH",
+    );
+    assert.deepEqual((await preview(available.code)).body, {
+      name: "Alicia",
+      character: "bear",
+      expiresAt: available.expiresAt,
+    });
+    assert.equal(
+      (await call("/state", undefined, bob.token)).body.friends[0].online,
+      false,
+    );
+    assert.equal((await call("/state")).status, 401);
+    assert.equal((await call("/invites", {})).status, 401);
+    assert.equal((await preview("")).status, 400);
+    assert.equal((await preview("x".repeat(43))).status, 404);
+    const blocked = await fetch(base + "/invites/preview", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://untrusted.test",
+      },
+      body: JSON.stringify(available),
+    });
+    assert.equal(blocked.status, 403);
+    await blocked.body?.cancel();
+    const carol = (await call("/session", { ...input, name: "Carol" }))
+      .body as Session;
+    assert.equal(
+      (await call("/invites/accept", available, carol.token)).status,
+      200,
+      "preview leaves the code usable",
+    );
+    assert.equal(
+      (await preview(available.code)).status,
+      404,
+      "consumed codes cannot reveal a profile",
+    );
+    const old = (await call("/invites", {}, alice.token)).body as Invite;
+    const replacement = (await call("/invites", {}, alice.token))
+      .body as Invite;
+    assert.equal((await preview(old.code)).status, 404);
+    time = replacement.expiresAt;
+    assert.equal(
+      (await preview(replacement.code)).status,
+      404,
+      "expiry applies without waiting for housekeeping",
+    );
+    const deleted = (await call("/invites", {}, alice.token)).body as Invite;
+    await call("/profile/delete", { profileId: alice.profile.id }, alice.token);
+    assert.equal((await preview(deleted.code)).status, 404);
+    time += 60_001;
+    for (let i = 0; i < 60; i++)
+      assert.equal((await preview("x".repeat(43))).status, 404);
+    assert.equal((await preview("x".repeat(43))).status, 429);
+    assert.equal(
+      (await call("/session", { ...input, name: "Dave" })).status,
+      201,
+      "previews do not consume the session creation allowance",
+    );
+    assert.equal(
+      (await call("/invites", {}, bob.token)).status,
+      201,
+      "previews do not consume the write allowance",
+    );
+    time += 60_001;
+    assert.equal((await preview("x".repeat(43))).status, 404);
+  } finally {
+    inspection.close();
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("profiles, invitations, presence and friendship persist safely end to end", async () => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-test-"));
   const databasePath = join(directory, "test.sqlite");

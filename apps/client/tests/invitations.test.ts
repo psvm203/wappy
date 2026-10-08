@@ -1,10 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { parseInvitePreview } from "@wappy/api";
 import {
   formatInvitation,
   isLocalServer,
   parseInvitation,
 } from "../src/invitations.ts";
+
+test("invitation previews validate display data and discard private fields", () => {
+  const preview = {
+    name: "Alice",
+    character: "cat",
+    expiresAt: 1_800_000_000_000,
+  };
+  assert.deepEqual(
+    parseInvitePreview({
+      ...preview,
+      id: "private",
+      status: "private",
+      token: "private",
+      online: true,
+    }),
+    preview,
+  );
+  for (const invalid of [
+    null,
+    [],
+    {},
+    { ...preview, name: "" },
+    { ...preview, name: "x".repeat(25) },
+    { ...preview, name: "A\nB" },
+    { ...preview, character: "unknown" },
+    ...["tomorrow", 0, -1, 0.5, NaN, Infinity, 8_640_000_000_000_001].map(
+      (expiresAt) => ({ ...preview, expiresAt }),
+    ),
+  ])
+    assert.throws(() => parseInvitePreview(invalid));
+});
 
 test("shared invitations preserve the server and reject ambiguous or secret input", () => {
   const code = "a_-".repeat(14) + "A";
