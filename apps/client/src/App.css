@@ -196,6 +196,34 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+.chat-unread-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.chat-unread-list button {
+  width: auto;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.chat-unread-list button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px #73985c;
+  background: #e6efda;
+}
+.chat-new {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  color: #496337;
+}
+.chat-read-control {
+  margin: 12px 0 18px;
+}
+.compact-chat {
+  margin: 6px 0;
+  font-size: 11px;
+}
 .character.asleep .character-body {
   transform-origin: 50px 96px;
   animation: sleeping-breathe 3s ease-in-out infinite;

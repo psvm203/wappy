@@ -7,7 +7,11 @@ import {
 } from "@wappy/api";
 import { errorMessage } from "./api";
 import { Character } from "./Character";
-import { chatBubbleText, conversationMessages } from "./chat";
+import {
+  chatBubbleText,
+  conversationMessages,
+  unreadChatByConversation,
+} from "./chat";
 
 export function ChatBubble({ message }: { message?: ChatMessage }) {
   const [expired, setExpired] = useState<number | null>(null);
@@ -40,6 +44,7 @@ export function ChatPanel({
   recipientId,
   onRecipientChange,
   onSend,
+  onRead,
 }: {
   state: SidebarState;
   connected: boolean;
@@ -48,12 +53,13 @@ export function ChatPanel({
   recipientId: string | null;
   onRecipientChange: (id: string | null) => void;
   onSend: (text: string, recipientId: string | null) => Promise<void>;
+  onRead: (messageIds: number[]) => Promise<void>;
 }) {
   const [drafts, setDrafts] = useState(() => new Map<string, string>());
   const conversation = recipientId ?? "";
   const draft = drafts.get(conversation) ?? "";
-  const [busy, setBusy] = useState(false);
-  const sending = useRef(false);
+  const [busy, setBusy] = useState<"send" | "read" | null>(null);
+  const pending = useRef(false);
   const [error, setError] = useState<{
     conversation: string;
     text: string;
@@ -71,6 +77,8 @@ export function ChatPanel({
     state.self.id,
     recipientId,
   );
+  const unreadChats = unreadChatByConversation(state);
+  const unreadIds = unreadChats.get(recipientId) ?? [];
   const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
     if (active) input.current?.focus();
@@ -87,15 +95,15 @@ export function ChatPanel({
   async function send(event: FormEvent) {
     event.preventDefault();
     if (
-      sending.current ||
+      pending.current ||
       !connected ||
       !supported ||
       !available ||
       !draft.trim()
     )
       return;
-    sending.current = true;
-    setBusy(true);
+    pending.current = true;
+    setBusy("send");
     setError(null);
     try {
       await onSend(draft, recipientId);
@@ -105,11 +113,28 @@ export function ChatPanel({
     } catch (cause) {
       setError({ conversation, text: errorMessage(cause) });
     } finally {
-      sending.current = false;
-      setBusy(false);
+      pending.current = false;
+      setBusy(null);
       requestAnimationFrame(() => {
         if (input.current?.getClientRects().length) input.current.focus();
       });
+    }
+  }
+
+  async function confirmRead() {
+    if (pending.current || !connected || !unreadIds.length) return;
+    pending.current = true;
+    setBusy("read");
+    setError(null);
+    // The confirmation button disappears on success; move keyboard focus now.
+    input.current?.focus();
+    try {
+      await onRead(unreadIds);
+    } catch (cause) {
+      setError({ conversation, text: errorMessage(cause) });
+    } finally {
+      pending.current = false;
+      setBusy(null);
     }
   }
 
@@ -119,13 +144,41 @@ export function ChatPanel({
       <div className="section-heading">
         <h1>{recipientId === null ? "함께 이야기해요" : "둘이 이야기해요"}</h1>
       </div>
+      {unreadChats.size > 0 && (
+        <div
+          className="chat-unread-list"
+          role="group"
+          aria-label="새 메시지가 있는 대화"
+        >
+          {[...unreadChats].map(([id, ids]) => (
+            <button
+              key={id === null ? "broadcast" : `direct:${id}`}
+              type="button"
+              className="secondary"
+              onClick={() => onRecipientChange(id)}
+              disabled={!!busy}
+              aria-pressed={recipientId === id}
+            >
+              {id === null
+                ? "모든 친구에게"
+                : `${state.friends.find((friend) => friend.id === id)?.name ?? "친구"} 님과 1:1`}
+              <span
+                className="wave-count"
+                aria-label={`새 메시지 ${ids.length}개`}
+              >
+                {ids.length}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="field chat-recipient">
         <label htmlFor="chat-recipient">받는 사람</label>
         <select
           id="chat-recipient"
           value={conversation}
           onChange={(event) => onRecipientChange(event.target.value || null)}
-          disabled={busy}
+          disabled={!!busy}
         >
           <option value="">모든 친구에게</option>
           {recipientId !== null && !recipient && (
@@ -183,6 +236,9 @@ export function ChatPanel({
                   <strong>
                     {sender.name}
                     {sender.id === state.self.id ? " (나)" : ""}
+                    {unreadIds.includes(message.id) && (
+                      <span className="chat-new">새 메시지</span>
+                    )}
                   </strong>
                   <time dateTime={new Date(message.sentAt).toISOString()}>
                     {new Date(message.sentAt).toLocaleTimeString("ko-KR", {
@@ -197,6 +253,24 @@ export function ChatPanel({
           );
         })}
       </ol>
+      {unreadIds.length > 0 && (
+        <div className="chat-read-control">
+          <p className="hint">
+            확인하면 이 대화의 새 메시지 표시만 지워져요. 상대에게 읽음 여부를
+            보내지 않아요.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!!busy || !connected}
+            onClick={() => void confirmRead()}
+          >
+            {busy === "read"
+              ? "확인 중…"
+              : `이 대화의 새 메시지 ${unreadIds.length}개 확인`}
+          </button>
+        </div>
+      )}
       {supported && available && !messages.length && (
         <p className="hint">아직 대화가 없어요. 먼저 말을 걸어 보세요.</p>
       )}
@@ -224,7 +298,7 @@ export function ChatPanel({
             rows={3}
             maxLength={MAX_CHAT_LENGTH}
             value={draft}
-            disabled={busy || !supported || !available}
+            disabled={busy === "send" || !supported || !available}
             placeholder="무슨 이야기를 나눌까요?"
             onChange={(event) => {
               const text = event.target.value;
@@ -250,10 +324,10 @@ export function ChatPanel({
           className="primary"
           type="submit"
           disabled={
-            busy || !connected || !supported || !available || !draft.trim()
+            !!busy || !connected || !supported || !available || !draft.trim()
           }
         >
-          {busy
+          {busy === "send"
             ? "보내는 중…"
             : recipientId === null
               ? "친구들에게 보내기"

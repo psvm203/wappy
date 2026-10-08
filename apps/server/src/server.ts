@@ -17,6 +17,7 @@ import {
   CHAT_TTL_MS,
   isRecord,
   parseChatText,
+  parseChatMessageIds,
   parseProfile,
   type ApiErrorBody,
   type Output,
@@ -166,6 +167,7 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS chat_recipients (
       message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1)),
       PRIMARY KEY (message_id, user_id, friend_id),
       FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
@@ -181,6 +183,15 @@ export function createApp(options: {
   )
     db.exec(
       "ALTER TABLE chat_messages ADD COLUMN recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE",
+    );
+  if (
+    !db
+      .prepare("PRAGMA table_info(chat_recipients)")
+      .all()
+      .some((column) => column.name === "acknowledged")
+  )
+    db.exec(
+      "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
     );
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
@@ -232,12 +243,23 @@ export function createApp(options: {
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
   const selectMessages = db.prepare(`
-    SELECT id, sender_id AS senderId, recipient_id AS recipientId, text, sent_at AS sentAt FROM chat_messages
+    SELECT id, sender_id AS senderId, recipient_id AS recipientId, text, sent_at AS sentAt,
+      sender_id <> ? AND EXISTS (
+        SELECT 1 FROM chat_recipients r WHERE r.message_id = chat_messages.id
+          AND (r.user_id = ? OR r.friend_id = ?) AND r.acknowledged = 0
+      ) AS unread
+    FROM chat_messages
     WHERE id IN (
       SELECT id FROM chat_messages WHERE sender_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE user_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
     ) AND sent_at > ? ORDER BY id DESC LIMIT ?
+  `);
+  const acknowledgeChat = db.prepare(`
+    UPDATE chat_recipients SET acknowledged = 1
+    WHERE message_id = ? AND (user_id = ? OR friend_id = ?)
+      AND EXISTS (SELECT 1 FROM chat_messages WHERE id = chat_recipients.message_id
+        AND sender_id <> ? AND sent_at > ?)
   `);
   const selectChanges = db.prepare("SELECT total_changes() AS changes");
   const selectDataVersion = db.prepare("PRAGMA data_version");
@@ -625,25 +647,31 @@ export function createApp(options: {
             sharing: number;
           })[];
           const presence = selectPresence.get(self!.id);
+          const messages = (
+            selectMessages.all(
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              time - CHAT_TTL_MS,
+              CHAT_HISTORY_LIMIT,
+            ) as unknown as (Omit<ChatMessage, "recipientId"> & {
+              recipientId: string | null;
+              unread: number;
+            })[]
+          ).reverse();
           const state: Output<"GET /state"> = {
             self: self!,
             directChat: true,
-            messages: (
-              selectMessages.all(
-                self!.id,
-                self!.id,
-                self!.id,
-                time - CHAT_TTL_MS,
-                CHAT_HISTORY_LIMIT,
-              ) as unknown as (Omit<ChatMessage, "recipientId"> & {
-                recipientId: string | null;
-              })[]
-            )
-              .reverse()
-              .map(({ recipientId, ...message }) => ({
-                ...message,
-                ...(recipientId === null ? {} : { recipientId }),
-              })),
+            messages: messages.map(({ recipientId, unread, ...message }) => ({
+              ...message,
+              ...(recipientId === null ? {} : { recipientId }),
+            })),
+            unreadChatIds: messages
+              .filter((message) => message.unread === 1)
+              .map((message) => message.id),
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
               revision: presence ? Number(presence.revision) : 0,
@@ -750,14 +778,12 @@ export function createApp(options: {
             );
             // Snapshot the audience. New/reconnected friends cannot read earlier messages.
             if (pair) {
-              db.prepare("INSERT INTO chat_recipients VALUES (?, ?, ?)").run(
-                id,
-                pair[0]!,
-                pair[1]!,
-              );
+              db.prepare(
+                "INSERT INTO chat_recipients (message_id, user_id, friend_id) VALUES (?, ?, ?)",
+              ).run(id, pair[0]!, pair[1]!);
             } else
               db.prepare(
-                `INSERT INTO chat_recipients
+                `INSERT INTO chat_recipients (message_id, user_id, friend_id)
               SELECT ?, user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?
             `,
               ).run(id, self!.id, self!.id);
@@ -783,6 +809,40 @@ export function createApp(options: {
             },
             201,
           );
+          break;
+        }
+        case "POST /chat/read": {
+          let messageIds: number[];
+          try {
+            messageIds = parseChatMessageIds(
+              isRecord(body) ? body.messageIds : undefined,
+            );
+          } catch (error) {
+            throw new HttpError(400, (error as Error).message);
+          }
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            const cutoff = now() - CHAT_TTL_MS;
+            for (const id of messageIds) {
+              const result = acknowledgeChat.run(
+                id,
+                self!.id,
+                self!.id,
+                self!.id,
+                cutoff,
+              );
+              if (!result.changes)
+                throw new HttpError(
+                  404,
+                  "메시지를 확인할 수 없어요. 최신 대화 목록을 확인해 주세요.",
+                );
+            }
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          reply(res, route, { messageIds });
           break;
         }
         case "PATCH /profile": {

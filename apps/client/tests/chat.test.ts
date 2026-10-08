@@ -5,15 +5,103 @@ import {
   CHAT_HISTORY_LIMIT,
   MAX_CHAT_LENGTH,
   parseChatMessage,
+  parseChatMessageIds,
   parseChatText,
   parseSidebarState,
+  type SidebarState,
 } from "@wappy/api";
 import {
   chatBubbleText,
   conversationMessages,
   latestChat,
   movedForDrag,
+  reconcileChatReads,
+  unreadChatByConversation,
 } from "../src/chat.ts";
+
+test("unread messages belong to the viewer, group by conversation, and never reappear after a delayed poll", () => {
+  const self = {
+    id: "alice",
+    name: "Alice",
+    character: "cat" as const,
+    status: "",
+  };
+  const bob = { ...self, id: "bob", online: true };
+  const carol = { ...bob, id: "carol" };
+  const broadcast = {
+    id: 1,
+    senderId: bob.id,
+    text: "모두 안녕",
+    sentAt: 1_800_000_000_000,
+  };
+  const direct = { ...broadcast, id: 2, recipientId: self.id };
+  const other = { ...direct, id: 3, senderId: carol.id };
+  const own = { ...broadcast, id: 4, senderId: self.id };
+  const before: SidebarState = {
+    self,
+    friends: [bob, carol],
+    messages: [broadcast, direct, other, own],
+    unreadChatIds: [1, 2, 3],
+  };
+  assert.deepEqual(parseSidebarState(before), before);
+  assert.deepEqual(
+    [...unreadChatByConversation(before)],
+    [
+      [null, [1]],
+      [bob.id, [2]],
+      [carol.id, [3]],
+    ],
+  );
+  assert.equal(unreadChatByConversation(null).size, 0);
+  const confirmed = { ...before, unreadChatIds: [1, 3] };
+  const nextMessage = { ...direct, id: 5 };
+  const delayed = {
+    ...before,
+    messages: [...before.messages!, nextMessage],
+    unreadChatIds: [1, 2, 3, 5],
+  };
+  assert.deepEqual(
+    reconcileChatReads(confirmed, delayed).unreadChatIds,
+    [1, 3, 5],
+  );
+  assert.deepEqual(confirmed.unreadChatIds, [1, 3]);
+  assert.deepEqual(
+    reconcileChatReads(before, { ...before, unreadChatIds: [] }).unreadChatIds,
+    [],
+  );
+  assert.equal(reconcileChatReads(null, before), before);
+  const different = { ...before, self: bob };
+  assert.equal(reconcileChatReads(confirmed, different), different);
+  const legacy = { ...before, unreadChatIds: undefined };
+  assert.equal(reconcileChatReads(confirmed, legacy), legacy);
+  assert.equal(reconcileChatReads(legacy, before), before);
+  for (const unreadChatIds of [
+    null,
+    "1",
+    ["1"],
+    [-1],
+    [0],
+    [1.5],
+    [NaN],
+    [Infinity],
+    [Number.MAX_SAFE_INTEGER + 1],
+    [1, 1],
+    [4],
+    [99],
+    Array.from({ length: CHAT_HISTORY_LIMIT + 1 }, (_, index) => index + 1),
+  ])
+    assert.throws(() => parseSidebarState({ ...before, unreadChatIds }));
+  assert.throws(() =>
+    parseSidebarState({ self, friends: [], unreadChatIds: [] }),
+  );
+  assert.deepEqual(parseChatMessageIds([]), []);
+  assert.deepEqual(parseChatMessageIds([2, 1]), [2, 1]);
+  assert.deepEqual(
+    parseSidebarState({ self, friends: [], messages: [], unreadChatIds: [] })
+      .unreadChatIds,
+    [],
+  );
+});
 
 test("private conversations keep their audience and never expose contents in character bubbles", () => {
   const self = { id: "alice", name: "Alice", character: "cat", status: "" };

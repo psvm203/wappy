@@ -12,6 +12,7 @@ import {
   parsePresenceSettings,
   parseProfile,
   parseChatMessage,
+  parseChatMessageIds,
   CHAT_HISTORY_LIMIT,
   isRecord,
   type Invite,
@@ -43,7 +44,11 @@ import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { KakaoLogin } from "./KakaoLogin";
 import { ChatPanel, ChatBubble } from "./ChatPanel";
-import { latestChat } from "./chat";
+import {
+  latestChat,
+  reconcileChatReads,
+  unreadChatByConversation,
+} from "./chat";
 import { LocalPreview } from "./LocalPreview";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { DeleteProfile } from "./DeleteProfile";
@@ -201,7 +206,9 @@ function App() {
   }
 
   function applyState(next: SidebarState) {
-    setState((current) => reconcilePresence(current, next));
+    setState((current) =>
+      reconcileChatReads(current, reconcilePresence(current, next)),
+    );
   }
 
   function openChat(recipientId: string | null = null) {
@@ -251,20 +258,61 @@ function App() {
         "메시지 전송 결과를 확인하지 못했어요. 대화 목록을 확인해 주세요.",
       );
     if (currentSession.current !== active) return;
+    setState((current) => {
+      if (
+        !current ||
+        (recipientId !== null &&
+          !current.friends.some((friend) => friend.id === recipientId))
+      )
+        return current;
+      const messages = [
+        ...(current.messages ?? []).filter((item) => item.id !== message.id),
+        message,
+      ]
+        .sort((a, b) => a.id - b.id)
+        .slice(-CHAT_HISTORY_LIMIT);
+      return {
+        ...current,
+        messages,
+        ...(current.unreadChatIds === undefined
+          ? {}
+          : {
+              unreadChatIds: current.unreadChatIds.filter((id) =>
+                messages.some((item) => item.id === id),
+              ),
+            }),
+      };
+    });
+  }
+
+  async function readChat(messageIds: number[]) {
+    if (
+      !session ||
+      connection !== "online" ||
+      state?.unreadChatIds === undefined
+    )
+      throw new ApiError(503, "서버에 다시 연결된 뒤 확인해 주세요.");
+    const active = session;
+    const result = await request(active, "POST /chat/read", { messageIds });
+    const confirmed = parseChatMessageIds(
+      isRecord(result) ? result.messageIds : undefined,
+    );
+    if (
+      confirmed.length !== messageIds.length ||
+      confirmed.some((id) => !messageIds.includes(id))
+    )
+      throw new ApiError(
+        502,
+        "메시지 확인 결과를 받지 못했어요. 다시 확인해 주세요.",
+      );
+    if (currentSession.current !== active) return;
     setState((current) =>
-      current &&
-      (recipientId === null ||
-        current.friends.some((friend) => friend.id === recipientId))
+      current?.unreadChatIds
         ? {
             ...current,
-            messages: [
-              ...(current.messages ?? []).filter(
-                (item) => item.id !== message.id,
-              ),
-              message,
-            ]
-              .sort((a, b) => a.id - b.id)
-              .slice(-CHAT_HISTORY_LIMIT),
+            unreadChatIds: current.unreadChatIds.filter(
+              (id) => !confirmed.includes(id),
+            ),
           }
         : current,
     );
@@ -610,6 +658,11 @@ function App() {
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
   const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
+  const unreadChats = unreadChatByConversation(state);
+  const unreadChatCount = [...unreadChats.values()].reduce(
+    (total, ids) => total + ids.length,
+    0,
+  );
   const listedFriends = filterFriends(
     state?.friends ?? [],
     friendQuery,
@@ -749,6 +802,15 @@ function App() {
             <span className="compact-presence">접속 숨김</span>
           )}
         </button>
+        {unreadChatCount > 0 && (
+          <button
+            className="compact-chat text-button"
+            aria-label={`새 메시지 ${unreadChatCount}개 확인하러 가기`}
+            onClick={() => openChat(unreadChats.keys().next().value ?? null)}
+          >
+            채팅 <span className="wave-count">{unreadChatCount}</span>
+          </button>
+        )}
         <div className="compact-friends">
           {state.friends.map((friend) => (
             <div
@@ -1107,6 +1169,14 @@ function App() {
                     {waveCount}
                   </span>
                 )}
+                {id === "chat" && unreadChatCount > 0 && (
+                  <span
+                    className="wave-count"
+                    aria-label={`새 메시지 ${unreadChatCount}개`}
+                  >
+                    {unreadChatCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -1122,6 +1192,7 @@ function App() {
                   recipientId={chatRecipient}
                   onRecipientChange={setChatRecipient}
                   onSend={sendChat}
+                  onRead={readChat}
                 />
               </div>
             )}
@@ -1282,6 +1353,14 @@ function App() {
                             onClick={() => openChat(friend.id)}
                           >
                             1:1 채팅
+                            {!!unreadChats.get(friend.id)?.length && (
+                              <span
+                                className="wave-count"
+                                aria-label={`새 메시지 ${unreadChats.get(friend.id)!.length}개`}
+                              >
+                                {unreadChats.get(friend.id)!.length}
+                              </span>
+                            )}
                           </button>
                           <small>
                             {connection !== "online"

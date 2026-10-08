@@ -53,6 +53,8 @@ export interface SidebarState {
   messages?: ChatMessage[];
   /** Explicit support is required before enabling private message composition. */
   directChat?: true;
+  /** Unacknowledged received messages in this snapshot; private to self. Absent on older servers. */
+  unreadChatIds?: number[];
 }
 export interface PresenceSettings {
   sharing: boolean;
@@ -100,6 +102,10 @@ export interface ApiRoutes {
   "POST /chat/direct": {
     input: { text: string; friendId: string };
     output: ChatMessage;
+  };
+  "POST /chat/read": {
+    input: { messageIds: number[] };
+    output: { messageIds: number[] };
   };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "POST /profile/delete": {
@@ -163,6 +169,17 @@ export function parseChatMessage(value: unknown): ChatMessage {
     text: parseChatText(value.text),
     sentAt: value.sentAt,
   };
+}
+
+export function parseChatMessageIds(value: unknown): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > CHAT_HISTORY_LIMIT ||
+    value.some((id) => !Number.isSafeInteger(id) || id <= 0) ||
+    new Set(value).size !== value.length
+  )
+    throw new Error("잘못된 채팅 메시지 목록입니다.");
+  return [...value];
 }
 
 export function parsePresenceSettings(value: unknown): PresenceSettings {
@@ -282,11 +299,23 @@ export function parseSidebarState(value: unknown): SidebarState {
   }
   if (value.directChat !== undefined && value.directChat !== true)
     throw new Error("잘못된 1:1 채팅 지원 응답입니다.");
+  let unreadChatIds: number[] | undefined;
+  if (value.unreadChatIds !== undefined) {
+    unreadChatIds = parseChatMessageIds(value.unreadChatIds);
+    const received = new Set(
+      messages
+        ?.filter((message) => message.senderId !== self.id)
+        .map((message) => message.id),
+    );
+    if (!messages || unreadChatIds.some((id) => !received.has(id)))
+      throw new Error("잘못된 새 채팅 메시지 응답입니다.");
+  }
   return {
     self,
     friends,
     ...(messages === undefined ? {} : { messages }),
     ...(value.directChat === true ? { directChat: true as const } : {}),
+    ...(unreadChatIds === undefined ? {} : { unreadChatIds }),
     ...(value.presence === undefined
       ? {}
       : { presence: parsePresenceSettings(value.presence) }),
