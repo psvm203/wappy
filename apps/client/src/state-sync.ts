@@ -1,29 +1,27 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
-import {
-  POLL_INTERVAL_MS,
-  parseSidebarState,
-  type SidebarState,
-} from "@wappy/api";
-import { ApiError, request, type SavedSession } from "./api";
-
-export type StateUpdate =
-  | { connection: "online"; state: SidebarState }
-  | { connection: "offline" | "unauthorized" };
+import { parseSidebarState } from "@wappy/api";
+import type { SavedSession } from "./sessions";
+import { subscribeBrowserState, type StateUpdate } from "./state-polling";
+export type { StateUpdate } from "./state-polling";
 
 export function subscribeState(
   session: SavedSession,
   onUpdate: (update: StateUpdate) => void,
 ): () => void {
   let disposed = false;
+  let validated = false;
   const receive = (update: StateUpdate) => {
     if (disposed) return;
     try {
-      onUpdate(
-        update.connection === "online"
-          ? { connection: "online", state: parseSidebarState(update.state) }
-          : update,
-      );
+      if (update.connection === "online") {
+        if (update.state !== undefined) {
+          const state = parseSidebarState(update.state);
+          validated = true;
+          onUpdate({ connection: "online", state });
+        } else onUpdate({ connection: validated ? "online" : "offline" });
+      } else onUpdate(update);
     } catch {
+      validated = false;
       onUpdate({ connection: "offline" });
     }
   };
@@ -45,30 +43,5 @@ export function subscribeState(
     };
   }
 
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout>;
-  async function poll() {
-    let unauthorized = false;
-    try {
-      const state = await request(
-        session,
-        "GET /state",
-        undefined,
-        controller.signal,
-      );
-      receive({ connection: "online", state });
-    } catch (cause) {
-      unauthorized = cause instanceof ApiError && cause.status === 401;
-      receive({ connection: unauthorized ? "unauthorized" : "offline" });
-    } finally {
-      if (!disposed && !unauthorized)
-        timer = setTimeout(poll, POLL_INTERVAL_MS);
-    }
-  }
-  void poll();
-  return () => {
-    disposed = true;
-    controller.abort();
-    clearTimeout(timer);
-  };
+  return subscribeBrowserState(session, onUpdate);
 }

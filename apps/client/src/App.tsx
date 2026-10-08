@@ -260,7 +260,8 @@ function App() {
     if (!session) return;
     return subscribeState(session, (update) => {
       if (currentSession.current !== session) return;
-      if (update.connection === "online") applyState(update.state);
+      if (update.connection === "online" && update.state)
+        applyState(update.state);
       setConnection(update.connection);
     });
   }, [session]);

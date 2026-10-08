@@ -92,8 +92,13 @@ export function DesktopCharacters({
     const moving = (resident: Resident) =>
       needsAnimation(resident.body, resident.walking);
     const schedule = () => {
-      if (!paused && [...entries.current.values()].some(moving))
-        frame = requestAnimationFrame(animate);
+      if (paused) return;
+      for (const resident of entries.current.values()) {
+        if (moving(resident)) {
+          frame = requestAnimationFrame(animate);
+          break;
+        }
+      }
     };
     const animate = (now: number) => {
       frame = null;
@@ -159,21 +164,24 @@ export function DesktopCharacters({
           "desktop_cursor_position",
         );
         if (disposed) return;
-        const hit =
-          !!drag.current ||
-          [...entries.current.values()].some(({ element }) => {
-            return [
-              ...element.querySelectorAll("svg, .resident-wave, .chat-bubble"),
-            ].some((target) => {
-              const rect = target.getBoundingClientRect();
-              return (
-                x >= rect.left - 6 &&
-                x <= rect.right + 6 &&
-                y >= rect.top - 6 &&
-                y <= rect.bottom + 6
-              );
-            });
-          });
+        let hit = !!drag.current;
+        for (const { element } of entries.current.values()) {
+          if (hit) break;
+          for (const target of element.querySelectorAll(
+            "svg, .resident-wave, .chat-bubble",
+          )) {
+            const rect = target.getBoundingClientRect();
+            if (
+              x >= rect.left - 6 &&
+              x <= rect.right + 6 &&
+              y >= rect.top - 6 &&
+              y <= rect.bottom + 6
+            ) {
+              hit = true;
+              break;
+            }
+          }
+        }
         if (hit !== interactive) {
           await window.setIgnoreCursorEvents(!hit);
           interactive = hit;

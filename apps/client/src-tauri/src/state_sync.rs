@@ -1,4 +1,4 @@
-use reqwest::{redirect::Policy, Client, StatusCode, Url};
+use reqwest::{header, redirect::Policy, Client, StatusCode, Url};
 use serde::Serialize;
 use serde_json::Value;
 use std::{sync::Mutex, time::Duration};
@@ -10,7 +10,10 @@ const MAX_STATE_BYTES: usize = 1024 * 1024;
 #[derive(Serialize)]
 #[serde(tag = "connection", rename_all = "lowercase")]
 pub enum StateUpdate {
-    Online { state: Value },
+    Online {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        state: Option<Value>,
+    },
     Offline,
     Unauthorized,
 }
@@ -65,15 +68,25 @@ fn http_client() -> Result<Client, String> {
         .map_err(|_| "Could not initialize the background connection".into())
 }
 
-async fn fetch_state(client: &Client, url: &Url, token: &str) -> Result<StateUpdate, ()> {
-    let mut response = client
-        .get(url.clone())
-        .bearer_auth(token)
-        .send()
-        .await
-        .map_err(|_| ())?;
+async fn fetch_state(
+    client: &Client,
+    url: &Url,
+    token: &str,
+    etag: &mut Option<String>,
+) -> Result<StateUpdate, ()> {
+    let mut request = client.get(url.clone()).bearer_auth(token);
+    if let Some(tag) = etag.as_ref() {
+        request = request.header(header::IF_NONE_MATCH, tag);
+    }
+    let mut response = request.send().await.map_err(|_| ())?;
     if response.status() == StatusCode::UNAUTHORIZED {
         return Ok(StateUpdate::Unauthorized);
+    }
+    if response.status() == StatusCode::NOT_MODIFIED {
+        return etag
+            .as_ref()
+            .map(|_| StateUpdate::Online { state: None })
+            .ok_or(());
     }
     if !response.status().is_success()
         || response
@@ -82,7 +95,12 @@ async fn fetch_state(client: &Client, url: &Url, token: &str) -> Result<StateUpd
     {
         return Err(());
     }
-    let mut body = Vec::new();
+    let next_etag = response
+        .headers()
+        .get(header::ETAG)
+        .and_then(|tag| tag.to_str().ok())
+        .map(str::to_owned);
+    let mut body = Vec::with_capacity(response.content_length().unwrap_or(0) as usize);
     while let Some(chunk) = response.chunk().await.map_err(|_| ())? {
         if body.len() + chunk.len() > MAX_STATE_BYTES {
             return Err(());
@@ -90,7 +108,12 @@ async fn fetch_state(client: &Client, url: &Url, token: &str) -> Result<StateUpd
         body.extend_from_slice(&chunk);
     }
     let state = serde_json::from_slice(&body).map_err(|_| ())?;
-    Ok(StateUpdate::Online { state })
+    *etag = next_etag;
+    Ok(StateUpdate::Online { state: Some(state) })
+}
+
+fn retry_delay(failures: u32) -> Duration {
+    (POLL_INTERVAL * 2_u32.pow(failures.saturating_sub(1).min(4))).min(Duration::from_secs(60))
 }
 
 impl StatePolling {
@@ -111,16 +134,23 @@ impl StatePolling {
         }
         current.id += 1;
         current.task = Some(tauri::async_runtime::spawn(async move {
+            let mut etag = None;
+            let mut failures: u32 = 0;
             loop {
-                let update = fetch_state(&client, &url, &token)
+                let update = fetch_state(&client, &url, &token, &mut etag)
                     .await
                     .unwrap_or(StateUpdate::Offline);
+                failures = if matches!(update, StateUpdate::Offline) {
+                    failures.saturating_add(1)
+                } else {
+                    0
+                };
                 let unauthorized = matches!(update, StateUpdate::Unauthorized);
                 if updates.send(update).is_err() || unauthorized {
                     break;
                 }
                 // Native time keeps presence alive while the WebView is hidden or throttled.
-                tokio::time::sleep(POLL_INTERVAL).await;
+                tokio::time::sleep(retry_delay(failures)).await;
             }
         }));
         Ok(current.id)
@@ -249,22 +279,102 @@ mod tests {
         let url = state_url(&base, &token).unwrap();
         let client = http_client().unwrap();
         tauri::async_runtime::block_on(async {
+            let mut etag = None;
             assert!(matches!(
-                fetch_state(&client, &url, &token).await,
+                fetch_state(&client, &url, &token, &mut etag).await,
                 Ok(StateUpdate::Online { .. })
             ));
             assert!(matches!(
-                fetch_state(&client, &url, &token).await,
+                fetch_state(&client, &url, &token, &mut etag).await,
                 Ok(StateUpdate::Unauthorized)
             ));
             for _ in 0..4 {
-                assert!(fetch_state(&client, &url, &token).await.is_err());
+                assert!(fetch_state(&client, &url, &token, &mut etag).await.is_err());
             }
         });
         let request = requests.recv_timeout(Duration::from_secs(1)).unwrap();
         assert!(request.starts_with("GET /state HTTP/1.1"));
         assert!(request.contains(&format!("Bearer {token}")));
         assert!(redirected.try_recv().is_err());
+    }
+
+    #[test]
+    fn conditional_polls_skip_bodies_recover_and_never_cache_invalid_json() {
+        let token = "a".repeat(43);
+        let tagged = |body: &str, tag: &str| {
+            response(200, body).replacen("Connection:", &format!("ETag: {tag}\r\nConnection:"), 1)
+        };
+        let (base, requests) = server(vec![
+            response(304, ""),
+            tagged("{}", "\"v1\""),
+            response(304, ""),
+            response(503, "{}"),
+            response(304, ""),
+            tagged("{", "\"invalid\""),
+            tagged("{\"changed\":true}", "\"v2\""),
+            response(200, "{}"),
+        ]);
+        let client = http_client().unwrap();
+        let url = state_url(&base, &token).unwrap();
+        tauri::async_runtime::block_on(async {
+            let mut etag = None;
+            assert!(fetch_state(&client, &url, &token, &mut etag).await.is_err());
+            assert!(matches!(
+                fetch_state(&client, &url, &token, &mut etag).await,
+                Ok(StateUpdate::Online { state: Some(_) })
+            ));
+            assert_eq!(etag.as_deref(), Some("\"v1\""));
+            assert!(matches!(
+                fetch_state(&client, &url, &token, &mut etag).await,
+                Ok(StateUpdate::Online { state: None })
+            ));
+            assert!(fetch_state(&client, &url, &token, &mut etag).await.is_err());
+            let recovered = fetch_state(&client, &url, &token, &mut etag).await.unwrap();
+            assert_eq!(
+                serde_json::to_value(recovered).unwrap(),
+                serde_json::json!({"connection":"online"})
+            );
+            assert!(fetch_state(&client, &url, &token, &mut etag).await.is_err());
+            assert_eq!(etag.as_deref(), Some("\"v1\""));
+            assert!(matches!(
+                fetch_state(&client, &url, &token, &mut etag).await,
+                Ok(StateUpdate::Online { state: Some(_) })
+            ));
+            assert_eq!(etag.as_deref(), Some("\"v2\""));
+            assert!(fetch_state(&client, &url, &token, &mut etag).await.is_ok());
+            assert_eq!(etag, None, "legacy responses clear the validator");
+        });
+        for expected in [
+            None,
+            None,
+            Some("\"v1\""),
+            Some("\"v1\""),
+            Some("\"v1\""),
+            Some("\"v1\""),
+            Some("\"v1\""),
+            Some("\"v2\""),
+        ] {
+            let request = requests
+                .recv_timeout(Duration::from_secs(1))
+                .unwrap()
+                .to_lowercase();
+            if let Some(tag) = expected {
+                assert!(request.contains(&format!("if-none-match: {tag}")));
+            } else {
+                assert!(!request.contains("if-none-match"));
+            }
+        }
+        for (failures, seconds) in [
+            (0, 5),
+            (1, 5),
+            (2, 10),
+            (3, 20),
+            (4, 40),
+            (5, 60),
+            (u32::MAX, 60),
+        ] {
+            assert_eq!(retry_delay(failures), Duration::from_secs(seconds));
+        }
     }
 
     #[test]
