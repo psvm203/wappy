@@ -263,10 +263,17 @@ fn main() -> Result<(), String> {
         }
     });
     let handle = app.handle().clone();
+    let (ready, native_ready) = mpsc::channel();
     let completed = Arc::new(AtomicBool::new(false));
     let completed_by_worker = completed.clone();
     thread::spawn(move || {
         let check = || -> Result<(), String> {
+            // Ready follows creation of both WebViews and the native setup hook.
+            // A cold WebView2 start must not consume the state delivery deadline.
+            native_ready
+                .recv_timeout(Duration::from_secs(60))
+                .map_err(|error| format!("Native app initialization did not finish: {error}"))?;
+            println!("CHECK: native app ready; waiting for initial character state");
             let initial = snapshot(&received, |_| true)?;
             println!("CHECK: windows are ready; checking login startup and tray controls");
             if initial["state"] != serde_json::Value::Null {
@@ -597,6 +604,9 @@ fn main() -> Result<(), String> {
         handle.exit(exit_code);
     });
     app.run(move |_, event| {
+        if matches!(event, tauri::RunEvent::Ready) {
+            let _ = ready.send(());
+        }
         if matches!(event, tauri::RunEvent::ExitRequested { .. })
             && !completed.load(Ordering::SeqCst)
         {
