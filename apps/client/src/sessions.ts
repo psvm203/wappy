@@ -127,8 +127,13 @@ export function forgetSavedSession(
 /** Only call after the server confirms deletion. Try every local cleanup independently. */
 export function forgetDeletedProfile(
   session: SavedProfile & { profile: Profile },
-  storage: SessionStorage = localStorage,
+  storage?: SessionStorage,
 ): boolean {
+  try {
+    storage ??= localStorage;
+  } catch {
+    return false;
+  }
   let complete = true;
   for (const cleanup of [
     () => {

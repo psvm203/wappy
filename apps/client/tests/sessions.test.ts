@@ -104,6 +104,24 @@ test("confirmed profile deletion removes only that identity and reports partial 
   );
   assert.equal(loadSession(storage), null);
   assert.equal(storage.getItem(selectionKey), null);
+
+  const descriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "localStorage",
+  );
+  try {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("Storage access denied");
+      },
+    });
+    assert.equal(forgetDeletedProfile(deleted), false);
+  } finally {
+    if (descriptor)
+      Object.defineProperty(globalThis, "localStorage", descriptor);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
 });
 
 test("server switching preserves distinct profiles and updates only the recovered identity", () => {
