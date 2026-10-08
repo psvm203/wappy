@@ -1010,7 +1010,6 @@ function App() {
             ).map(([id, label]) => (
               <button
                 key={id}
-                id={`sidebar-tab-${id}`}
                 className="text-button"
                 aria-current={onboarding === id ? "page" : undefined}
                 disabled={busy}
@@ -1198,6 +1197,7 @@ function App() {
               <button
                 key={id}
                 aria-current={panel === id ? "page" : undefined}
+                id={`sidebar-tab-${id}`}
                 className={panel === id ? "selected" : ""}
                 onClick={() => {
                   setPanel(id);
@@ -1229,6 +1229,7 @@ function App() {
               <div hidden={panel !== "chat"}>
                 <ChatPanel
                   key={`${session.server}:${session.token}:${state.self.id}`}
+                  session={session}
                   state={state}
                   connected={connection === "online"}
                   focusRequest={chatFocus}

@@ -5,7 +5,8 @@ import {
   type ChatMessage,
   type SidebarState,
 } from "@wappy/api";
-import { errorMessage } from "./api";
+import { errorMessage, type SavedSession } from "./api";
+import { MessageReport, ChatReportHistory } from "./ChatReports";
 import { Character } from "./Character";
 import {
   chatBubbleText,
@@ -37,6 +38,7 @@ export function ChatBubble({ message }: { message?: ChatMessage }) {
 }
 
 export function ChatPanel({
+  session,
   state,
   connected,
   focusRequest,
@@ -46,6 +48,7 @@ export function ChatPanel({
   onSend,
   onRead,
 }: {
+  session: SavedSession;
   state: SidebarState;
   connected: boolean;
   focusRequest: number;
@@ -248,11 +251,26 @@ export function ChatPanel({
                   </time>
                 </header>
                 <p>{message.text}</p>
+                {sender.id !== state.self.id && (
+                  <MessageReport
+                    session={session}
+                    messageId={message.id}
+                    text={message.text}
+                    senderName={sender.name}
+                    disabled={!connected || state.chatReporting !== true}
+                  />
+                )}
               </div>
             </li>
           );
         })}
       </ol>
+      {state.chatReporting !== true && (
+        <p className="hint">
+          이 서버는 현재 새 메시지 신고를 받지 않아요. 불편한 친구는 친구들
+          탭에서 차단할 수 있어요.
+        </p>
+      )}
       {unreadIds.length > 0 && (
         <div className="chat-read-control">
           <p className="hint">
@@ -338,6 +356,9 @@ export function ChatPanel({
         <p className="error" role="alert">
           {error.text}
         </p>
+      )}
+      {state.chatReporting !== undefined && (
+        <ChatReportHistory session={session} connected={connected} />
       )}
     </section>
   );

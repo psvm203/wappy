@@ -18,6 +18,28 @@ export const CHAT_HISTORY_LIMIT = 50;
 export const CHAT_TTL_MS = 24 * 60 * 60 * 1_000;
 export const CHAT_BUBBLE_MS = 60_000;
 export const CHAT_COOLDOWN_MS = 1_000;
+export const CHAT_REPORT_REASONS = {
+  harassment: "괴롭힘·혐오·위협",
+  sexual: "성적인 내용",
+  spam: "스팸·사기",
+  other: "기타 부적절한 내용",
+} as const;
+export const MAX_REPORT_DETAILS = 500;
+export const REPORT_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+export const REPORT_DAILY_LIMIT = 20;
+export interface ChatReportInput {
+  messageId: number;
+  reason: keyof typeof CHAT_REPORT_REASONS;
+  details: string;
+}
+export interface ChatReportReceipt {
+  id: string;
+  messageId: number;
+  senderName: string;
+  reason: ChatReportInput["reason"];
+  status: "pending" | "removed" | "dismissed";
+  reportedAt: number;
+}
 
 export interface ChatMessage {
   id: number;
@@ -57,6 +79,8 @@ export interface SidebarState {
   unreadChatIds?: number[];
   /** The authenticated profile's block list; absent on older servers. */
   blocking?: BlockingSettings;
+  /** Absent on older servers; false when the operator has paused new reports. */
+  chatReporting?: boolean;
 }
 export type BlockedProfile = Pick<Profile, "id" | "name" | "character">;
 export interface BlockingSettings {
@@ -114,6 +138,8 @@ export interface ApiRoutes {
     input: { messageIds: number[] };
     output: { messageIds: number[] };
   };
+  "POST /chat/report": { input: ChatReportInput; output: ChatReportReceipt };
+  "GET /chat/reports": { input: undefined; output: ChatReportReceipt[] };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "POST /profile/delete": {
     input: { profileId: string };
@@ -141,6 +167,60 @@ export type Output<R extends Route> = ApiRoutes[R]["output"];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseChatReportInput(value: unknown): ChatReportInput {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.messageId) ||
+    (value.messageId as number) <= 0 ||
+    typeof value.reason !== "string" ||
+    !Object.hasOwn(CHAT_REPORT_REASONS, value.reason) ||
+    typeof value.details !== "string" ||
+    value.details.length > MAX_REPORT_DETAILS ||
+    /[\u0000-\u0009\u000b-\u001f\u007f]/.test(value.details)
+  )
+    throw new Error("신고할 메시지와 사유를 확인해 주세요.");
+  return {
+    messageId: value.messageId as number,
+    reason: value.reason as ChatReportInput["reason"],
+    details: value.details.trim(),
+  };
+}
+
+export function parseChatReportReceipt(value: unknown): ChatReportReceipt {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    !value.id ||
+    value.id.length > 128 ||
+    typeof value.senderName !== "string" ||
+    !value.senderName.trim() ||
+    value.senderName.length > MAX_NAME_LENGTH ||
+    !["pending", "removed", "dismissed"].includes(value.status as string) ||
+    !Number.isSafeInteger(value.reportedAt) ||
+    (value.reportedAt as number) <= 0 ||
+    (value.reportedAt as number) > 8_640_000_000_000_000
+  )
+    throw new Error("신고 접수 결과를 확인하지 못했어요.");
+  const { messageId, reason } = parseChatReportInput({ ...value, details: "" });
+  return {
+    id: value.id,
+    messageId,
+    senderName: value.senderName,
+    reason,
+    status: value.status as ChatReportReceipt["status"],
+    reportedAt: value.reportedAt as number,
+  };
+}
+
+export function parseChatReportReceipts(value: unknown): ChatReportReceipt[] {
+  if (!Array.isArray(value) || value.length > CHAT_HISTORY_LIMIT)
+    throw new Error("신고 내역을 확인하지 못했어요.");
+  const receipts = value.map(parseChatReportReceipt);
+  if (new Set(receipts.map((receipt) => receipt.id)).size !== receipts.length)
+    throw new Error("신고 내역이 중복되어 있어요.");
+  return receipts;
 }
 
 export function parseChatText(value: unknown): string {
@@ -339,6 +419,11 @@ export function parseSidebarState(value: unknown): SidebarState {
   }
   if (value.directChat !== undefined && value.directChat !== true)
     throw new Error("잘못된 1:1 채팅 지원 응답입니다.");
+  if (
+    value.chatReporting !== undefined &&
+    typeof value.chatReporting !== "boolean"
+  )
+    throw new Error("잘못된 신고 지원 응답입니다.");
   let unreadChatIds: number[] | undefined;
   if (value.unreadChatIds !== undefined) {
     unreadChatIds = parseChatMessageIds(value.unreadChatIds);
@@ -361,6 +446,9 @@ export function parseSidebarState(value: unknown): SidebarState {
     friends,
     ...(messages === undefined ? {} : { messages }),
     ...(value.directChat === true ? { directChat: true as const } : {}),
+    ...(value.chatReporting === undefined
+      ? {}
+      : { chatReporting: value.chatReporting as boolean }),
     ...(unreadChatIds === undefined ? {} : { unreadChatIds }),
     ...(blocking === undefined ? {} : { blocking }),
     ...(value.presence === undefined

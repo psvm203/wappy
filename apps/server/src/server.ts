@@ -7,6 +7,7 @@ import {
 import { DatabaseSync } from "node:sqlite";
 import { isIP } from "node:net";
 import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
+import { createReports, ReportError } from "./reports.ts";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
@@ -18,6 +19,7 @@ import {
   isRecord,
   parseChatText,
   parseChatMessageIds,
+  parseChatReportInput,
   parseProfile,
   type ApiErrorBody,
   type Output,
@@ -118,6 +120,7 @@ export function createApp(options: {
   now?: () => number;
   kakao?: KakaoConfig;
   kakaoFetch?: typeof fetch;
+  reportsEnabled?: boolean;
 }) {
   const db = new DatabaseSync(options.databasePath);
   db.exec(`
@@ -206,6 +209,7 @@ export function createApp(options: {
       "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
     );
   const now = options.now ?? Date.now;
+  const reports = createReports(db, now);
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
   let presenceRevision = 0;
@@ -293,6 +297,7 @@ export function createApp(options: {
   const profile = (id: string) => selectProfile.get(id) as unknown as Profile;
   const housekeeping = setInterval(() => {
     const time = now();
+    reports.prune();
     for (const [id, validator] of validators)
       if (validator.validUntil <= time) validators.delete(id);
     for (const [id, seen] of lastSeen)
@@ -693,6 +698,7 @@ export function createApp(options: {
             self: self!,
             blocking: blocking(self!.id),
             directChat: true,
+            chatReporting: options.reportsEnabled === true,
             messages: messages.map(({ recipientId, unread, ...message }) => ({
               ...message,
               ...(recipientId === null ? {} : { recipientId }),
@@ -837,6 +843,25 @@ export function createApp(options: {
             },
             201,
           );
+          break;
+        }
+        case "GET /chat/reports": {
+          reply(res, route, reports.receipts(self!.id));
+          break;
+        }
+        case "POST /chat/report": {
+          if (!options.reportsEnabled)
+            throw new HttpError(
+              503,
+              "이 서버는 현재 새 메시지 신고를 받지 않아요. 불편한 친구는 차단할 수 있어요.",
+            );
+          let input;
+          try {
+            input = parseChatReportInput(body);
+          } catch (error) {
+            throw new HttpError(400, (error as Error).message);
+          }
+          reply(res, route, reports.submit(self!.id, input));
           break;
         }
         case "POST /chat/read": {
@@ -1119,13 +1144,11 @@ export function createApp(options: {
           throw new HttpError(404, "API 경로를 찾을 수 없습니다.");
       }
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
+      const known = error instanceof HttpError || error instanceof ReportError;
+      const status = known ? error.status : 500;
       if (status === 500) console.error("Request failed:", error);
       const body: ApiErrorBody = {
-        error:
-          error instanceof HttpError
-            ? error.message
-            : "서버 오류가 발생했습니다.",
+        error: known ? error.message : "서버 오류가 발생했습니다.",
       };
       if (!res.headersSent && !res.destroyed) {
         if (kakaoBrowser) loginPage(res, status, body.error);
