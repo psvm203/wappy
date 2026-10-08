@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node --env-file-if-exists=.env dist/index.js",
     "check-types": "tsc --noEmit",
-    "test": "node --test src/server.test.ts"
+    "test": "node --test src/*.test.ts"
   },
   "dependencies": {
     "@wappy/api": "workspace:*"

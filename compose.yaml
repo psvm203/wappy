@@ -8,6 +8,9 @@ services:
     restart: unless-stopped
     environment:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      KAKAO_REDIRECT_URI: ${KAKAO_REDIRECT_URI:-}
     ports:
       - "127.0.0.1:${WAPPY_PORT:-3001}:3001"
     volumes:

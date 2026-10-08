@@ -13,6 +13,18 @@ export const MAX_NAME_LENGTH = 24;
 export const MAX_STATUS_LENGTH = 60;
 export const WAVE_COOLDOWN_MS = 30_000;
 export const WAVE_TTL_MS = 24 * 60 * 60 * 1_000;
+export const MAX_CHAT_LENGTH = 200;
+export const CHAT_HISTORY_LIMIT = 50;
+export const CHAT_TTL_MS = 24 * 60 * 60 * 1_000;
+export const CHAT_BUBBLE_MS = 60_000;
+export const CHAT_COOLDOWN_MS = 1_000;
+
+export interface ChatMessage {
+  id: number;
+  senderId: string;
+  text: string;
+  sentAt: number;
+}
 
 export interface ProfileInput {
   name: string;
@@ -35,6 +47,8 @@ export interface SidebarState {
   friends: Friend[];
   /** Private to the authenticated profile; absent on servers without this feature. */
   presence?: PresenceSettings;
+  /** Absent on servers that do not support chat. */
+  messages?: ChatMessage[];
 }
 export interface PresenceSettings {
   sharing: boolean;
@@ -59,6 +73,18 @@ export interface ApiErrorBody {
 
 /** The client and server share method, path, request and response types. */
 export interface ApiRoutes {
+  "POST /auth/kakao/start": {
+    input: Record<string, never>;
+    output: { loginToken: string; authorizationUrl: string; expiresAt: number };
+  };
+  "POST /auth/kakao/poll": {
+    input: { loginToken: string };
+    output: { status: "pending" } | { status: "complete"; session: Session };
+  };
+  "POST /auth/kakao/cancel": {
+    input: { loginToken: string };
+    output: { ok: true };
+  };
   "POST /session": { input: ProfileInput; output: Session };
   "POST /session/recover": { input: { code: string }; output: Session };
   "POST /recovery-code": {
@@ -66,6 +92,7 @@ export interface ApiRoutes {
     output: { code: string };
   };
   "GET /state": { input: undefined; output: SidebarState };
+  "POST /chat": { input: { text: string }; output: ChatMessage };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "POST /profile/delete": {
     input: { profileId: string };
@@ -85,6 +112,41 @@ export type Output<R extends Route> = ApiRoutes[R]["output"];
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseChatText(value: unknown): string {
+  if (typeof value !== "string") throw new Error("채팅 내용을 입력해 주세요.");
+  const text = value.replace(/\r\n?/g, "\n").trim();
+  if (
+    !text ||
+    text.length > MAX_CHAT_LENGTH ||
+    /[\u0000-\u0009\u000b-\u001f\u007f]/.test(text)
+  )
+    throw new Error(`채팅은 1–${MAX_CHAT_LENGTH}자 이내로 입력해 주세요.`);
+  return text;
+}
+
+export function parseChatMessage(value: unknown): ChatMessage {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "number" ||
+    !Number.isSafeInteger(value.id) ||
+    value.id <= 0 ||
+    typeof value.senderId !== "string" ||
+    !value.senderId ||
+    value.senderId.length > 128 ||
+    typeof value.sentAt !== "number" ||
+    !Number.isSafeInteger(value.sentAt) ||
+    value.sentAt <= 0 ||
+    value.sentAt > 8_640_000_000_000_000
+  )
+    throw new Error("잘못된 채팅 응답입니다.");
+  return {
+    id: value.id,
+    senderId: value.senderId,
+    text: parseChatText(value.text),
+    sentAt: value.sentAt,
+  };
 }
 
 export function parsePresenceSettings(value: unknown): PresenceSettings {
@@ -180,9 +242,26 @@ export function parseSidebarState(value: unknown): SidebarState {
     }
     return { ...parsed, online: friend.online, ...(wave ? { wave } : {}) };
   });
+  let messages: ChatMessage[] | undefined;
+  if (value.messages !== undefined) {
+    if (
+      !Array.isArray(value.messages) ||
+      value.messages.length > CHAT_HISTORY_LIMIT
+    )
+      throw new Error("잘못된 채팅 목록입니다.");
+    let previousId = 0;
+    messages = value.messages.map((input) => {
+      const message = parseChatMessage(input);
+      if (!ids.has(message.senderId) || message.id <= previousId)
+        throw new Error("잘못된 채팅 순서 또는 보낸 사람입니다.");
+      previousId = message.id;
+      return message;
+    });
+  }
   return {
     self,
     friends,
+    ...(messages === undefined ? {} : { messages }),
     ...(value.presence === undefined
       ? {}
       : { presence: parsePresenceSettings(value.presence) }),

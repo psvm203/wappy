@@ -76,6 +76,22 @@ export function Character({
         <ellipse cx="27" cy="60" rx="5" ry="3" />
         <ellipse cx="73" cy="60" rx="5" ry="3" />
       </g>
+      {asleep && (
+        <g
+          className="sleep-marks"
+          fill="#65745d"
+          aria-hidden="true"
+          fontFamily="sans-serif"
+          fontWeight="700"
+        >
+          <text x="77" y="26" fontSize="13">
+            z
+          </text>
+          <text x="87" y="15" fontSize="10">
+            z
+          </text>
+        </g>
+      )}
     </svg>
   );
 }

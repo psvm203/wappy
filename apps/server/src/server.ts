@@ -6,18 +6,24 @@ import {
 } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { isIP } from "node:net";
+import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
   WAVE_COOLDOWN_MS,
   WAVE_TTL_MS,
+  CHAT_COOLDOWN_MS,
+  CHAT_HISTORY_LIMIT,
+  CHAT_TTL_MS,
   isRecord,
+  parseChatText,
   parseProfile,
   type ApiErrorBody,
   type Output,
   type Profile,
   type Route,
   type Wave,
+  type ChatMessage,
 } from "@wappy/api";
 
 class HttpError extends Error {
@@ -30,6 +36,30 @@ class HttpError extends Error {
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
+const KAKAO_LOGIN_TTL_MS = 10 * 60_000;
+
+interface KakaoAttempt {
+  expiresAt: number;
+  browserHash?: string;
+  processing?: boolean;
+  identity?: { id: string; name: string };
+  error?: string;
+}
+
+function loginPage(res: ServerResponse, status: number, message: string) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy":
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    "X-Content-Type-Options": "nosniff",
+  });
+  // Only fixed application messages, never provider responses or query parameters.
+  res.end(
+    `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wappy 카카오 로그인</title><body><h1>Wappy 카카오 로그인</h1><p>${message}</p><p>이 창을 닫고 Wappy로 돌아가 주세요.</p></body></html>`,
+  );
+}
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
   if (
@@ -84,6 +114,8 @@ export function createApp(options: {
   origins?: string[];
   trustProxy?: boolean;
   now?: () => number;
+  kakao?: KakaoConfig;
+  kakaoFetch?: typeof fetch;
 }) {
   const db = new DatabaseSync(options.databasePath);
   db.exec(`
@@ -106,6 +138,10 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS recovery_codes (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS kakao_accounts (
+      kakao_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;
     CREATE TABLE IF NOT EXISTS presence_settings (
       user_id TEXT PRIMARY KEY REFERENCES users(id),
       sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
@@ -119,11 +155,26 @@ export function createApp(options: {
       CHECK (sender_id = user_id OR sender_id = friend_id),
       FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      text TEXT NOT NULL, sent_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
+    CREATE INDEX IF NOT EXISTS chat_expiry ON chat_messages(sent_at);
+    CREATE TABLE IF NOT EXISTS chat_recipients (
+      message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
+      PRIMARY KEY (message_id, user_id, friend_id),
+      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
+    ) STRICT;
   `);
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
   const limits = new Map<string, { count: number; until: number }>();
+  // ponytail: pending logins share this single server process; use shared TTL storage before replicas.
+  const kakaoAttempts = new Map<string, KakaoAttempt>();
   const origins = new Set([
     "tauri://localhost",
     "http://tauri.localhost",
@@ -142,13 +193,25 @@ export function createApp(options: {
       if (time - seen >= ONLINE_TIMEOUT_MS) lastSeen.delete(id);
     for (const [ip, limit] of limits)
       if (limit.until <= time) limits.delete(ip);
+    for (const [state, attempt] of kakaoAttempts)
+      if (attempt.expiresAt <= time) kakaoAttempts.delete(state);
     db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
     db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
+    db.prepare("DELETE FROM chat_messages WHERE sent_at <= ?").run(
+      time - CHAT_TTL_MS,
+    );
   }, 60_000);
   housekeeping.unref();
 
   const server = createServer(async (req, res) => {
+    let kakaoBrowser = false;
     try {
+      const url = URL.parse(req.url ?? "/", "http://localhost");
+      if (!url) throw new HttpError(400, "올바른 요청 주소가 아닙니다.");
+      const route = `${req.method} ${url.pathname}`;
+      kakaoBrowser =
+        route === "GET /auth/kakao/authorize" ||
+        route === "GET /auth/kakao/callback";
       const origin = req.headers.origin;
       if (origin && !origins.has(origin))
         throw new HttpError(403, "허용되지 않은 앱 주소입니다.");
@@ -165,14 +228,18 @@ export function createApp(options: {
         res.end();
         return;
       }
-      const route = `${req.method} ${req.url}`;
       if (route === "GET /health") {
         json(res, 200, { ok: true });
         return;
       }
       const publicSession =
-        route === "POST /session" || route === "POST /session/recover";
+        route === "POST /session" ||
+        route === "POST /session/recover" ||
+        route === "POST /auth/kakao/start";
       const publicPreview = route === "POST /invites/preview";
+      const kakaoPoll =
+        route === "POST /auth/kakao/poll" ||
+        route === "POST /auth/kakao/cancel";
       if (req.method !== "GET") {
         // Opt in only behind one trusted proxy with no direct access to this port.
         // Its appended, rightmost address wins over any client-supplied prefix.
@@ -183,14 +250,14 @@ export function createApp(options: {
             : undefined;
         const ip =
           address && isIP(address) ? address : req.socket.remoteAddress;
-        const key = `${ip}:${publicSession ? "session" : publicPreview ? "preview" : "write"}`;
+        const key = `${ip}:${publicSession ? "session" : publicPreview ? "preview" : kakaoPoll ? "kakao" : "write"}`;
         const limit = limits.get(key);
         const current =
           limit && limit.until > now()
             ? limit
             : { count: 0, until: now() + 60_000 };
         limits.set(key, current);
-        if (++current.count > (publicSession ? 10 : 60)) {
+        if (++current.count > (publicSession ? 10 : kakaoPoll ? 120 : 60)) {
           res.setHeader("Retry-After", "60");
           throw new HttpError(
             429,
@@ -198,10 +265,104 @@ export function createApp(options: {
           );
         }
       }
+      if (kakaoBrowser) {
+        const config = options.kakao;
+        if (!config)
+          throw new HttpError(
+            503,
+            "이 서버는 아직 카카오 로그인을 설정하지 않았습니다.",
+          );
+        const state = url.searchParams.get("state") ?? "";
+        const attempt = kakaoAttempts.get(state);
+        if (!attempt || attempt.expiresAt <= now() || attempt.processing)
+          throw new HttpError(
+            400,
+            "로그인 요청이 만료되었거나 이미 처리되었습니다. 앱에서 다시 시작해 주세요.",
+          );
+        const cookieName = `wappy_kakao_${state}`;
+        const cookieOptions = `Path=/auth/kakao; HttpOnly; SameSite=Lax${config.redirectUri.startsWith("https:") ? "; Secure" : ""}`;
+        const browserCookie = req.headers.cookie
+          ?.split(";")
+          .map((cookie) => cookie.trim())
+          .find((cookie) => cookie.startsWith(`${cookieName}=`))
+          ?.slice(cookieName.length + 1);
+        if (route === "GET /auth/kakao/authorize") {
+          if (
+            attempt.browserHash &&
+            (!browserCookie || hash(browserCookie) !== attempt.browserHash)
+          )
+            throw new HttpError(
+              400,
+              "이미 열린 로그인 요청입니다. 앱에서 다시 시작해 주세요.",
+            );
+          // A reload in the initiating browser must retain the same binding.
+          const browserSecret = attempt.browserHash ? browserCookie! : secret();
+          attempt.browserHash = hash(browserSecret);
+          const destination = new URL(
+            "https://kauth.kakao.com/oauth/authorize",
+          );
+          destination.search = new URLSearchParams({
+            client_id: config.restApiKey,
+            redirect_uri: config.redirectUri,
+            response_type: "code",
+            state,
+          }).toString();
+          res.writeHead(302, {
+            Location: destination.href,
+            "Set-Cookie": `${cookieName}=${browserSecret}; Max-Age=600; ${cookieOptions}`,
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+          });
+          res.end();
+          return;
+        }
+        if (
+          !browserCookie ||
+          !attempt.browserHash ||
+          hash(browserCookie) !== attempt.browserHash
+        )
+          throw new HttpError(
+            400,
+            "로그인을 시작한 브라우저를 확인하지 못했습니다. 앱에서 다시 시작해 주세요.",
+          );
+        attempt.processing = true; // Claim before awaiting Kakao; callbacks are single use.
+        res.setHeader(
+          "Set-Cookie",
+          `${cookieName}=; Max-Age=0; ${cookieOptions}`,
+        );
+        const code = url.searchParams.get("code");
+        if (url.searchParams.has("error") || !code || code.length > 2048) {
+          attempt.error =
+            "카카오 로그인이 취소되었거나 승인되지 않았습니다. 다시 시도해 주세요.";
+        } else {
+          try {
+            attempt.identity = await kakaoIdentity(
+              config,
+              code,
+              options.kakaoFetch,
+            );
+          } catch {
+            attempt.error =
+              "카카오 인증을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+          }
+        }
+        if (attempt.expiresAt <= now() || kakaoAttempts.get(state) !== attempt)
+          throw new HttpError(
+            400,
+            "로그인 요청이 만료되었거나 취소되었습니다. 앱에서 다시 시작해 주세요.",
+          );
+        loginPage(
+          res,
+          attempt.error ? 400 : 200,
+          attempt.error ??
+            "인증을 완료했습니다. Wappy에서 로그인을 마무리하고 있어요.",
+        );
+        return;
+      }
       const body = req.method === "GET" ? undefined : await readBody(req);
       // Authenticate after the last await so recovery also revokes in-flight writes.
       let self: Profile | undefined;
-      if (!publicSession && !publicPreview) {
+      if (!publicSession && !publicPreview && !kakaoPoll) {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
@@ -218,6 +379,106 @@ export function createApp(options: {
         self = profile(user.id as string);
       }
       switch (route) {
+        case "POST /auth/kakao/start": {
+          if (!options.kakao)
+            throw new HttpError(
+              503,
+              "이 서버는 아직 카카오 로그인을 설정하지 않았습니다.",
+            );
+          if (kakaoAttempts.size >= 1000)
+            throw new HttpError(
+              503,
+              "로그인 요청이 많습니다. 잠시 후 다시 시도해 주세요.",
+            );
+          const loginToken = secret();
+          const state = hash(loginToken);
+          const expiresAt = now() + KAKAO_LOGIN_TTL_MS;
+          kakaoAttempts.set(state, { expiresAt });
+          const authorizationUrl = new URL(
+            "/auth/kakao/authorize",
+            options.kakao.redirectUri,
+          );
+          authorizationUrl.searchParams.set("state", state);
+          reply(res, route, {
+            loginToken,
+            authorizationUrl: authorizationUrl.href,
+            expiresAt,
+          });
+          break;
+        }
+        case "POST /auth/kakao/cancel":
+        case "POST /auth/kakao/poll": {
+          const loginToken = field(body, "loginToken");
+          if (!/^[A-Za-z0-9_-]{43}$/.test(loginToken))
+            throw new HttpError(400, "잘못된 로그인 요청입니다.");
+          const state = hash(loginToken);
+          const attempt = kakaoAttempts.get(state);
+          if (route === "POST /auth/kakao/cancel") {
+            kakaoAttempts.delete(state);
+            reply(res, route, { ok: true });
+            break;
+          }
+          if (!attempt || attempt.expiresAt <= now()) {
+            kakaoAttempts.delete(state);
+            throw new HttpError(
+              410,
+              "로그인 요청이 만료되었습니다. 다시 시작해 주세요.",
+            );
+          }
+          if (attempt.error) {
+            kakaoAttempts.delete(state);
+            throw new HttpError(400, attempt.error);
+          }
+          if (!attempt.identity) {
+            reply(res, route, { status: "pending" });
+            break;
+          }
+          const identity = attempt.identity;
+          const token = secret();
+          let user: Profile;
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            const account = db
+              .prepare("SELECT user_id FROM kakao_accounts WHERE kakao_id = ?")
+              .get(identity.id);
+            if (account) {
+              user = profile(account.user_id as string);
+              db.prepare("UPDATE users SET token_hash = ? WHERE id = ?").run(
+                hash(token),
+                user.id,
+              );
+            } else {
+              user = {
+                id: randomUUID(),
+                name: identity.name,
+                character: "bunny",
+                status: "",
+              };
+              db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)").run(
+                user.id,
+                hash(token),
+                user.name,
+                user.character,
+                user.status,
+              );
+              db.prepare("INSERT INTO kakao_accounts VALUES (?, ?)").run(
+                identity.id,
+                user.id,
+              );
+            }
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          kakaoAttempts.delete(state);
+          lastSeen.set(user.id, now());
+          reply(res, route, {
+            status: "complete",
+            session: { token, profile: user },
+          });
+          break;
+        }
         case "POST /session": {
           let input;
           try {
@@ -298,6 +559,27 @@ export function createApp(options: {
             .get(self!.id);
           reply(res, route, {
             self: self!,
+            messages: (
+              db
+                .prepare(
+                  `
+              SELECT m.id, m.sender_id AS senderId, m.text, m.sent_at AS sentAt
+              FROM chat_messages m WHERE m.sent_at > ? AND (
+                m.sender_id = ? OR EXISTS (
+                  SELECT 1 FROM chat_recipients r WHERE r.message_id = m.id
+                  AND (r.user_id = ? OR r.friend_id = ?)
+                )
+              ) ORDER BY m.id DESC LIMIT ?
+            `,
+                )
+                .all(
+                  time - CHAT_TTL_MS,
+                  self!.id,
+                  self!.id,
+                  self!.id,
+                  CHAT_HISTORY_LIMIT,
+                ) as unknown as ChatMessage[]
+            ).reverse(),
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
               revision: presence ? Number(presence.revision) : 0,
@@ -315,6 +597,57 @@ export function createApp(options: {
               }),
             ),
           });
+          break;
+        }
+        case "POST /chat": {
+          let text;
+          try {
+            text = parseChatText(isRecord(body) ? body.text : undefined);
+          } catch (error) {
+            throw new HttpError(400, (error as Error).message);
+          }
+          const time = now();
+          const last = db
+            .prepare(
+              "SELECT sent_at FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT 1",
+            )
+            .get(self!.id);
+          if (last && time - Number(last.sent_at) < CHAT_COOLDOWN_MS) {
+            res.setHeader("Retry-After", "1");
+            throw new HttpError(429, "메시지는 1초에 한 번 보낼 수 있어요.");
+          }
+          db.exec("BEGIN IMMEDIATE");
+          let id: number;
+          try {
+            id = Number(
+              db
+                .prepare(
+                  "INSERT INTO chat_messages (sender_id, text, sent_at) VALUES (?, ?, ?)",
+                )
+                .run(self!.id, text, time).lastInsertRowid,
+            );
+            // Snapshot the audience. New/reconnected friends cannot read earlier messages.
+            db.prepare(
+              `INSERT INTO chat_recipients
+              SELECT ?, user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?
+            `,
+            ).run(id, self!.id, self!.id);
+            db.prepare(
+              `DELETE FROM chat_messages WHERE sender_id = ? AND id NOT IN (
+              SELECT id FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT ?
+            )`,
+            ).run(self!.id, self!.id, CHAT_HISTORY_LIMIT);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          reply(
+            res,
+            route,
+            { id, senderId: self!.id, text, sentAt: time },
+            201,
+          );
           break;
         }
         case "PATCH /profile": {
@@ -515,7 +848,10 @@ export function createApp(options: {
             ? error.message
             : "서버 오류가 발생했습니다.",
       };
-      if (!res.headersSent && !res.destroyed) json(res, status, body);
+      if (!res.headersSent && !res.destroyed) {
+        if (kakaoBrowser) loginPage(res, status, body.error);
+        else json(res, status, body);
+      }
     }
   });
   server.requestTimeout = 10_000;

@@ -151,13 +151,17 @@ export interface DesktopSnapshot {
 export const DESKTOP_STATE_EVENT = "wappy:desktop-state";
 export const DESKTOP_READY_EVENT = "wappy:desktop-ready";
 export const OPEN_GREETING_EVENT = "wappy:open-greeting";
+export const OPEN_CHAT_EVENT = "wappy:open-chat";
 
 export interface GreetingTarget {
   profileKey: string;
   friendId: string;
 }
 
-export function useDesktopGreeting(onOpen: (target: GreetingTarget) => void) {
+export function useDesktopGreeting(
+  onOpen: (target: GreetingTarget) => void,
+  eventName = OPEN_GREETING_EVENT,
+) {
   const handler = useRef(onOpen);
   handler.current = onOpen;
   const [error, setError] = useState("");
@@ -165,7 +169,7 @@ export function useDesktopGreeting(onOpen: (target: GreetingTarget) => void) {
     if (!isTauri()) return;
     let disposed = false;
     let unlisten: UnlistenFn | undefined;
-    void listen<unknown>(OPEN_GREETING_EVENT, ({ payload }) => {
+    void listen<unknown>(eventName, ({ payload }) => {
       if (
         !disposed &&
         payload &&
@@ -187,14 +191,14 @@ export function useDesktopGreeting(onOpen: (target: GreetingTarget) => void) {
       .catch(() => {
         if (!disposed)
           setError(
-            "인사 바로가기를 연결하지 못했어요. 트레이에서 사이드바를 열어 주세요.",
+            "캐릭터 바로가기를 연결하지 못했어요. 트레이에서 사이드바를 열어 주세요.",
           );
       });
     return () => {
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [eventName]);
   return error;
 }
 

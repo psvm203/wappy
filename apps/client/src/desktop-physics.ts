@@ -95,22 +95,11 @@ function angleDifference(angle: number, target: number) {
   return Math.atan2(Math.sin(target - angle), Math.cos(target - angle));
 }
 
-export function needsAnimation(
-  body: Body,
-  width: number,
-  height: number,
-  walking: boolean,
-) {
-  if (body.mode === "air") return true;
+export function needsAnimation(body: Body, walking: boolean) {
+  if (!walking) return false;
   if (body.mode === "drag")
     return Math.abs(angleDifference(body.angle, 0)) > 0.001;
-  if (walking) return true; // Resting pets still need their wake-up timer.
-  const pose = walkPose(body, width, height);
-  return (
-    body.x !== pose.x ||
-    body.y !== pose.y ||
-    Math.abs(angleDifference(body.angle, pose.angle)) > 0.001
-  );
+  return true; // Online pets still need their rest/wake timer and flight physics.
 }
 
 function turn(body: Body, target: number, dt: number) {
@@ -129,6 +118,10 @@ export function advanceBody(
   const { left, top, right, bottom, w, h } = track(width, height);
   const perimeter = Math.max(1, 2 * (w + h));
   moveBody(body, body.x, body.y, width, height);
+  if (!walking) {
+    body.vx = body.vy = 0;
+    return;
+  }
   for (let remaining = Math.min(elapsed, 0.05); remaining > 0;) {
     const dt = Math.min(remaining, 1 / 120);
     remaining -= dt;
