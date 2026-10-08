@@ -21,6 +21,8 @@ jobs:
       - run: node .github/scripts/check-server-container.mjs
   check:
     name: Check ${{ matrix.artifact }}
+    env:
+      VITE_BUILD_ID: ${{ github.sha }}
     timeout-minutes: 45
     strategy:
       fail-fast: false

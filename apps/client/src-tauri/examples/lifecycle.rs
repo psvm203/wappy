@@ -299,6 +299,62 @@ fn main() -> Result<(), String> {
             let desktop = handle
                 .get_webview_window("desktop")
                 .ok_or("Missing character window")?;
+            println!("CHECK: support diagnostics and restricted browser permissions");
+            sidebar.eval(r#"
+                document.querySelector('.support-panel').open = true;
+                window.__originalClipboard = navigator.clipboard;
+                Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+                    writeText: async value => {
+                        const displayed = document.querySelector('.support-panel textarea').value;
+                        document.body.dataset.supportCopied = String(value === displayed && value.startsWith('Wappy 문제 확인 정보'));
+                    }
+                }});
+            "#).map_err(|error| error.to_string())?;
+            text_rendered(
+                &sidebar,
+                ".support-panel textarea",
+                &format!("앱 버전: {}", handle.package_info().version),
+                true,
+            )?;
+            if let Ok(build) = std::env::var("VITE_BUILD_ID") {
+                if build.len() == 40 && build.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    text_rendered(
+                        &sidebar,
+                        ".support-panel textarea",
+                        &format!("빌드: {}", &build[..12]),
+                        true,
+                    )?;
+                }
+            }
+            click_button(&sidebar, "문제 확인 정보 복사")?;
+            text_rendered(&sidebar, "body[data-support-copied='true']", "", true)?;
+            for window in [&sidebar, &desktop] {
+                let requests = if window.label() == "main" {
+                    serde_json::json!([
+                        {"url": "https://github.com/psvm203/wappy/issues/new?body=scope-check"},
+                        {"url": "https://example.invalid/wappy-scope-check"},
+                        {"url": "file:///wappy-scope-check"},
+                        {"url": "https://github.com/psvm203/wappy/issues/new", "with": "wappy-scope-check"}
+                    ])
+                } else {
+                    serde_json::json!([{"url": "https://github.com/psvm203/wappy/issues/new"}])
+                };
+                window
+                    .eval(format!(
+                        r#"(async () => {{
+                    const results = await Promise.all({requests}.map(args =>
+                        window.__TAURI_INTERNALS__.invoke('plugin:opener|open_url', args)
+                            .then(() => false, error => /not allowed/i.test(String(error)))
+                    ));
+                    document.body.dataset.supportScopeDenied = String(results.every(Boolean));
+                }})()"#
+                    ))
+                    .map_err(|error| error.to_string())?;
+                text_rendered(window, "body[data-support-scope-denied='true']", "", true)?;
+            }
+            sidebar
+                .eval("document.querySelector('.support-panel').open = false; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: window.__originalClipboard }); delete window.__originalClipboard;")
+                .map_err(|error| error.to_string())?;
             let autostart = std::env::args().any(|arg| arg == "--autostart");
             if sidebar.is_visible().unwrap_or(false) == autostart {
                 return Err("Initial sidebar visibility did not match the launch mode".into());

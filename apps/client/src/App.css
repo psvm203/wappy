@@ -728,6 +728,28 @@
 .server-check {
   margin: 12px 0;
 }
+.support-panel {
+  margin-top: 20px;
+  text-align: left;
+}
+.support-panel summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.support-panel h2 {
+  margin-top: 20px;
+}
+.support-panel textarea {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.support-link {
+  display: block;
+  margin: 12px 0 18px;
+  color: #52683d;
+  font-size: 12px;
+}
 .hint {
   font-size: 10px;
   color: #68745e;

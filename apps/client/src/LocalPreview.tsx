@@ -5,12 +5,14 @@ import { ProfileForm } from "./ProfileForm";
 export function LocalPreview({
   profile,
   controls,
+  support,
   error,
   onChange,
   onExit,
 }: {
   profile: ProfileInput;
   controls: ReactNode;
+  support: ReactNode;
   error: string;
   onChange: (profile: ProfileInput) => void;
   onExit: () => void;
@@ -52,6 +54,7 @@ export function LocalPreview({
           {error}
         </p>
       )}
+      {support}
     </section>
   );
 }

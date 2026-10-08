@@ -45,6 +45,7 @@ import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
 import { ServerCheck } from "./ServerCheck";
+import { SupportPanel } from "./SupportPanel";
 import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
@@ -619,6 +620,16 @@ function App() {
     </section>
   );
 
+  const support = (
+    <SupportPanel
+      desktop={desktop}
+      connection={localPreview ? "preview" : session ? connection : "none"}
+      server={localPreview ? null : (session?.server ?? server)}
+      paused={motionPaused}
+      visible={charactersVisible}
+    />
+  );
+
   if (compact && state)
     return (
       <main className="sidebar compact-sidebar">
@@ -746,6 +757,7 @@ function App() {
       {!session && localPreview ? (
         <LocalPreview
           profile={localPreview.self}
+          support={support}
           controls={desktopControls}
           error={error || desktopError}
           onChange={previewLocally}
@@ -891,6 +903,7 @@ function App() {
             </p>
           )}
           {desktop && <StartupSettings />}
+          {support}
         </div>
       ) : (
         <>
@@ -1420,6 +1433,7 @@ function App() {
                   </button>
                 </section>
                 {desktop && <StartupSettings />}
+                {support}
               </>
             )}
           </div>

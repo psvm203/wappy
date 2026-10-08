@@ -120,6 +120,11 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         }
     }));
     builder
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
         .manage(state_sync::StatePolling::default())
         .on_page_load(|webview, payload| {
             if webview.label() == "main"
