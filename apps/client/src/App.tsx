@@ -562,7 +562,7 @@ function App() {
     } catch {
       throw new ApiError(
         400,
-        "올바른 서버 주소를 입력해 주세요. 예: http://localhost:3001",
+        "올바른 서버 주소를 입력해 주세요. 예: https://wappy-api.waps.im",
       );
     }
   }

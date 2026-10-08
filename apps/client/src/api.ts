@@ -9,7 +9,7 @@ export { serverUrl } from "./invitations";
 export { SESSION_KEY, loadSession, type SavedSession } from "./sessions";
 
 export const DEFAULT_SERVER =
-  import.meta.env.VITE_API_URL || "http://localhost:3001";
+  import.meta.env.VITE_API_URL || "https://wappy-api.waps.im";
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

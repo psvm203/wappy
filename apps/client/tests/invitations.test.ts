@@ -85,13 +85,14 @@ test("shared invitations preserve the server and reject ambiguous or secret inpu
     assert.throws(() => parseInvitation(input));
   assert.throws(() => formatInvitation("https://example.test", "bad-code"));
   for (const server of [
-    "http://localhost:3001",
+    "http://localhost",
     "http://dev.localhost",
     "http://127.0.0.2",
     "http://[::1]:3001",
   ])
     assert.equal(isLocalServer(server), true);
   for (const server of [
+    "https://wappy-api.waps.im",
     "https://example.test",
     "https://localhost.example.test",
     "http://192.168.1.50:3001",
