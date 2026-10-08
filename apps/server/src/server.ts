@@ -158,6 +158,7 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       text TEXT NOT NULL, sent_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
@@ -172,6 +173,15 @@ export function createApp(options: {
     CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
     CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
   `);
+  if (
+    !db
+      .prepare("PRAGMA table_info(chat_messages)")
+      .all()
+      .some((column) => column.name === "recipient_id")
+  )
+    db.exec(
+      "ALTER TABLE chat_messages ADD COLUMN recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE",
+    );
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
@@ -222,7 +232,7 @@ export function createApp(options: {
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
   const selectMessages = db.prepare(`
-    SELECT id, sender_id AS senderId, text, sent_at AS sentAt FROM chat_messages
+    SELECT id, sender_id AS senderId, recipient_id AS recipientId, text, sent_at AS sentAt FROM chat_messages
     WHERE id IN (
       SELECT id FROM chat_messages WHERE sender_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE user_id = ?
@@ -617,6 +627,7 @@ export function createApp(options: {
           const presence = selectPresence.get(self!.id);
           const state: Output<"GET /state"> = {
             self: self!,
+            directChat: true,
             messages: (
               selectMessages.all(
                 self!.id,
@@ -624,8 +635,15 @@ export function createApp(options: {
                 self!.id,
                 time - CHAT_TTL_MS,
                 CHAT_HISTORY_LIMIT,
-              ) as unknown as ChatMessage[]
-            ).reverse(),
+              ) as unknown as (Omit<ChatMessage, "recipientId"> & {
+                recipientId: string | null;
+              })[]
+            )
+              .reverse()
+              .map(({ recipientId, ...message }) => ({
+                ...message,
+                ...(recipientId === null ? {} : { recipientId }),
+              })),
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
               revision: presence ? Number(presence.revision) : 0,
@@ -681,13 +699,35 @@ export function createApp(options: {
           res.end(unchanged ? undefined : body);
           break;
         }
-        case "POST /chat": {
+        case "POST /chat":
+        case "POST /chat/direct": {
           let text;
           try {
             text = parseChatText(isRecord(body) ? body.text : undefined);
           } catch (error) {
             throw new HttpError(400, (error as Error).message);
           }
+          const recipientId =
+            route === "POST /chat/direct" ? field(body, "friendId") : undefined;
+          if (
+            route === "POST /chat" &&
+            isRecord(body) &&
+            ("friendId" in body || "recipientId" in body)
+          )
+            throw new HttpError(400, "1:1 채팅 전송 경로를 사용해 주세요.");
+          const pair = recipientId ? [self!.id, recipientId].sort() : undefined;
+          if (
+            pair &&
+            !db
+              .prepare(
+                "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
+              )
+              .get(pair[0]!, pair[1]!)
+          )
+            throw new HttpError(
+              404,
+              "연결된 친구에게만 1:1 메시지를 보낼 수 있어요.",
+            );
           const time = now();
           const last = db
             .prepare(
@@ -704,16 +744,23 @@ export function createApp(options: {
             id = Number(
               db
                 .prepare(
-                  "INSERT INTO chat_messages (sender_id, text, sent_at) VALUES (?, ?, ?)",
+                  "INSERT INTO chat_messages (sender_id, recipient_id, text, sent_at) VALUES (?, ?, ?, ?)",
                 )
-                .run(self!.id, text, time).lastInsertRowid,
+                .run(self!.id, recipientId ?? null, text, time).lastInsertRowid,
             );
             // Snapshot the audience. New/reconnected friends cannot read earlier messages.
-            db.prepare(
-              `INSERT INTO chat_recipients
+            if (pair) {
+              db.prepare("INSERT INTO chat_recipients VALUES (?, ?, ?)").run(
+                id,
+                pair[0]!,
+                pair[1]!,
+              );
+            } else
+              db.prepare(
+                `INSERT INTO chat_recipients
               SELECT ?, user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?
             `,
-            ).run(id, self!.id, self!.id);
+              ).run(id, self!.id, self!.id);
             db.prepare(
               `DELETE FROM chat_messages WHERE sender_id = ? AND id NOT IN (
               SELECT id FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT ?
@@ -727,7 +774,13 @@ export function createApp(options: {
           reply(
             res,
             route,
-            { id, senderId: self!.id, text, sentAt: time },
+            {
+              id,
+              senderId: self!.id,
+              ...(recipientId ? { recipientId } : {}),
+              text,
+              sentAt: time,
+            },
             201,
           );
           break;
@@ -857,9 +910,20 @@ export function createApp(options: {
         }
         case "POST /friends/remove": {
           const pair = [self!.id, field(body, "friendId")].sort();
-          db.prepare(
-            "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
-          ).run(pair[0]!, pair[1]!);
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            db.prepare(
+              `DELETE FROM chat_messages
+              WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)`,
+            ).run(pair[0]!, pair[1]!, pair[1]!, pair[0]!);
+            db.prepare(
+              "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
+            ).run(pair[0]!, pair[1]!);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
           reply(res, route, { ok: true });
           break;
         }

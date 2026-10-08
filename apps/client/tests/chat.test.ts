@@ -8,7 +8,80 @@ import {
   parseChatText,
   parseSidebarState,
 } from "@wappy/api";
-import { latestChat, movedForDrag } from "../src/chat.ts";
+import {
+  chatBubbleText,
+  conversationMessages,
+  latestChat,
+  movedForDrag,
+} from "../src/chat.ts";
+
+test("private conversations keep their audience and never expose contents in character bubbles", () => {
+  const self = { id: "alice", name: "Alice", character: "cat", status: "" };
+  const bob = { ...self, id: "bob", online: false };
+  const carol = { ...bob, id: "carol" };
+  const broadcast = {
+    id: 1,
+    senderId: "bob",
+    text: "모두 안녕",
+    sentAt: 1_800_000_000_000,
+  };
+  const incoming = {
+    ...broadcast,
+    id: 2,
+    recipientId: "alice",
+    text: "둘만의 이야기",
+  };
+  const outgoing = {
+    ...incoming,
+    id: 3,
+    senderId: "alice",
+    recipientId: "bob",
+  };
+  const other = { ...outgoing, id: 4, recipientId: "carol" };
+  const messages = [broadcast, incoming, outgoing, other];
+  assert.deepEqual(
+    parseSidebarState({
+      self,
+      friends: [bob, carol],
+      messages,
+      directChat: true,
+    }).messages,
+    messages,
+  );
+  assert.deepEqual(conversationMessages(messages, self.id, null), [broadcast]);
+  assert.deepEqual(conversationMessages(messages, self.id, "bob"), [
+    incoming,
+    outgoing,
+  ]);
+  assert.deepEqual(conversationMessages(messages, self.id, "carol"), [other]);
+  assert.deepEqual(conversationMessages(undefined, self.id, "bob"), []);
+  assert.equal(chatBubbleText(broadcast), broadcast.text);
+  assert.equal(chatBubbleText(incoming).includes(incoming.text), false);
+  assert.match(chatBubbleText(incoming), /1:1/);
+  for (const recipientId of [
+    null,
+    "",
+    12,
+    "bob",
+    "stranger",
+    "carol",
+    "x".repeat(129),
+  ])
+    assert.throws(() =>
+      parseSidebarState({
+        self,
+        friends: [bob, carol],
+        messages: [{ ...incoming, recipientId }],
+      }),
+    );
+  assert.throws(() =>
+    parseSidebarState({ self, friends: [bob], directChat: "true" }),
+  );
+  assert.equal(
+    parseSidebarState({ self, friends: [bob] }).directChat,
+    undefined,
+  );
+});
 
 test("chat validates text, audience, ordering and history bounds at the server boundary", () => {
   const self = { id: "alice", name: "Alice", character: "cat", status: "" };

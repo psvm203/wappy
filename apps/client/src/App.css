@@ -173,6 +173,29 @@
   background: #fffefa;
   font: inherit;
 }
+.chat-recipient {
+  margin-top: 16px;
+}
+.chat-recipient select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px;
+  border: 1px solid #b6c5a7;
+  border-radius: 8px;
+  background: #fffefa;
+  color: inherit;
+  font: inherit;
+}
+.chat-recipient select:focus-visible {
+  outline: 2px solid #73985c;
+  outline-offset: 3px;
+}
+.chat-audience {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .character.asleep .character-body {
   transform-origin: 50px 96px;
   animation: sleeping-breathe 3s ease-in-out infinite;

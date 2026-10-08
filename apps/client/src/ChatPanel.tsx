@@ -7,6 +7,7 @@ import {
 } from "@wappy/api";
 import { errorMessage } from "./api";
 import { Character } from "./Character";
+import { chatBubbleText, conversationMessages } from "./chat";
 
 export function ChatBubble({ message }: { message?: ChatMessage }) {
   const [expired, setExpired] = useState<number | null>(null);
@@ -25,8 +26,8 @@ export function ChatBubble({ message }: { message?: ChatMessage }) {
   )
     return null;
   return (
-    <p className="chat-bubble" title={message.text}>
-      {message.text}
+    <p className="chat-bubble" title={chatBubbleText(message)}>
+      {chatBubbleText(message)}
     </p>
   );
 }
@@ -35,24 +36,49 @@ export function ChatPanel({
   state,
   connected,
   focusRequest,
+  active,
+  recipientId,
+  onRecipientChange,
   onSend,
 }: {
   state: SidebarState;
   connected: boolean;
   focusRequest: number;
-  onSend: (text: string) => Promise<void>;
+  active: boolean;
+  recipientId: string | null;
+  onRecipientChange: (id: string | null) => void;
+  onSend: (text: string, recipientId: string | null) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState("");
+  const [drafts, setDrafts] = useState(() => new Map<string, string>());
+  const conversation = recipientId ?? "";
+  const draft = drafts.get(conversation) ?? "";
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const sending = useRef(false);
+  const [error, setError] = useState<{
+    conversation: string;
+    text: string;
+  } | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const atBottom = useRef(true);
-  const supported = state.messages !== undefined;
-  const lastId = state.messages?.[state.messages.length - 1]?.id;
+  const recipient = state.friends.find((friend) => friend.id === recipientId);
+  const supported =
+    state.messages !== undefined &&
+    (recipientId === null || state.directChat === true);
+  const available = recipientId === null || !!recipient;
+  const messages = conversationMessages(
+    state.messages,
+    state.self.id,
+    recipientId,
+  );
+  const lastId = messages[messages.length - 1]?.id;
   useEffect(() => {
-    input.current?.focus();
-  }, [focusRequest]);
+    if (active) input.current?.focus();
+  }, [focusRequest, active]);
+  useEffect(() => {
+    atBottom.current = true;
+    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, [recipientId, active]);
   useEffect(() => {
     if (list.current && atBottom.current)
       list.current.scrollTop = list.current.scrollHeight;
@@ -60,19 +86,30 @@ export function ChatPanel({
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    if (busy || !connected || !supported || !draft.trim()) return;
+    if (
+      sending.current ||
+      !connected ||
+      !supported ||
+      !available ||
+      !draft.trim()
+    )
+      return;
+    sending.current = true;
     setBusy(true);
-    setError("");
+    setError(null);
     try {
-      await onSend(draft);
-      setDraft("");
+      await onSend(draft, recipientId);
+      setDrafts((current) => new Map(current).set(conversation, ""));
       atBottom.current = true;
       if (list.current) list.current.scrollTop = list.current.scrollHeight;
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError({ conversation, text: errorMessage(cause) });
     } finally {
+      sending.current = false;
       setBusy(false);
-      requestAnimationFrame(() => input.current?.focus());
+      requestAnimationFrame(() => {
+        if (input.current?.getClientRects().length) input.current.focus();
+      });
     }
   }
 
@@ -80,11 +117,39 @@ export function ChatPanel({
   return (
     <section className="chat-panel" aria-label="친구들과 채팅">
       <div className="section-heading">
-        <h1>함께 이야기해요</h1>
+        <h1>{recipientId === null ? "함께 이야기해요" : "둘이 이야기해요"}</h1>
       </div>
+      <div className="field chat-recipient">
+        <label htmlFor="chat-recipient">받는 사람</label>
+        <select
+          id="chat-recipient"
+          value={conversation}
+          onChange={(event) => onRecipientChange(event.target.value || null)}
+          disabled={busy}
+        >
+          <option value="">모든 친구에게</option>
+          {recipientId !== null && !recipient && (
+            <option value={recipientId}>연결이 해제된 친구</option>
+          )}
+          {state.friends.map((friend) => (
+            <option key={friend.id} value={friend.id}>
+              {friend.name} 님에게만 · 1:1
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="chat-audience">
+        {recipientId === null
+          ? "보내는 순간 연결된 모든 친구에게 보여요."
+          : recipient
+            ? `${recipient.name} 님과 나만 이 대화를 볼 수 있어요.`
+            : "친구 연결이 해제되어 이 대화를 보낼 수 없어요."}
+      </p>
       <p className="hint">
-        보내는 순간 연결된 모든 친구에게 보여요. 말풍선은 1분, 대화는 최근
-        24시간의 50개까지 표시해요.
+        {recipientId === null
+          ? "말풍선은 1분간 표시해요. "
+          : "1:1 내용은 바탕화면 말풍선에 표시하지 않아요. "}
+        전체 채팅 중 최근 24시간의 50개까지 보관해요.
       </p>
       <ol
         className="chat-messages"
@@ -100,7 +165,7 @@ export function ChatPanel({
             32;
         }}
       >
-        {state.messages?.map((message) => {
+        {messages.map((message) => {
           const sender = profiles.find(
             (profile) => profile.id === message.senderId,
           );
@@ -132,12 +197,13 @@ export function ChatPanel({
           );
         })}
       </ol>
-      {supported && !state.messages?.length && (
+      {supported && available && !messages.length && (
         <p className="hint">아직 대화가 없어요. 먼저 말을 걸어 보세요.</p>
       )}
       {!supported && (
         <p className="hint">
-          이 서버는 채팅을 지원하지 않아요. 서버를 업데이트해 주세요.
+          이 서버는 {recipientId === null ? "채팅" : "1:1 채팅"}을 지원하지
+          않아요. 서버를 업데이트해 주세요.
         </p>
       )}
       {!connected && (
@@ -150,15 +216,20 @@ export function ChatPanel({
       )}
       <form onSubmit={(event) => void send(event)}>
         <label className="field">
-          친구들에게 한마디
+          {recipientId === null
+            ? "친구들에게 한마디"
+            : `${recipient?.name ?? "연결이 해제된 친구"} 님에게 한마디`}
           <textarea
             ref={input}
             rows={3}
             maxLength={MAX_CHAT_LENGTH}
             value={draft}
-            disabled={busy || !supported}
+            disabled={busy || !supported || !available}
             placeholder="무슨 이야기를 나눌까요?"
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              const text = event.target.value;
+              setDrafts((current) => new Map(current).set(conversation, text));
+            }}
             onKeyDown={(event) => {
               if (
                 event.key === "Enter" &&
@@ -178,14 +249,20 @@ export function ChatPanel({
         <button
           className="primary"
           type="submit"
-          disabled={busy || !connected || !supported || !draft.trim()}
+          disabled={
+            busy || !connected || !supported || !available || !draft.trim()
+          }
         >
-          {busy ? "보내는 중…" : "친구들에게 보내기"}
+          {busy
+            ? "보내는 중…"
+            : recipientId === null
+              ? "친구들에게 보내기"
+              : `${recipient?.name ?? "친구"} 님에게만 보내기`}
         </button>
       </form>
-      {error && (
+      {error?.conversation === conversation && (
         <p className="error" role="alert">
-          {error}
+          {error.text}
         </p>
       )}
     </section>

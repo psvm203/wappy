@@ -1,5 +1,24 @@
 import { CHAT_BUBBLE_MS, type ChatMessage } from "@wappy/api";
 
+export function conversationMessages(
+  messages: readonly ChatMessage[] | undefined,
+  selfId: string,
+  friendId: string | null,
+) {
+  return (messages ?? []).filter((message) =>
+    friendId === null
+      ? message.recipientId === undefined
+      : (message.senderId === selfId && message.recipientId === friendId) ||
+        (message.senderId === friendId && message.recipientId === selfId),
+  );
+}
+
+export function chatBubbleText(message: ChatMessage) {
+  return message.recipientId
+    ? "🔒 1:1 메시지 · 채팅에서 확인해요"
+    : message.text;
+}
+
 export function latestChat(
   messages: readonly ChatMessage[] | undefined,
   senderId: string,

@@ -109,6 +109,7 @@ function App() {
   const [friendView, setFriendView] = useState<FriendView>("all");
   const friendSearch = useRef<HTMLInputElement>(null);
   const [chatFocus, setChatFocus] = useState(0);
+  const [chatRecipient, setChatRecipient] = useState<string | null>(null);
   const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
     null,
   );
@@ -155,7 +156,7 @@ function App() {
         !state.friends.some((friend) => friend.id === target.friendId))
     )
       return;
-    openChat();
+    openChat(target.friendId === state.self.id ? null : target.friendId);
   }, OPEN_CHAT_EVENT);
   const syncError = useDesktopSync({
     state: session ? (selection.ready ? state : null) : localPreview,
@@ -196,13 +197,14 @@ function App() {
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
+    setChatRecipient(null);
   }
 
   function applyState(next: SidebarState) {
     setState((current) => reconcilePresence(current, next));
   }
 
-  function openChat() {
+  function openChat(recipientId: string | null = null) {
     if (!session) return;
     const active = session;
     void windowAction(async () => {
@@ -214,20 +216,45 @@ function App() {
       if (currentSession.current !== active) return;
       setCompact(false);
       setPanel("chat");
+      setChatRecipient(recipientId);
       setChatFocus((value) => value + 1);
     });
   }
 
-  async function sendChat(text: string) {
+  async function sendChat(text: string, recipientId: string | null) {
     if (!session || connection !== "online")
       throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
     const active = session;
+    if (
+      recipientId !== null &&
+      (!state?.directChat ||
+        !state.friends.some((friend) => friend.id === recipientId))
+    )
+      throw new ApiError(
+        409,
+        "1:1 채팅 지원 여부와 친구 연결을 다시 확인해 주세요.",
+      );
     const message = parseChatMessage(
-      await request(active, "POST /chat", { text }),
+      recipientId === null
+        ? await request(active, "POST /chat", { text })
+        : await request(active, "POST /chat/direct", {
+            text,
+            friendId: recipientId,
+          }),
     );
+    if (
+      message.senderId !== state?.self.id ||
+      message.recipientId !== (recipientId ?? undefined)
+    )
+      throw new ApiError(
+        502,
+        "메시지 전송 결과를 확인하지 못했어요. 대화 목록을 확인해 주세요.",
+      );
     if (currentSession.current !== active) return;
     setState((current) =>
-      current
+      current &&
+      (recipientId === null ||
+        current.friends.some((friend) => friend.id === recipientId))
         ? {
             ...current,
             messages: [
@@ -1084,14 +1111,19 @@ function App() {
             ))}
           </nav>
           <div className="scroll-area content">
-            {state && panel === "chat" && (
-              <ChatPanel
-                key={`${session.server}:${state.self.id}`}
-                state={state}
-                connected={connection === "online"}
-                focusRequest={chatFocus}
-                onSend={sendChat}
-              />
+            {state && (
+              <div hidden={panel !== "chat"}>
+                <ChatPanel
+                  key={`${session.server}:${session.token}:${state.self.id}`}
+                  state={state}
+                  connected={connection === "online"}
+                  focusRequest={chatFocus}
+                  active={panel === "chat"}
+                  recipientId={chatRecipient}
+                  onRecipientChange={setChatRecipient}
+                  onSend={sendChat}
+                />
+              </div>
             )}
             {desktopError && (
               <p className="error" role="alert">
@@ -1225,8 +1257,8 @@ function App() {
                         <button
                           type="button"
                           className="friend-scene character-chat"
-                          aria-label={`${friend.name} 캐릭터로 채팅 열기`}
-                          onClick={openChat}
+                          aria-label={`${friend.name} 캐릭터로 1:1 채팅 열기`}
+                          onClick={() => openChat(friend.id)}
                         >
                           <Character
                             kind={friend.character}
@@ -1245,6 +1277,12 @@ function App() {
                           <ChatBubble
                             message={latestChat(state.messages, friend.id)}
                           />
+                          <button
+                            className="text-button"
+                            onClick={() => openChat(friend.id)}
+                          >
+                            1:1 채팅
+                          </button>
                           <small>
                             {connection !== "online"
                               ? "접속 상태 확인 중"
@@ -1538,7 +1576,7 @@ function App() {
                 type="button"
                 className="character-chat"
                 aria-label="내 캐릭터로 채팅 열기"
-                onClick={openChat}
+                onClick={() => openChat()}
               >
                 <Character kind={state.self.character} />
               </button>

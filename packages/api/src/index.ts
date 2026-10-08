@@ -22,6 +22,8 @@ export const CHAT_COOLDOWN_MS = 1_000;
 export interface ChatMessage {
   id: number;
   senderId: string;
+  /** Present only for a message addressed to one friend. */
+  recipientId?: string;
   text: string;
   sentAt: number;
 }
@@ -49,6 +51,8 @@ export interface SidebarState {
   presence?: PresenceSettings;
   /** Absent on servers that do not support chat. */
   messages?: ChatMessage[];
+  /** Explicit support is required before enabling private message composition. */
+  directChat?: true;
 }
 export interface PresenceSettings {
   sharing: boolean;
@@ -93,6 +97,10 @@ export interface ApiRoutes {
   };
   "GET /state": { input: undefined; output: SidebarState };
   "POST /chat": { input: { text: string }; output: ChatMessage };
+  "POST /chat/direct": {
+    input: { text: string; friendId: string };
+    output: ChatMessage;
+  };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "POST /profile/delete": {
     input: { profileId: string };
@@ -135,6 +143,11 @@ export function parseChatMessage(value: unknown): ChatMessage {
     typeof value.senderId !== "string" ||
     !value.senderId ||
     value.senderId.length > 128 ||
+    (value.recipientId !== undefined &&
+      (typeof value.recipientId !== "string" ||
+        !value.recipientId ||
+        value.recipientId.length > 128 ||
+        value.recipientId === value.senderId)) ||
     typeof value.sentAt !== "number" ||
     !Number.isSafeInteger(value.sentAt) ||
     value.sentAt <= 0 ||
@@ -144,6 +157,9 @@ export function parseChatMessage(value: unknown): ChatMessage {
   return {
     id: value.id,
     senderId: value.senderId,
+    ...(value.recipientId === undefined
+      ? {}
+      : { recipientId: value.recipientId as string }),
     text: parseChatText(value.text),
     sentAt: value.sentAt,
   };
@@ -254,14 +270,23 @@ export function parseSidebarState(value: unknown): SidebarState {
       const message = parseChatMessage(input);
       if (!ids.has(message.senderId) || message.id <= previousId)
         throw new Error("잘못된 채팅 순서 또는 보낸 사람입니다.");
+      if (
+        message.recipientId !== undefined &&
+        (!ids.has(message.recipientId) ||
+          (message.senderId !== self.id && message.recipientId !== self.id))
+      )
+        throw new Error("잘못된 1:1 채팅 받는 사람입니다.");
       previousId = message.id;
       return message;
     });
   }
+  if (value.directChat !== undefined && value.directChat !== true)
+    throw new Error("잘못된 1:1 채팅 지원 응답입니다.");
   return {
     self,
     friends,
     ...(messages === undefined ? {} : { messages }),
+    ...(value.directChat === true ? { directChat: true as const } : {}),
     ...(value.presence === undefined
       ? {}
       : { presence: parsePresenceSettings(value.presence) }),
