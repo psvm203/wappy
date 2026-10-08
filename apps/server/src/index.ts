@@ -12,6 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const host = process.env.HOST ?? "127.0.0.1";
 const server = createApp({
   databasePath,
+  trustProxy: process.env.TRUST_PROXY === "1",
   origins: process.env.ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),

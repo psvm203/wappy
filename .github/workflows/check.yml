@@ -9,6 +9,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  server-container:
+    name: Check server container and HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node .github/scripts/check-server-container.mjs
   check:
     name: Check ${{ matrix.artifact }}
     timeout-minutes: 45

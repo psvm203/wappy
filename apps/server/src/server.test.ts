@@ -19,6 +19,49 @@ import {
 } from "@wappy/api";
 import { createApp } from "./server.ts";
 
+test("proxy rate limits require opt-in and use only the last valid forwarded address", async () => {
+  for (const trustProxy of [false, true]) {
+    const server = createApp({ databasePath: ":memory:", trustProxy });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    async function call(forwarded?: string) {
+      const response = await fetch(`http://127.0.0.1:${address.port}/session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(forwarded === undefined ? {} : { "X-Forwarded-For": forwarded }),
+        },
+        body: "{}",
+      });
+      await response.body?.cancel();
+      return response.status;
+    }
+    try {
+      for (let i = 0; i < 10; i++)
+        assert.equal(await call(`192.0.2.${i}, 198.51.100.1`), 400);
+      assert.equal(await call("203.0.113.1, 198.51.100.1"), 429);
+      assert.equal(await call("198.51.100.2"), trustProxy ? 400 : 429);
+      assert.equal(await call("2001:db8::1"), trustProxy ? 400 : 429);
+      if (trustProxy) {
+        // Invalid/missing final addresses share the socket address's allowance;
+        // never fall back to an attacker-controlled earlier address in the list.
+        for (let i = 0; i < 10; i++)
+          assert.equal(await call(`192.0.2.${i}, invalid-${i}`), 400);
+        assert.equal(await call("198.51.100.3, unknown"), 429);
+        assert.equal(await call("198.51.100.4,"), 429);
+      }
+      assert.equal(await call(), 429);
+    } finally {
+      const closed = once(server, "close");
+      server.close();
+      server.closeAllConnections();
+      await closed;
+    }
+  }
+});
+
 test("public invitation previews are read-only, bounded and reveal only invitation display data", async () => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-preview-"));
   const databasePath = join(directory, "test.sqlite");

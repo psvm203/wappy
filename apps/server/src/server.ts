@@ -5,6 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { isIP } from "node:net";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
@@ -81,6 +82,7 @@ function reply<R extends Route>(
 export function createApp(options: {
   databasePath: string;
   origins?: string[];
+  trustProxy?: boolean;
   now?: () => number;
 }) {
   const db = new DatabaseSync(options.databasePath);
@@ -172,7 +174,16 @@ export function createApp(options: {
         route === "POST /session" || route === "POST /session/recover";
       const publicPreview = route === "POST /invites/preview";
       if (req.method !== "GET") {
-        const key = `${req.socket.remoteAddress}:${publicSession ? "session" : publicPreview ? "preview" : "write"}`;
+        // Opt in only behind one trusted proxy with no direct access to this port.
+        // Its appended, rightmost address wins over any client-supplied prefix.
+        const forwarded = req.headers["x-forwarded-for"];
+        const address =
+          options.trustProxy && typeof forwarded === "string"
+            ? forwarded.split(",").at(-1)?.trim()
+            : undefined;
+        const ip =
+          address && isIP(address) ? address : req.socket.remoteAddress;
+        const key = `${ip}:${publicSession ? "session" : publicPreview ? "preview" : "write"}`;
         const limit = limits.get(key);
         const current =
           limit && limit.until > now()
