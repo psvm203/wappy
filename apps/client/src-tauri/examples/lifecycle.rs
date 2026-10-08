@@ -7,7 +7,7 @@ use std::{
     net::TcpListener,
     process::Command,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver},
         Arc,
     },
@@ -100,26 +100,36 @@ fn text_rendered(
     text: &str,
     present: bool,
 ) -> Result<(), String> {
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    // A delayed signal from an earlier observation must never satisfy this one.
+    let event = format!(
+        "wappy:lifecycle-rendered-{}",
+        SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    );
+    let js_event = serde_json::to_string(&event).map_err(|error| error.to_string())?;
     let selector = serde_json::to_string(selector).map_err(|error| error.to_string())?;
     let text = serde_json::to_string(text).map_err(|error| error.to_string())?;
     let (sent, received) = mpsc::channel();
-    let listener = window
-        .app_handle()
-        .listen_any("wappy:lifecycle-rendered", move |_| {
-            let _ = sent.send(());
-        });
+    let listener = window.app_handle().listen_any(event, move |_| {
+        let _ = sent.send(());
+    });
     window.eval(format!(r#"(() => {{
+      let finished = false;
       const check = () => {{
+        if (finished) return;
         const element = document.querySelector({selector});
         if (!!element === {present} && (!element || element.textContent.includes({text}))) {{
+          finished = true;
           observer.disconnect();
           document.removeEventListener('focusin', check);
-          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-rendered', payload: null }});
+          window.removeEventListener('focus', check);
+          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: {js_event}, payload: null }});
         }}
       }};
       const observer = new MutationObserver(check);
       observer.observe(document.body, {{ childList: true, subtree: true, characterData: true, attributes: true }});
       document.addEventListener('focusin', check);
+      window.addEventListener('focus', check);
       check();
     }})()"#)).map_err(|error| error.to_string())?;
     let result = received
@@ -128,6 +138,31 @@ fn text_rendered(
             format!("Expected UI did not render ({selector}, present={present}): {error}")
         });
     window.app_handle().unlisten(listener);
+    if result.is_err() {
+        let (sent, received) = mpsc::channel();
+        let listener = window
+            .app_handle()
+            .listen_any("wappy:lifecycle-diagnostic", move |event| {
+                let _ = sent.send(event.payload().to_string());
+            });
+        let _ = window.eval(format!(
+            r#"window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{
+          target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-diagnostic',
+          payload: {{ focused: document.hasFocus(), visible: document.visibilityState,
+            active: document.activeElement?.outerHTML.slice(0, 500),
+            matched: document.querySelector({selector})?.outerHTML.slice(0, 500),
+            friend: document.querySelector('.friend-card')?.outerHTML.slice(0, 500) }}
+        }});"#
+        ));
+        eprintln!(
+            "UI DIAGNOSTIC: native focused={:?}, visible={:?}, minimized={:?}; DOM={:?}",
+            window.is_focused(),
+            window.is_visible(),
+            window.is_minimized(),
+            received.recv_timeout(Duration::from_secs(2))
+        );
+        window.app_handle().unlisten(listener);
+    }
     result
 }
 
@@ -383,6 +418,7 @@ fn main() -> Result<(), String> {
             click_button(&desktop, "Friend 님의 인사 보기")?;
             until(|| sidebar.is_visible().unwrap_or(false))?;
             text_rendered(&sidebar, ".sidebar:not(.compact-sidebar)", "", true)?;
+            println!("CHECK: friend card focus after restoring the compact hidden sidebar");
             text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
             text_rendered(
                 &sidebar,
@@ -398,6 +434,7 @@ fn main() -> Result<(), String> {
             until(|| {
                 sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
             })?;
+            println!("CHECK: friend card focus after restoring the minimized sidebar");
             text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
