@@ -15,6 +15,7 @@ export function ProfileForm({
   children,
   beforeProfile,
   canSave = true,
+  submitLabel = "이 모습으로 함께하기",
 }: {
   initial: ProfileInput;
   busy: boolean;
@@ -22,6 +23,7 @@ export function ProfileForm({
   children?: ReactNode;
   beforeProfile?: ReactNode;
   canSave?: boolean;
+  submitLabel?: string;
 }) {
   const [profile, setProfile] = useState(initial);
   function submit(event: FormEvent) {
@@ -86,7 +88,7 @@ export function ProfileForm({
           disabled={!profile.name.trim() || !canSave}
           type="submit"
         >
-          {busy ? "저장하는 중…" : "이 모습으로 함께하기"}
+          {busy ? "저장하는 중…" : submitLabel}
           <span aria-hidden="true">↗</span>
         </button>
       </fieldset>

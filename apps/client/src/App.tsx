@@ -10,6 +10,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   parseSidebarState,
   parsePresenceSettings,
+  parseProfile,
   isRecord,
   type Invite,
   type ProfileInput,
@@ -37,6 +38,7 @@ import {
 import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
+import { LocalPreview } from "./LocalPreview";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
@@ -74,6 +76,8 @@ function App() {
     "create",
   );
   const [state, setState] = useState<SidebarState | null>(null);
+  const [localPreview, setLocalPreview] = useState<SidebarState | null>(null);
+  const previewStart = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
@@ -133,9 +137,9 @@ function App() {
     });
   });
   const syncError = useDesktopSync({
-    state: selection.ready ? state : null,
+    state: session ? (selection.ready ? state : null) : localPreview,
     profileKey,
-    connected: connection === "online",
+    connected: !!session && connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
     hiddenIds: selection.hiddenIds,
@@ -161,6 +165,7 @@ function App() {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
     currentSession.current = next;
     setSession(next);
+    setLocalPreview(null);
     setPresenceStatus("ready");
     setDeleteError("");
     setVerifiedInvitation("");
@@ -170,6 +175,19 @@ function App() {
 
   function applyState(next: SidebarState) {
     setState((current) => reconcilePresence(current, next));
+  }
+
+  function previewLocally(profile: ProfileInput) {
+    if (session) return;
+    try {
+      setLocalPreview({
+        self: { ...parseProfile(profile), id: "local-preview" },
+        friends: [],
+      });
+      setError("");
+    } catch (cause) {
+      setError((cause as Error).message);
+    }
   }
 
   useEffect(() => {
@@ -724,7 +742,19 @@ function App() {
         )}
       </header>
 
-      {!session ? (
+      {!session && localPreview ? (
+        <LocalPreview
+          profile={localPreview.self}
+          controls={desktopControls}
+          error={error || desktopError}
+          onChange={previewLocally}
+          onExit={() => {
+            setLocalPreview(null);
+            setError("");
+            requestAnimationFrame(() => previewStart.current?.focus());
+          }}
+        />
+      ) : !session ? (
         <div className="onboarding scroll-area">
           <div className="intro-art">
             <Character kind="bunny" />
@@ -743,6 +773,23 @@ function App() {
             친구들의 작은 존재감을
             <br />내 화면 한쪽에 놓아두세요.
           </p>
+          {desktop && (
+            <div className="local-preview-entry">
+              <button
+                ref={previewStart}
+                className="secondary"
+                disabled={busy}
+                onClick={() =>
+                  previewLocally({ ...emptyProfile, name: "체험 캐릭터" })
+                }
+              >
+                서버 없이 체험하기
+              </button>
+              <p className="hint">
+                프로필을 만들기 전에 바탕화면에서 함께 걸어봐요.
+              </p>
+            </div>
+          )}
           <nav className="onboarding-tabs" aria-label="시작 방법">
             {(
               [

@@ -81,8 +81,11 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .eval(format!(
             r#"(() => {{
       const click = () => {{
-        const button = [...document.querySelectorAll('button,label')].find(button =>
-          button.textContent.trim() === {label} || button.getAttribute('aria-label') === {label});
+        const button = [...document.querySelectorAll('button,label')].find(button => {{
+          const visible = button.cloneNode(true);
+          visible.querySelectorAll('[aria-hidden="true"]').forEach(node => node.remove());
+          return visible.textContent.trim() === {label} || button.getAttribute('aria-label') === {label};
+        }});
         const control = button?.querySelector('input') || button;
         if (control && !control.disabled) {{ observer.disconnect(); control.click(); }}
       }};
@@ -110,33 +113,29 @@ fn text_rendered(
     let selector = serde_json::to_string(selector).map_err(|error| error.to_string())?;
     let text = serde_json::to_string(text).map_err(|error| error.to_string())?;
     let (sent, received) = mpsc::channel();
-    let listener = window.app_handle().listen_any(event, move |_| {
-        let _ = sent.send(());
+    let listener = window.app_handle().listen_any(event, move |event| {
+        if let Ok(matches) = serde_json::from_str::<bool>(event.payload()) {
+            let _ = sent.send(matches);
+        }
     });
-    window.eval(format!(r#"(() => {{
-      let finished = false;
-      const check = () => {{
-        if (finished) return;
+    // Native polling also observes focus/style changes that have no DOM mutation,
+    // and does not depend on the WebView timers disabled by this smoke check.
+    let result = (|| -> Result<(), String> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            window.eval(format!(r#"(() => {{
         const element = document.querySelector({selector});
-        if (!!element === {present} && (!element || element.textContent.includes({text}))) {{
-          finished = true;
-          observer.disconnect();
-          document.removeEventListener('focusin', check);
-          window.removeEventListener('focus', check);
-          window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: {js_event}, payload: null }});
-        }}
-      }};
-      const observer = new MutationObserver(check);
-      observer.observe(document.body, {{ childList: true, subtree: true, characterData: true, attributes: true }});
-      document.addEventListener('focusin', check);
-      window.addEventListener('focus', check);
-      check();
-    }})()"#)).map_err(|error| error.to_string())?;
-    let result = received
-        .recv_timeout(Duration::from_secs(5))
-        .map_err(|error| {
-            format!("Expected UI did not render ({selector}, present={present}): {error}")
-        });
+        const matches = !!element === {present} && (!element || element.textContent.includes({text}));
+        window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: {js_event}, payload: matches }});
+      }})()"#)).map_err(|error| error.to_string())?;
+            if received.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .map_err(|error| error.to_string())? {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        Err("timed out after 5 seconds".into())
+    })().map_err(|error| format!("Expected UI did not render ({selector}, text={text}, present={present}): {error}"));
     window.app_handle().unlisten(listener);
     if result.is_err() {
         let (sent, received) = mpsc::channel();
@@ -297,6 +296,85 @@ fn main() -> Result<(), String> {
             // Wait for readback to re-enable the checkbox before toggling off.
             click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
             until(|| startup.0.is_enabled().is_ok_and(|enabled| !enabled))?;
+            println!("CHECK: local preview without a session or server requests");
+            let (server, requests) = presence_server()?;
+            let preview_server =
+                serde_json::to_string(&server).map_err(|error| error.to_string())?;
+            sidebar.eval(format!(r#"(() => {{
+                const input = document.querySelector('.server-settings input[type="url"]');
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, {preview_server});
+                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+            }})()"#)).map_err(|error| error.to_string())?;
+            click_button(&sidebar, "서버 없이 체험하기")?;
+            let preview = snapshot(&received, |value| {
+                value["state"]["self"]["id"] == "local-preview"
+            })
+            .map_err(|error| format!("Local preview did not start: {error}"))?;
+            if preview["connected"] != false
+                || preview["profileKey"] != serde_json::Value::Null
+                || preview["paused"] != initial["paused"]
+                || preview["visible"] != initial["visible"]
+                || preview["state"]["friends"] != serde_json::json!([])
+            {
+                return Err(
+                    "Local preview changed global preferences or claimed a server connection"
+                        .into(),
+                );
+            }
+            text_rendered(&desktop, ".resident-name", "체험 캐릭터", true)?;
+            sidebar.close().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
+            text_rendered(&desktop, ".resident-name", "체험 캐릭터", true)?;
+            client_lib::show_sidebar(&handle).map_err(|error| error.to_string())?;
+            click_button(&sidebar, "고양이")?;
+            click_button(&sidebar, "체험 모습 바꾸기")?;
+            snapshot(&received, |value| {
+                value["state"]["self"]["character"] == "cat"
+            })
+            .map_err(|error| format!("Local preview appearance did not change: {error}"))?;
+            text_rendered(
+                &desktop,
+                ".desktop-resident svg[aria-label='고양이 캐릭터']",
+                "",
+                true,
+            )?;
+            sidebar
+                .eval(
+                    r#"document.body.dataset.previewCredentialsSafe = String(
+                localStorage.getItem('wappy.session.v1') === null &&
+                localStorage.getItem('wappy.saved-sessions.v1') === null &&
+                !Object.keys(localStorage).some(key => key.startsWith('wappy.residents.v1:'))
+            );"#,
+                )
+                .map_err(|error| error.to_string())?;
+            text_rendered(
+                &sidebar,
+                "body[data-preview-credentials-safe='true']",
+                "",
+                true,
+            )?;
+            if requests.recv_timeout(Duration::from_millis(300)).is_ok() {
+                return Err("Local preview contacted the configured server".into());
+            }
+            click_button(&sidebar, "체험 끝내고 시작하기")?;
+            snapshot(&received, |value| value["state"] == serde_json::Value::Null)
+                .map_err(|error| format!("Local preview did not stop: {error}"))?;
+            text_rendered(&desktop, ".desktop-resident", "", false)?;
+            click_button(&sidebar, "서버 없이 체험하기")?;
+            snapshot(&received, |value| {
+                value["state"]["self"]["id"] == "local-preview"
+            })
+            .map_err(|error| format!("Local preview did not restart: {error}"))?;
+            sidebar
+                .eval("location.reload();")
+                .map_err(|error| error.to_string())?;
+            snapshot(&received, |value| value["state"] == serde_json::Value::Null)
+                .map_err(|error| format!("Local preview survived reload: {error}"))?;
+            text_rendered(&desktop, ".desktop-resident", "", false)?;
+            text_rendered(&sidebar, ".local-preview", "", false)?;
+            if startup.0.is_enabled().map_err(|error| error.to_string())? {
+                return Err("Local preview enabled login startup".into());
+            }
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             if handle.get_webview_window("main").is_none() || !desktop.is_visible().unwrap_or(false)
@@ -323,7 +401,6 @@ fn main() -> Result<(), String> {
             // The real sidebar is hidden and all WebView timers are disabled.
             // Presence must still poll, report a failure and reconnect using native time.
             println!("CHECK: hidden background connection and reconnect");
-            let (server, requests) = presence_server()?;
             let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
                 .map_err(|error| error.to_string())?;
@@ -513,7 +590,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, scoped greeting shortcut restores compact sidebar without consuming the wave, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: local preview without accounts/network, appearance changes, exit/reload cleanup, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, scoped greeting shortcut restores compact sidebar without consuming the wave, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);
