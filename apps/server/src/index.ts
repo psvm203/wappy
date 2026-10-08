@@ -14,6 +14,7 @@ const host = process.env.HOST ?? "127.0.0.1";
 const server = createApp({
   databasePath,
   kakao: kakaoConfig(process.env),
+  reportsEnabled: process.env.CHAT_REPORTS_ENABLED === "1",
   trustProxy: process.env.TRUST_PROXY === "1",
   origins: process.env.ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())

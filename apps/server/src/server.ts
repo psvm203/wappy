@@ -7,6 +7,7 @@ import {
 import { DatabaseSync } from "node:sqlite";
 import { isIP } from "node:net";
 import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
+import { createReports, ReportError } from "./reports.ts";
 import {
   INVITE_TTL_MS,
   ONLINE_TIMEOUT_MS,
@@ -17,6 +18,8 @@ import {
   CHAT_TTL_MS,
   isRecord,
   parseChatText,
+  parseChatMessageIds,
+  parseChatReportInput,
   parseProfile,
   type ApiErrorBody,
   type Output,
@@ -24,6 +27,7 @@ import {
   type Route,
   type Wave,
   type ChatMessage,
+  type BlockedProfile,
 } from "@wappy/api";
 
 class HttpError extends Error {
@@ -116,6 +120,7 @@ export function createApp(options: {
   now?: () => number;
   kakao?: KakaoConfig;
   kakaoFetch?: typeof fetch;
+  reportsEnabled?: boolean;
 }) {
   const db = new DatabaseSync(options.databasePath);
   db.exec(`
@@ -130,6 +135,17 @@ export function createApp(options: {
       user_id TEXT NOT NULL REFERENCES users(id),
       friend_id TEXT NOT NULL REFERENCES users(id),
       PRIMARY KEY (user_id, friend_id), CHECK (user_id < friend_id)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS profile_blocks (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL, character TEXT NOT NULL,
+      PRIMARY KEY (user_id, blocked_id), CHECK (user_id <> blocked_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS blocks_target ON profile_blocks(blocked_id);
+    CREATE TABLE IF NOT EXISTS blocking_settings (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      revision INTEGER NOT NULL CHECK (revision >= 1)
     ) STRICT;
     CREATE TABLE IF NOT EXISTS invites (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
@@ -158,6 +174,7 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       text TEXT NOT NULL, sent_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
@@ -165,6 +182,7 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS chat_recipients (
       message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1)),
       PRIMARY KEY (message_id, user_id, friend_id),
       FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
@@ -172,7 +190,26 @@ export function createApp(options: {
     CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
     CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
   `);
+  if (
+    !db
+      .prepare("PRAGMA table_info(chat_messages)")
+      .all()
+      .some((column) => column.name === "recipient_id")
+  )
+    db.exec(
+      "ALTER TABLE chat_messages ADD COLUMN recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE",
+    );
+  if (
+    !db
+      .prepare("PRAGMA table_info(chat_recipients)")
+      .all()
+      .some((column) => column.name === "acknowledged")
+  )
+    db.exec(
+      "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
+    );
   const now = options.now ?? Date.now;
+  const reports = createReports(db, now);
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
   let presenceRevision = 0;
@@ -221,19 +258,46 @@ export function createApp(options: {
   const selectPresence = db.prepare(
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
+  const selectBlocks = db.prepare(
+    "SELECT blocked_id AS id, name, character FROM profile_blocks WHERE user_id = ? ORDER BY name, blocked_id",
+  );
+  const selectBlockingRevision = db.prepare(
+    "SELECT revision FROM blocking_settings WHERE user_id = ?",
+  );
+  const advanceBlocking =
+    db.prepare(`INSERT INTO blocking_settings VALUES (?, 1)
+    ON CONFLICT(user_id) DO UPDATE SET revision = blocking_settings.revision + 1`);
+  const blockedPair = db.prepare(`SELECT 1 FROM profile_blocks
+    WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)`);
+  const blocking = (id: string) => ({
+    revision: Number(selectBlockingRevision.get(id)?.revision ?? 0),
+    profiles: selectBlocks.all(id) as unknown as BlockedProfile[],
+  });
   const selectMessages = db.prepare(`
-    SELECT id, sender_id AS senderId, text, sent_at AS sentAt FROM chat_messages
+    SELECT id, sender_id AS senderId, recipient_id AS recipientId, text, sent_at AS sentAt,
+      sender_id <> ? AND EXISTS (
+        SELECT 1 FROM chat_recipients r WHERE r.message_id = chat_messages.id
+          AND (r.user_id = ? OR r.friend_id = ?) AND r.acknowledged = 0
+      ) AS unread
+    FROM chat_messages
     WHERE id IN (
       SELECT id FROM chat_messages WHERE sender_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE user_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
     ) AND sent_at > ? ORDER BY id DESC LIMIT ?
   `);
+  const acknowledgeChat = db.prepare(`
+    UPDATE chat_recipients SET acknowledged = 1
+    WHERE message_id = ? AND (user_id = ? OR friend_id = ?)
+      AND EXISTS (SELECT 1 FROM chat_messages WHERE id = chat_recipients.message_id
+        AND sender_id <> ? AND sent_at > ?)
+  `);
   const selectChanges = db.prepare("SELECT total_changes() AS changes");
   const selectDataVersion = db.prepare("PRAGMA data_version");
   const profile = (id: string) => selectProfile.get(id) as unknown as Profile;
   const housekeeping = setInterval(() => {
     const time = now();
+    reports.prune();
     for (const [id, validator] of validators)
       if (validator.validUntil <= time) validators.delete(id);
     for (const [id, seen] of lastSeen)
@@ -615,17 +679,33 @@ export function createApp(options: {
             sharing: number;
           })[];
           const presence = selectPresence.get(self!.id);
+          const messages = (
+            selectMessages.all(
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              self!.id,
+              time - CHAT_TTL_MS,
+              CHAT_HISTORY_LIMIT,
+            ) as unknown as (Omit<ChatMessage, "recipientId"> & {
+              recipientId: string | null;
+              unread: number;
+            })[]
+          ).reverse();
           const state: Output<"GET /state"> = {
             self: self!,
-            messages: (
-              selectMessages.all(
-                self!.id,
-                self!.id,
-                self!.id,
-                time - CHAT_TTL_MS,
-                CHAT_HISTORY_LIMIT,
-              ) as unknown as ChatMessage[]
-            ).reverse(),
+            blocking: blocking(self!.id),
+            directChat: true,
+            chatReporting: options.reportsEnabled === true,
+            messages: messages.map(({ recipientId, unread, ...message }) => ({
+              ...message,
+              ...(recipientId === null ? {} : { recipientId }),
+            })),
+            unreadChatIds: messages
+              .filter((message) => message.unread === 1)
+              .map((message) => message.id),
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
               revision: presence ? Number(presence.revision) : 0,
@@ -681,13 +761,35 @@ export function createApp(options: {
           res.end(unchanged ? undefined : body);
           break;
         }
-        case "POST /chat": {
+        case "POST /chat":
+        case "POST /chat/direct": {
           let text;
           try {
             text = parseChatText(isRecord(body) ? body.text : undefined);
           } catch (error) {
             throw new HttpError(400, (error as Error).message);
           }
+          const recipientId =
+            route === "POST /chat/direct" ? field(body, "friendId") : undefined;
+          if (
+            route === "POST /chat" &&
+            isRecord(body) &&
+            ("friendId" in body || "recipientId" in body)
+          )
+            throw new HttpError(400, "1:1 채팅 전송 경로를 사용해 주세요.");
+          const pair = recipientId ? [self!.id, recipientId].sort() : undefined;
+          if (
+            pair &&
+            !db
+              .prepare(
+                "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
+              )
+              .get(pair[0]!, pair[1]!)
+          )
+            throw new HttpError(
+              404,
+              "연결된 친구에게만 1:1 메시지를 보낼 수 있어요.",
+            );
           const time = now();
           const last = db
             .prepare(
@@ -704,16 +806,21 @@ export function createApp(options: {
             id = Number(
               db
                 .prepare(
-                  "INSERT INTO chat_messages (sender_id, text, sent_at) VALUES (?, ?, ?)",
+                  "INSERT INTO chat_messages (sender_id, recipient_id, text, sent_at) VALUES (?, ?, ?, ?)",
                 )
-                .run(self!.id, text, time).lastInsertRowid,
+                .run(self!.id, recipientId ?? null, text, time).lastInsertRowid,
             );
             // Snapshot the audience. New/reconnected friends cannot read earlier messages.
-            db.prepare(
-              `INSERT INTO chat_recipients
+            if (pair) {
+              db.prepare(
+                "INSERT INTO chat_recipients (message_id, user_id, friend_id) VALUES (?, ?, ?)",
+              ).run(id, pair[0]!, pair[1]!);
+            } else
+              db.prepare(
+                `INSERT INTO chat_recipients (message_id, user_id, friend_id)
               SELECT ?, user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?
             `,
-            ).run(id, self!.id, self!.id);
+              ).run(id, self!.id, self!.id);
             db.prepare(
               `DELETE FROM chat_messages WHERE sender_id = ? AND id NOT IN (
               SELECT id FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT ?
@@ -727,9 +834,68 @@ export function createApp(options: {
           reply(
             res,
             route,
-            { id, senderId: self!.id, text, sentAt: time },
+            {
+              id,
+              senderId: self!.id,
+              ...(recipientId ? { recipientId } : {}),
+              text,
+              sentAt: time,
+            },
             201,
           );
+          break;
+        }
+        case "GET /chat/reports": {
+          reply(res, route, reports.receipts(self!.id));
+          break;
+        }
+        case "POST /chat/report": {
+          if (!options.reportsEnabled)
+            throw new HttpError(
+              503,
+              "이 서버는 현재 새 메시지 신고를 받지 않아요. 불편한 친구는 차단할 수 있어요.",
+            );
+          let input;
+          try {
+            input = parseChatReportInput(body);
+          } catch (error) {
+            throw new HttpError(400, (error as Error).message);
+          }
+          reply(res, route, reports.submit(self!.id, input));
+          break;
+        }
+        case "POST /chat/read": {
+          let messageIds: number[];
+          try {
+            messageIds = parseChatMessageIds(
+              isRecord(body) ? body.messageIds : undefined,
+            );
+          } catch (error) {
+            throw new HttpError(400, (error as Error).message);
+          }
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            const cutoff = now() - CHAT_TTL_MS;
+            for (const id of messageIds) {
+              const result = acknowledgeChat.run(
+                id,
+                self!.id,
+                self!.id,
+                self!.id,
+                cutoff,
+              );
+              if (!result.changes)
+                throw new HttpError(
+                  404,
+                  "메시지를 확인할 수 없어요. 최신 대화 목록을 확인해 주세요.",
+                );
+            }
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          reply(res, route, { messageIds });
           break;
         }
         case "PATCH /profile": {
@@ -762,6 +928,10 @@ export function createApp(options: {
             db.prepare("DELETE FROM presence_settings WHERE user_id = ?").run(
               self!.id,
             );
+            db.prepare(
+              `UPDATE blocking_settings SET revision = revision + 1
+              WHERE user_id IN (SELECT user_id FROM profile_blocks WHERE blocked_id = ?)`,
+            ).run(self!.id);
             db.prepare("DELETE FROM users WHERE id = ?").run(self!.id);
             db.exec("COMMIT");
           } catch (error) {
@@ -838,6 +1008,11 @@ export function createApp(options: {
                 "자신의 초대 코드는 사용할 수 없습니다.",
               );
             const friendId = invite.owner_id as string;
+            if (blockedPair.get(self!.id, friendId, friendId, self!.id))
+              throw new HttpError(
+                409,
+                "이 초대장으로는 친구를 연결할 수 없어요.",
+              );
             const pair = [self!.id, friendId].sort();
             const result = db
               .prepare("INSERT OR IGNORE INTO friendships VALUES (?, ?)")
@@ -855,12 +1030,58 @@ export function createApp(options: {
           }
           break;
         }
-        case "POST /friends/remove": {
-          const pair = [self!.id, field(body, "friendId")].sort();
-          db.prepare(
-            "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
-          ).run(pair[0]!, pair[1]!);
-          reply(res, route, { ok: true });
+        case "POST /friends/remove":
+        case "POST /friends/block": {
+          const friendId = field(body, "friendId");
+          if (route === "POST /friends/block" && friendId === self!.id)
+            throw new HttpError(400, "내 프로필은 차단할 수 없어요.");
+          const pair = [self!.id, friendId].sort();
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            if (route === "POST /friends/block") {
+              if (!profile(friendId))
+                throw new HttpError(404, "프로필을 찾을 수 없어요.");
+              const result = db
+                .prepare(
+                  `INSERT OR IGNORE INTO profile_blocks (user_id, blocked_id, name, character)
+                SELECT ?, id, name, character FROM users WHERE id = ?`,
+                )
+                .run(self!.id, friendId);
+              if (result.changes) advanceBlocking.run(self!.id);
+            }
+            db.prepare(
+              `DELETE FROM chat_messages
+              WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)`,
+            ).run(pair[0]!, pair[1]!, pair[1]!, pair[0]!);
+            db.prepare(
+              "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
+            ).run(pair[0]!, pair[1]!);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          if (route === "POST /friends/block")
+            reply(res, route, blocking(self!.id));
+          else reply(res, route, { ok: true });
+          break;
+        }
+        case "POST /friends/unblock": {
+          const friendId = field(body, "friendId");
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            const result = db
+              .prepare(
+                "DELETE FROM profile_blocks WHERE user_id = ? AND blocked_id = ?",
+              )
+              .run(self!.id, friendId);
+            if (result.changes) advanceBlocking.run(self!.id);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          reply(res, route, blocking(self!.id));
           break;
         }
         case "POST /friends/wave": {
@@ -923,13 +1144,11 @@ export function createApp(options: {
           throw new HttpError(404, "API 경로를 찾을 수 없습니다.");
       }
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
+      const known = error instanceof HttpError || error instanceof ReportError;
+      const status = known ? error.status : 500;
       if (status === 500) console.error("Request failed:", error);
       const body: ApiErrorBody = {
-        error:
-          error instanceof HttpError
-            ? error.message
-            : "서버 오류가 발생했습니다.",
+        error: known ? error.message : "서버 오류가 발생했습니다.",
       };
       if (!res.headersSent && !res.destroyed) {
         if (kakaoBrowser) loginPage(res, status, body.error);

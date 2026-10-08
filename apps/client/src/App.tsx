@@ -12,6 +12,8 @@ import {
   parsePresenceSettings,
   parseProfile,
   parseChatMessage,
+  parseChatMessageIds,
+  parseBlockingSettings,
   CHAT_HISTORY_LIMIT,
   isRecord,
   type Invite,
@@ -43,7 +45,11 @@ import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { KakaoLogin } from "./KakaoLogin";
 import { ChatPanel, ChatBubble } from "./ChatPanel";
-import { latestChat } from "./chat";
+import {
+  latestChat,
+  reconcileChatReads,
+  unreadChatByConversation,
+} from "./chat";
 import { LocalPreview } from "./LocalPreview";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { DeleteProfile } from "./DeleteProfile";
@@ -55,6 +61,8 @@ import { SupportPanel } from "./SupportPanel";
 import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
+import { BlockedProfiles } from "./BlockedProfiles";
+import { applyBlockingSettings, reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
@@ -104,11 +112,13 @@ function App() {
   >("connecting");
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const [blockingFriend, setBlockingFriend] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
   const [friendView, setFriendView] = useState<FriendView>("all");
   const friendSearch = useRef<HTMLInputElement>(null);
   const [chatFocus, setChatFocus] = useState(0);
+  const [chatRecipient, setChatRecipient] = useState<string | null>(null);
   const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
     null,
   );
@@ -155,7 +165,7 @@ function App() {
         !state.friends.some((friend) => friend.id === target.friendId))
     )
       return;
-    openChat();
+    openChat(target.friendId === state.self.id ? null : target.friendId);
   }, OPEN_CHAT_EVENT);
   const syncError = useDesktopSync({
     state: session ? (selection.ready ? state : null) : localPreview,
@@ -196,13 +206,20 @@ function App() {
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
+    setChatRecipient(null);
+    setBlockingFriend(null);
   }
 
   function applyState(next: SidebarState) {
-    setState((current) => reconcilePresence(current, next));
+    setState((current) =>
+      reconcileChatReads(
+        current,
+        reconcilePresence(current, reconcileBlocking(current, next)),
+      ),
+    );
   }
 
-  function openChat() {
+  function openChat(recipientId: string | null = null) {
     if (!session) return;
     const active = session;
     void windowAction(async () => {
@@ -214,32 +231,133 @@ function App() {
       if (currentSession.current !== active) return;
       setCompact(false);
       setPanel("chat");
+      setChatRecipient(recipientId);
       setChatFocus((value) => value + 1);
     });
   }
 
-  async function sendChat(text: string) {
+  async function sendChat(text: string, recipientId: string | null) {
     if (!session || connection !== "online")
       throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
     const active = session;
+    if (
+      recipientId !== null &&
+      (!state?.directChat ||
+        !state.friends.some((friend) => friend.id === recipientId))
+    )
+      throw new ApiError(
+        409,
+        "1:1 채팅 지원 여부와 친구 연결을 다시 확인해 주세요.",
+      );
     const message = parseChatMessage(
-      await request(active, "POST /chat", { text }),
+      recipientId === null
+        ? await request(active, "POST /chat", { text })
+        : await request(active, "POST /chat/direct", {
+            text,
+            friendId: recipientId,
+          }),
     );
+    if (
+      message.senderId !== state?.self.id ||
+      message.recipientId !== (recipientId ?? undefined)
+    )
+      throw new ApiError(
+        502,
+        "메시지 전송 결과를 확인하지 못했어요. 대화 목록을 확인해 주세요.",
+      );
+    if (currentSession.current !== active) return;
+    setState((current) => {
+      if (
+        !current ||
+        (recipientId !== null &&
+          !current.friends.some((friend) => friend.id === recipientId))
+      )
+        return current;
+      const messages = [
+        ...(current.messages ?? []).filter((item) => item.id !== message.id),
+        message,
+      ]
+        .sort((a, b) => a.id - b.id)
+        .slice(-CHAT_HISTORY_LIMIT);
+      return {
+        ...current,
+        messages,
+        ...(current.unreadChatIds === undefined
+          ? {}
+          : {
+              unreadChatIds: current.unreadChatIds.filter((id) =>
+                messages.some((item) => item.id === id),
+              ),
+            }),
+      };
+    });
+  }
+
+  async function readChat(messageIds: number[]) {
+    if (
+      !session ||
+      connection !== "online" ||
+      state?.unreadChatIds === undefined
+    )
+      throw new ApiError(503, "서버에 다시 연결된 뒤 확인해 주세요.");
+    const active = session;
+    const result = await request(active, "POST /chat/read", { messageIds });
+    const confirmed = parseChatMessageIds(
+      isRecord(result) ? result.messageIds : undefined,
+    );
+    if (
+      confirmed.length !== messageIds.length ||
+      confirmed.some((id) => !messageIds.includes(id))
+    )
+      throw new ApiError(
+        502,
+        "메시지 확인 결과를 받지 못했어요. 다시 확인해 주세요.",
+      );
     if (currentSession.current !== active) return;
     setState((current) =>
-      current
+      current?.unreadChatIds
         ? {
             ...current,
-            messages: [
-              ...(current.messages ?? []).filter(
-                (item) => item.id !== message.id,
-              ),
-              message,
-            ]
-              .sort((a, b) => a.id - b.id)
-              .slice(-CHAT_HISTORY_LIMIT),
+            unreadChatIds: current.unreadChatIds.filter(
+              (id) => !confirmed.includes(id),
+            ),
           }
         : current,
+    );
+  }
+
+  async function changeBlocking(friendId: string, blocked: boolean) {
+    if (!session || connection !== "online" || state?.blocking === undefined)
+      throw new ApiError(
+        503,
+        "차단 기능을 지원하는 서버에 연결된 뒤 다시 시도해 주세요.",
+      );
+    const active = session;
+    const result = parseBlockingSettings(
+      await request(
+        active,
+        blocked ? "POST /friends/block" : "POST /friends/unblock",
+        { friendId },
+      ),
+    );
+    if (
+      result.profiles.some((profile) => profile.id === state.self.id) ||
+      result.profiles.some((profile) => profile.id === friendId) !== blocked
+    )
+      throw new ApiError(
+        502,
+        "차단 변경 결과를 확인하지 못했어요. 차단 목록을 다시 확인해 주세요.",
+      );
+    if (currentSession.current !== active) return;
+    setState((current) =>
+      current ? applyBlockingSettings(current, result) : current,
+    );
+    setBlockingFriend(null);
+    setRemoving(null);
+    setNotice(
+      blocked
+        ? "친구를 차단했어요. 내 모습에서 차단을 관리할 수 있어요."
+        : "차단을 해제했어요. 다시 함께하려면 초대로 연결해 주세요.",
     );
   }
 
@@ -583,6 +701,11 @@ function App() {
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
   const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
+  const unreadChats = unreadChatByConversation(state);
+  const unreadChatCount = [...unreadChats.values()].reduce(
+    (total, ids) => total + ids.length,
+    0,
+  );
   const listedFriends = filterFriends(
     state?.friends ?? [],
     friendQuery,
@@ -722,6 +845,15 @@ function App() {
             <span className="compact-presence">접속 숨김</span>
           )}
         </button>
+        {unreadChatCount > 0 && (
+          <button
+            className="compact-chat text-button"
+            aria-label={`새 메시지 ${unreadChatCount}개 확인하러 가기`}
+            onClick={() => openChat(unreadChats.keys().next().value ?? null)}
+          >
+            채팅 <span className="wave-count">{unreadChatCount}</span>
+          </button>
+        )}
         <div className="compact-friends">
           {state.friends.map((friend) => (
             <div
@@ -1065,6 +1197,7 @@ function App() {
               <button
                 key={id}
                 aria-current={panel === id ? "page" : undefined}
+                id={`sidebar-tab-${id}`}
                 className={panel === id ? "selected" : ""}
                 onClick={() => {
                   setPanel(id);
@@ -1080,18 +1213,33 @@ function App() {
                     {waveCount}
                   </span>
                 )}
+                {id === "chat" && unreadChatCount > 0 && (
+                  <span
+                    className="wave-count"
+                    aria-label={`새 메시지 ${unreadChatCount}개`}
+                  >
+                    {unreadChatCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
           <div className="scroll-area content">
-            {state && panel === "chat" && (
-              <ChatPanel
-                key={`${session.server}:${state.self.id}`}
-                state={state}
-                connected={connection === "online"}
-                focusRequest={chatFocus}
-                onSend={sendChat}
-              />
+            {state && (
+              <div hidden={panel !== "chat"}>
+                <ChatPanel
+                  key={`${session.server}:${session.token}:${state.self.id}`}
+                  session={session}
+                  state={state}
+                  connected={connection === "online"}
+                  focusRequest={chatFocus}
+                  active={panel === "chat"}
+                  recipientId={chatRecipient}
+                  onRecipientChange={setChatRecipient}
+                  onSend={sendChat}
+                  onRead={readChat}
+                />
+              </div>
             )}
             {desktopError && (
               <p className="error" role="alert">
@@ -1225,8 +1373,8 @@ function App() {
                         <button
                           type="button"
                           className="friend-scene character-chat"
-                          aria-label={`${friend.name} 캐릭터로 채팅 열기`}
-                          onClick={openChat}
+                          aria-label={`${friend.name} 캐릭터로 1:1 채팅 열기`}
+                          onClick={() => openChat(friend.id)}
                         >
                           <Character
                             kind={friend.character}
@@ -1245,6 +1393,20 @@ function App() {
                           <ChatBubble
                             message={latestChat(state.messages, friend.id)}
                           />
+                          <button
+                            className="text-button"
+                            onClick={() => openChat(friend.id)}
+                          >
+                            1:1 채팅
+                            {!!unreadChats.get(friend.id)?.length && (
+                              <span
+                                className="wave-count"
+                                aria-label={`새 메시지 ${unreadChats.get(friend.id)!.length}개`}
+                              >
+                                {unreadChats.get(friend.id)!.length}
+                              </span>
+                            )}
+                          </button>
                           <small>
                             {connection !== "online"
                               ? "접속 상태 확인 중"
@@ -1284,16 +1446,34 @@ function App() {
                               })
                             }
                           />
+                          <button
+                            type="button"
+                            className="text-button danger"
+                            id={`block-friend-${friend.id}`}
+                            aria-label={`${friend.name} 님 차단하기`}
+                            disabled={
+                              busy ||
+                              connection !== "online" ||
+                              state.blocking === undefined
+                            }
+                            onClick={() => {
+                              setBlockingFriend(friend.id);
+                              setRemoving(null);
+                            }}
+                          >
+                            차단하기
+                          </button>
                         </div>
                         <button
                           className="remove-button"
                           aria-label={`${friend.name} 친구 연결 해제`}
                           title="친구 연결 해제"
-                          onClick={() =>
+                          onClick={() => {
+                            setBlockingFriend(null);
                             setRemoving(
                               removing === friend.id ? null : friend.id,
-                            )
-                          }
+                            );
+                          }}
                         >
                           ×
                         </button>
@@ -1323,6 +1503,53 @@ function App() {
                             >
                               연결 해제
                             </button>
+                          </div>
+                        )}
+                        {blockingFriend === friend.id && (
+                          <div
+                            className="block-confirm"
+                            role="group"
+                            aria-label={`${friend.name} 님 차단 확인`}
+                          >
+                            <p>
+                              <strong>{friend.name} 님을 차단할까요?</strong>
+                            </p>
+                            <p>
+                              친구 연결과 둘 사이의 1:1 대화·인사를 삭제하고,
+                              초대로 다시 연결되는 것도 막아요. 차단 해제는 내
+                              모습에서 할 수 있어요.
+                            </p>
+                            <div>
+                              <button
+                                type="button"
+                                className="text-button"
+                                disabled={busy}
+                                autoFocus
+                                onClick={() => {
+                                  setBlockingFriend(null);
+                                  document
+                                    .getElementById(`block-friend-${friend.id}`)
+                                    ?.focus();
+                                }}
+                              >
+                                취소
+                              </button>
+                              <button
+                                type="button"
+                                className="text-button danger"
+                                disabled={busy || connection !== "online"}
+                                onClick={() => {
+                                  document
+                                    .getElementById("sidebar-tab-friends")
+                                    ?.focus();
+                                  void action(() =>
+                                    changeBlocking(friend.id, true),
+                                  );
+                                }}
+                              >
+                                친구 차단
+                              </button>
+                            </div>
                           </div>
                         )}
                       </li>
@@ -1486,6 +1713,13 @@ function App() {
                       onSave={saveProfile}
                     />
                     <RecoveryCode key={session.token} session={session} />
+                    <BlockedProfiles
+                      blocking={state.blocking}
+                      disabled={busy || connection !== "online"}
+                      onUnblock={(id) =>
+                        void action(() => changeBlocking(id, false))
+                      }
+                    />
                     <DeleteProfile
                       key={session.server + session.token}
                       profile={state.self}
@@ -1538,7 +1772,7 @@ function App() {
                 type="button"
                 className="character-chat"
                 aria-label="내 캐릭터로 채팅 열기"
-                onClick={openChat}
+                onClick={() => openChat()}
               >
                 <Character kind={state.self.character} />
               </button>

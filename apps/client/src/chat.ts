@@ -1,4 +1,64 @@
-import { CHAT_BUBBLE_MS, type ChatMessage } from "@wappy/api";
+import {
+  CHAT_BUBBLE_MS,
+  type ChatMessage,
+  type SidebarState,
+} from "@wappy/api";
+
+export function unreadChatByConversation(state: SidebarState | null) {
+  const unread = new Set(state?.unreadChatIds);
+  const conversations = new Map<string | null, number[]>();
+  for (const message of state?.messages ?? []) {
+    if (!unread.has(message.id) || message.senderId === state?.self.id)
+      continue;
+    const recipient = message.recipientId ? message.senderId : null;
+    const ids = conversations.get(recipient) ?? [];
+    ids.push(message.id);
+    conversations.set(recipient, ids);
+  }
+  return conversations;
+}
+
+/** A delayed poll must not restore a received message already confirmed as read. */
+export function reconcileChatReads(
+  current: SidebarState | null,
+  incoming: SidebarState,
+): SidebarState {
+  if (
+    current?.self.id !== incoming.self.id ||
+    !current.unreadChatIds ||
+    !incoming.unreadChatIds
+  )
+    return incoming;
+  const unread = new Set(current.unreadChatIds);
+  const read = new Set(
+    current.messages
+      ?.filter((message) => !unread.has(message.id))
+      .map((message) => message.id),
+  );
+  return {
+    ...incoming,
+    unreadChatIds: incoming.unreadChatIds.filter((id) => !read.has(id)),
+  };
+}
+
+export function conversationMessages(
+  messages: readonly ChatMessage[] | undefined,
+  selfId: string,
+  friendId: string | null,
+) {
+  return (messages ?? []).filter((message) =>
+    friendId === null
+      ? message.recipientId === undefined
+      : (message.senderId === selfId && message.recipientId === friendId) ||
+        (message.senderId === friendId && message.recipientId === selfId),
+  );
+}
+
+export function chatBubbleText(message: ChatMessage) {
+  return message.recipientId
+    ? "🔒 1:1 메시지 · 채팅에서 확인해요"
+    : message.text;
+}
 
 export function latestChat(
   messages: readonly ChatMessage[] | undefined,

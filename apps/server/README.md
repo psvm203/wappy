@@ -57,6 +57,31 @@ KAKAO_REDIRECT_URI=http://localhost:3001/auth/kakao/callback
 
 같은 서버에서 같은 카카오 계정으로 로그인하면 이름·캐릭터·친구·복구 코드를 유지하고 기존 Wappy 로그인 토큰을 교체하므로 이전 기기는 로그아웃됩니다. 기존에 이름으로 만든 프로필과 자동으로 합치지는 않습니다. 카카오 로그인 후 **초대하기**에서 친구 초대장을 사용할 수 있습니다. 프로필 영구 삭제 시 서버의 카카오 연결 정보도 삭제되어 다음 로그인은 새 프로필로 시작합니다. 카카오 계정의 서비스 연결 해제는 카카오 계정 설정에서 별도로 할 수 있습니다.
 
+## 메시지 신고 운영
+
+운영 담당자와 대응 주기를 정하고 공개 연락처를 준비한 뒤 새 신고 접수를 켜세요. 직접 실행은 `apps/server/.env`, Compose는 저장소 루트 `.env`에 `CHAT_REPORTS_ENABLED=1`을 넣고 서버를 다시 시작하거나 컨테이너를 다시 생성합니다. 기본값은 꺼짐입니다. `GET /state`의 `chatReporting`이 `true`일 때만 앱에서 새 신고를 접수할 수 있습니다. `false`는 접수 중단, 필드 없음은 이전 서버이며 기존 접수 내역은 중단 중에도 본인만 조회할 수 있습니다.
+
+저장소 루트에서 다음 명령으로 **해당 서버 DB에 접근할 수 있는 운영자만** 검토합니다. `list`는 오래된 미처리 신고부터 최대 100개를 보여 주며 `show`는 원문과 설명을 표시합니다. 접수 번호를 확인한 뒤 `remove`는 메시지를 모든 수신자에게서 삭제하고 같은 메시지의 미처리 신고를 함께 처리합니다. `dismiss`는 해당 신고만 조치 없이 종료합니다. 서버가 실행 중이어도 사용할 수 있으며 다음 상태 조회에 반영됩니다. 동일한 결정을 재실행해도 결과는 같고 이미 다른 결정으로 처리한 신고는 변경하지 않습니다.
+
+```sh
+pnpm --filter server reports list
+pnpm --filter server reports show REPORT_ID
+pnpm --filter server reports resolve REPORT_ID remove
+pnpm --filter server reports resolve REPORT_ID dismiss
+```
+
+Docker 배포에서는 같은 컨테이너의 빌드된 명령을 사용합니다. 아래 `REPORT_ID`를 실제 접수 번호로 바꾸세요.
+
+```sh
+docker compose exec server node dist/review-reports.js list
+docker compose exec server node dist/review-reports.js show REPORT_ID
+docker compose exec server node dist/review-reports.js resolve REPORT_ID remove
+```
+
+신고함을 정기적으로 확인하고 오래된 신고부터 검토하세요. 이 도구는 자동 알림이나 운영 인력을 대신하지 않으며 사용자 제재·이의 신청·게시 전 콘텐츠 필터링 기능은 제공하지 않습니다. 접수 내역과 처리 결과는 본인의 `GET /chat/reports`에만 노출되고 운영자용 공개 HTTP 경로는 없습니다. 터미널 출력에는 사적인 원문과 식별자가 포함되므로 공개 로그나 GitHub 이슈에 복사하지 마세요.
+
+신고 기록은 원래 채팅과 별도로 SQLite에 보관합니다. 신고 후 차단·연결 해제·채팅 만료는 검토 기록을 지우지 않습니다. 접수 30일 뒤 조회에서 제외하고 서버 시작·분당 정리·새 신고 접수·운영 명령 실행 때 만료분을 삭제합니다. 신고자 또는 보낸 사람의 프로필 삭제 시에도 관련 기록을 삭제합니다. 삭제된 원문은 새로 복구하지 않으며, 별도 백업의 보관·폐기는 운영자가 관리해야 합니다. 메시지 신고는 아직 볼 수 있는 실제 수신 기록으로만 접수하고 프로필당 24시간에 20개로 제한합니다. 기존 DB에는 시작 시 신고 테이블을 추가합니다.
+
 ## 업데이트와 재시작
 
 현재 데이터를 먼저 백업한 뒤 원하는 버전의 소스를 받아 실행합니다. 공개 서버에서는 계속 두 Compose 파일을 함께 사용하세요.
