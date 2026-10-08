@@ -8,8 +8,103 @@ import {
   saveSession,
   parkSession,
   forgetSavedSession,
+  forgetDeletedProfile,
   type SavedProfile,
 } from "../src/sessions.ts";
+import { residentSelectionKey } from "../src/resident-selection.ts";
+
+test("confirmed profile deletion removes only that identity and reports partial storage failures", () => {
+  const values = new Map<string, string>();
+  let fail = "";
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      if (key === fail) throw new Error("Storage unavailable");
+      values.set(key, value);
+    },
+    removeItem: (key: string) => {
+      if (key === fail) throw new Error("Storage unavailable");
+      values.delete(key);
+    },
+  };
+  const deleted = {
+    server: "https://one.test",
+    token: "a".repeat(43),
+    profile: {
+      id: "alice",
+      name: "Alice",
+      character: "cat" as const,
+      status: "",
+    },
+  };
+  const old = { ...deleted, token: "b".repeat(43) };
+  const bob = {
+    ...deleted,
+    token: "c".repeat(43),
+    profile: { ...deleted.profile, id: "bob" },
+  };
+  const elsewhere = { ...deleted, server: "https://two.test" };
+  const selectionKey = residentSelectionKey(deleted.server, deleted.profile.id);
+  function seed() {
+    fail = "";
+    values.clear();
+    storage.setItem(SESSION_KEY, JSON.stringify(deleted));
+    storage.setItem(
+      SAVED_SESSIONS_KEY,
+      JSON.stringify([old, deleted, bob, elsewhere]),
+    );
+    storage.setItem(selectionKey, '["bob"]');
+    storage.setItem(
+      residentSelectionKey(elsewhere.server, elsewhere.profile.id),
+      '["other"]',
+    );
+    storage.setItem("wappy.desktop.v1", "unchanged");
+  }
+  seed();
+  assert.equal(forgetDeletedProfile(deleted, storage), true);
+  assert.equal(loadSession(storage), null);
+  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere]);
+  assert.equal(storage.getItem(selectionKey), null);
+  assert.equal(
+    storage.getItem(
+      residentSelectionKey(elsewhere.server, elsewhere.profile.id),
+    ),
+    '["other"]',
+  );
+  assert.equal(storage.getItem("wappy.desktop.v1"), "unchanged");
+  assert.equal(forgetDeletedProfile(deleted, storage), true);
+
+  seed();
+  saveSession(bob, storage);
+  assert.equal(forgetDeletedProfile(deleted, storage), true);
+  assert.equal(
+    loadSession(storage)?.token,
+    bob.token,
+    "late cleanup cannot log out a different profile",
+  );
+
+  for (const key of [SESSION_KEY, SAVED_SESSIONS_KEY, selectionKey]) {
+    seed();
+    fail = key;
+    assert.equal(forgetDeletedProfile(deleted, storage), false);
+    if (key !== SESSION_KEY) assert.equal(loadSession(storage), null);
+    if (key !== SAVED_SESSIONS_KEY)
+      assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere]);
+    if (key !== selectionKey) assert.equal(storage.getItem(selectionKey), null);
+    fail = "";
+    assert.equal(forgetDeletedProfile(deleted, storage), true);
+  }
+  seed();
+  storage.setItem(SAVED_SESSIONS_KEY, "{damaged");
+  assert.equal(forgetDeletedProfile(deleted, storage), false);
+  assert.equal(
+    storage.getItem(SAVED_SESSIONS_KEY),
+    "{damaged",
+    "unreadable archives are not erased",
+  );
+  assert.equal(loadSession(storage), null);
+  assert.equal(storage.getItem(selectionKey), null);
+});
 
 test("server switching preserves distinct profiles and updates only the recovered identity", () => {
   const values = new Map<string, string>();

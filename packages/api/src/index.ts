@@ -62,6 +62,10 @@ export interface ApiRoutes {
   };
   "GET /state": { input: undefined; output: SidebarState };
   "PATCH /profile": { input: ProfileInput; output: Profile };
+  "POST /profile/delete": {
+    input: { profileId: string };
+    output: { ok: true };
+  };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/accept": { input: { code: string }; output: Profile };

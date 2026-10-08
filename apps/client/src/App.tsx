@@ -10,6 +10,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   parseSidebarState,
   parsePresenceSettings,
+  isRecord,
   type Invite,
   type ProfileInput,
   type Session,
@@ -36,6 +37,7 @@ import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
+import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
@@ -45,6 +47,7 @@ import { PresenceControl } from "./PresenceControl";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
+  forgetDeletedProfile,
   loadSavedSessions,
   parkSession,
   saveSession,
@@ -80,6 +83,7 @@ function App() {
     "ready" | "pending" | "unknown"
   >("ready");
   const [error, setError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
   >("connecting");
@@ -155,6 +159,7 @@ function App() {
     currentSession.current = next;
     setSession(next);
     setPresenceStatus("ready");
+    setDeleteError("");
     setFriendQuery("");
     setFriendView("all");
   }
@@ -304,6 +309,44 @@ function App() {
         "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
+  }
+
+  function deleteProfile() {
+    if (!session || !state || connection !== "online") return;
+    const deleted = { ...session, profile: state.self };
+    void action(async () => {
+      setDeleteError("");
+      try {
+        const result = await request(session, "POST /profile/delete", {
+          profileId: deleted.profile.id,
+        });
+        if (!isRecord(result) || result.ok !== true)
+          throw new Error("Unconfirmed deletion");
+      } catch (cause) {
+        let failure = cause;
+        if (cause instanceof ApiError && cause.status === 404)
+          failure = new ApiError(
+            404,
+            "이 서버는 프로필 삭제를 지원하지 않습니다. 서버를 업데이트한 뒤 다시 시도해 주세요.",
+          );
+        else if (!(cause instanceof ApiError) || cause.status >= 500)
+          failure = new ApiError(
+            503,
+            "서버의 삭제 결과를 확인하지 못했습니다. 자동으로 다시 요청하지 않습니다. 연결 상태를 확인해 주세요.",
+          );
+        setDeleteError(errorMessage(failure));
+        throw failure;
+      }
+      const cleaned = forgetDeletedProfile(deleted);
+      setSavedSessions(loadSavedSessions());
+      if (currentSession.current !== session) return;
+      showOnboarding("create");
+      setNotice("서버에서 프로필과 친구 연결을 삭제했어요.");
+      if (!cleaned)
+        setError(
+          "서버의 프로필은 삭제됐지만 기기의 로그인 정보나 캐릭터 선택을 일부 지우지 못했습니다. 저장소 접근을 확인하고 남은 프로필은 보관 해제해 주세요.",
+        );
+    });
   }
 
   function selectedServer() {
@@ -798,6 +841,7 @@ function App() {
               <button
                 className="text-button"
                 onClick={toggleCompact}
+                disabled={busy}
                 title="캐릭터만 보기"
               >
                 접기 ⇥
@@ -1260,6 +1304,15 @@ function App() {
                       onSave={saveProfile}
                     />
                     <RecoveryCode key={session.token} session={session} />
+                    <DeleteProfile
+                      key={session.server + session.token}
+                      profile={state.self}
+                      server={session.server}
+                      busy={busy}
+                      connected={connection === "online"}
+                      error={deleteError}
+                      onDelete={deleteProfile}
+                    />
                   </>
                 )}
                 <section

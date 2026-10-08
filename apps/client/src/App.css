@@ -572,6 +572,15 @@
 .server-panel {
   margin-top: 20px;
 }
+.delete-profile {
+  margin-top: 28px;
+  border-color: #e5ceca;
+}
+.delete-profile-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
 .startup-panel {
   margin-top: 20px;
 }

@@ -885,3 +885,222 @@ test("presence sharing stays private and hidden through polling, profile edits, 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("profile deletion is authenticated, atomic, durable and limited to the confirmed identity", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-delete-"));
+  const databasePath = join(directory, "test.sqlite");
+  let server = createApp({ databasePath });
+  let base = "";
+  async function listen() {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    base = `http://127.0.0.1:${address.port}`;
+  }
+  async function close() {
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+  }
+  async function call(
+    method: string,
+    path: string,
+    token?: string,
+    body?: unknown,
+  ) {
+    const response = await fetch(base + path, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  try {
+    await listen();
+    const create = async (name: string) =>
+      (
+        await call("POST", "/session", undefined, {
+          name,
+          character: "cat",
+          status: "",
+        })
+      ).body as Session;
+    const alice = await create("Alice");
+    const bob = await create("Bob");
+    const carol = await create("Carol");
+    for (const [from, to] of [
+      [alice, bob],
+      [alice, carol],
+      [bob, carol],
+    ] as const) {
+      const invite = (await call("POST", "/invites", from.token, {}))
+        .body as Invite;
+      assert.equal(
+        (await call("POST", "/invites/accept", to.token, { code: invite.code }))
+          .status,
+        200,
+      );
+    }
+    for (const [from, to] of [
+      [alice, bob],
+      [bob, alice],
+      [bob, carol],
+    ] as const)
+      assert.equal(
+        (
+          await call("POST", "/friends/wave", from.token, {
+            friendId: to.profile.id,
+          })
+        ).status,
+        201,
+      );
+    const invite = (await call("POST", "/invites", alice.token, {}))
+      .body as Invite;
+    const recovery = (await call("POST", "/recovery-code", alice.token, {}))
+      .body;
+    const bobRecovery = (await call("POST", "/recovery-code", bob.token, {}))
+      .body;
+    const bobInvite = (await call("POST", "/invites", bob.token, {}))
+      .body as Invite;
+    await call("PATCH", "/presence", alice.token, { sharing: false });
+    await call("PATCH", "/presence", bob.token, { sharing: false });
+    const remove = (token?: string, profileId = alice.profile.id) =>
+      call("POST", "/profile/delete", token, { profileId });
+    assert.equal((await remove()).status, 401);
+    assert.equal(
+      (await remove(bob.token)).status,
+      409,
+      "another profile cannot be targeted",
+    );
+    assert.equal((await remove(alice.token, "")).status, 400);
+
+    const inspection = new DatabaseSync(databasePath);
+    try {
+      const tables = [
+        "users",
+        "friendships",
+        "invites",
+        "recovery_codes",
+        "presence_settings",
+        "waves",
+      ];
+      const snapshot = () =>
+        tables.map((table) =>
+          inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+        );
+      const before = snapshot();
+      inspection.exec(
+        "CREATE TRIGGER prevent_delete BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'test rollback'); END;",
+      );
+      const logging = t.mock.method(console, "error", () => {});
+      try {
+        assert.equal((await remove(alice.token)).status, 500);
+      } finally {
+        logging.mock.restore();
+      }
+      assert.deepEqual(
+        snapshot(),
+        before,
+        "failed deletion must restore friends, greetings and credentials",
+      );
+      inspection.exec("DROP TRIGGER prevent_delete");
+
+      const pending = httpRequest(base + "/recovery-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${alice.token}`,
+        },
+      });
+      const responsePromise = once(pending, "response");
+      const arrived = once(server, "request");
+      pending.write("{");
+      await arrived;
+      assert.deepEqual(await remove(alice.token), {
+        status: 200,
+        body: { ok: true },
+      });
+      pending.end("}");
+      const [rejected] = await responsePromise;
+      assert.equal(
+        rejected.statusCode,
+        401,
+        "a pending write cannot recreate deleted credentials",
+      );
+      rejected.resume();
+      assert.equal(
+        JSON.stringify(snapshot()).includes(alice.profile.id),
+        false,
+      );
+      assert.equal(
+        inspection.prepare("SELECT COUNT(*) AS count FROM users").get()!.count,
+        2,
+      );
+      assert.equal(
+        inspection.prepare("SELECT COUNT(*) AS count FROM friendships").get()!
+          .count,
+        1,
+      );
+      assert.equal(
+        inspection.prepare("SELECT COUNT(*) AS count FROM waves").get()!.count,
+        1,
+      );
+      assert.deepEqual(
+        inspection.prepare("PRAGMA foreign_key_check").all(),
+        [],
+      );
+    } finally {
+      inspection.close();
+    }
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      assert.equal((await call("GET", "/state", alice.token)).status, 401);
+      assert.equal((await remove(alice.token)).status, 401);
+      assert.equal(
+        (await call("POST", "/session/recover", undefined, recovery)).status,
+        401,
+      );
+      assert.equal(
+        (await call("POST", "/invites/accept", carol.token, invite)).status,
+        404,
+      );
+      const remaining = (await call("GET", "/state", carol.token))
+        .body as SidebarState;
+      assert.deepEqual(
+        remaining.friends.map((friend) => friend.id),
+        [bob.profile.id],
+      );
+      assert.ok(
+        remaining.friends[0]?.wave,
+        "another pair's greeting is preserved",
+      );
+      if (!attempt) {
+        await close();
+        server = createApp({ databasePath });
+        await listen();
+      }
+    }
+    const restoredBob = (
+      await call("POST", "/session/recover", undefined, bobRecovery)
+    ).body as Session;
+    assert.equal(restoredBob.profile.id, bob.profile.id);
+    const dave = await create("Dave");
+    assert.equal(
+      (await call("POST", "/invites/accept", dave.token, bobInvite)).status,
+      200,
+    );
+    assert.equal(
+      ((await call("GET", "/state", restoredBob.token)).body as SidebarState)
+        .presence?.sharing,
+      false,
+    );
+  } finally {
+    if (server.listening) await close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

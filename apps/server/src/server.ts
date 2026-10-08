@@ -318,6 +318,33 @@ export function createApp(options: {
           reply(res, route, { ...input, id: self!.id });
           break;
         }
+        case "POST /profile/delete": {
+          if (field(body, "profileId") !== self!.id)
+            throw new HttpError(409, "삭제할 프로필을 다시 확인해 주세요.");
+          // Existing databases use restrictive user foreign keys. Keep removal atomic
+          // without rebuilding their tables; waves already cascade with friendships.
+          db.exec("BEGIN IMMEDIATE");
+          try {
+            db.prepare(
+              "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
+            ).run(self!.id, self!.id);
+            db.prepare("DELETE FROM invites WHERE owner_id = ?").run(self!.id);
+            db.prepare("DELETE FROM recovery_codes WHERE owner_id = ?").run(
+              self!.id,
+            );
+            db.prepare("DELETE FROM presence_settings WHERE user_id = ?").run(
+              self!.id,
+            );
+            db.prepare("DELETE FROM users WHERE id = ?").run(self!.id);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          lastSeen.delete(self!.id);
+          reply(res, route, { ok: true });
+          break;
+        }
         case "PATCH /presence": {
           if (!isRecord(body) || typeof body.sharing !== "boolean")
             throw new HttpError(400, "접속 공개 여부를 확인해 주세요.");
