@@ -31,17 +31,9 @@ test("blocking responses validate private snapshots without allowing a blocked f
     blocking: { revision: 0, profiles: [] },
     messages: [
       { id: 1, senderId: bob.id, text: "공유", sentAt: 1 },
-      {
-        id: 2,
-        senderId: self.id,
-        recipientId: bob.id,
-        text: "둘이",
-        sentAt: 1,
-      },
       { id: 3, senderId: carol.id, text: "그대로", sentAt: 1 },
       { id: 4, senderId: self.id, text: "내 공유", sentAt: 1 },
     ],
-    unreadChatIds: [1, 3],
   };
   const after = applyBlockingSettings(before, blocking);
   assert.deepEqual(after.friends, [carol]);
@@ -49,7 +41,6 @@ test("blocking responses validate private snapshots without allowing a blocked f
     after.messages?.map((message) => message.id),
     [3, 4],
   );
-  assert.deepEqual(after.unreadChatIds, [3]);
   assert.deepEqual(parseSidebarState(after), after);
   assert.deepEqual(before.friends, [bob, carol]);
   assert.deepEqual(

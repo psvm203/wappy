@@ -6,7 +6,6 @@ import {
   type PointerEvent,
 } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
-import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
 import {
@@ -17,8 +16,9 @@ import {
 } from "@wappy/api";
 import { Character } from "./Character";
 import { AttackEffects, drawAttackEffect } from "./AttackEffects";
-import { OPEN_CHAT_EVENT, OPEN_GREETING_EVENT } from "./desktop";
-import { ChatBubble } from "./ChatPanel";
+import { ChatBubble } from "./ChatBubble";
+import { ChatComposer } from "./ChatComposer";
+import { requestDesktopChat } from "./chat-bridge";
 import { latestChat, movedForDrag } from "./chat";
 import { requestDesktopAttack } from "./attack-bridge";
 import { collectAttacks, nextAttack, type AttackInbox } from "./online-attacks";
@@ -96,19 +96,8 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
     "--trail-opacity",
     `${Math.max(0, flight - 0.12) * 0.8}`,
   );
-  const hasChat = element.dataset.chat === "true";
-  const nameInset = hasChat ? 96 : 46;
-  const nameX = Math.max(
-    nameInset,
-    Math.min(innerWidth - nameInset, body.x + Math.sin(body.angle) * 92),
-  );
-  const labelInset = hasChat ? 64 : element.dataset.wave === "true" ? 24 : 12;
-  const nameY = Math.max(
-    labelInset,
-    Math.min(innerHeight - labelInset, body.y - Math.cos(body.angle) * 68),
-  );
-  element.style.setProperty("--name-x", `${nameX - body.x}px`);
-  element.style.setProperty("--name-y", `${nameY - body.y}px`);
+  element.style.setProperty("--resident-x", `${body.x}px`);
+  element.style.setProperty("--resident-y", `${body.y}px`);
   element.dataset.motion =
     body.mode === "drag"
       ? "drag"
@@ -136,8 +125,11 @@ export function DesktopCharacters({
   attackInbox: AttackInbox;
   connected: boolean;
 }) {
-  const [failedGreeting, setFailedGreeting] = useState<string | null>(null);
-  const [failedChat, setFailedChat] = useState<string | null>(null);
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
+  const chatTargetRef = useRef(chatTarget);
+  chatTargetRef.current = chatTarget;
+  const composing = chatTarget !== null;
+  const self = residents.find((resident) => resident.isSelf);
   const [attackNotice, setAttackNotice] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
@@ -147,6 +139,54 @@ export function DesktopCharacters({
     (Attack & { attackerId: string; targetId: string }) | null
   >(null);
   const wakeAnimation = useRef(() => {});
+
+  useLayoutEffect(() => {
+    if (chatTarget) {
+      const resident = entries.current.get(chatTarget);
+      if (resident) {
+        const caption = resident.element.querySelector("figcaption")!;
+        const minimumY = caption.offsetHeight + CHARACTER_SIZE / 2 + 8;
+        if (resident.body.y < minimumY) {
+          moveBody(
+            resident.body,
+            resident.body.x,
+            minimumY,
+            innerWidth,
+            innerHeight,
+          );
+          resident.body.mode = "air";
+          resident.body.vx = resident.body.vy = 0;
+          draw(resident, attack.current);
+        }
+      }
+    }
+    wakeAnimation.current();
+  }, [chatTarget]);
+
+  useEffect(() => {
+    if (!composing || !isTauri()) return;
+    const currentWindow = getCurrentWindow();
+    let disposed = false;
+    void (async () => {
+      await currentWindow.setFocusable(true);
+      if (disposed) return;
+      await currentWindow.setFocus();
+      if (!disposed)
+        entries.current
+          .get(chatTargetRef.current ?? "")
+          ?.element.querySelector("textarea")
+          ?.focus();
+    })().catch(() => {
+      if (!disposed)
+        setAttackNotice(
+          "채팅 입력창에 포커스를 주지 못했어요. 닫고 다시 열어 주세요.",
+        );
+    });
+    return () => {
+      disposed = true;
+      void currentWindow.setFocusable(false).catch(console.error);
+    };
+  }, [composing]);
 
   useEffect(() => {
     if (!attackNotice) return;
@@ -159,6 +199,8 @@ export function DesktopCharacters({
     for (const id of entries.current.keys())
       if (!ids.has(id)) entries.current.delete(id);
     if (drag.current && !ids.has(drag.current.id)) drag.current = null;
+    if (chatTargetRef.current && !ids.has(chatTargetRef.current))
+      setChatTarget(null);
     const active = attack.current;
     if (active && (!ids.has(active.attackerId) || !ids.has(active.targetId)))
       stopAttack();
@@ -194,6 +236,7 @@ export function DesktopCharacters({
     let frame: number | null = null;
     let previous = performance.now();
     const moving = (resident: Resident) =>
+      resident.element.dataset.composing !== "true" &&
       needsAnimation(resident.body, resident.walking);
     const schedule = () => {
       if (paused) return;
@@ -297,7 +340,7 @@ export function DesktopCharacters({
     let timer: ReturnType<typeof setTimeout>;
     let interactive = false;
     // Click-through windows do not receive pointermove. Poll the native cursor to
-    // enable input over a character or greeting, and keep capture until a drag ends.
+    // enable input over a character or chat input, and keep capture until a drag ends.
     const poll = async () => {
       try {
         const [x, y] = await invoke<[number, number]>(
@@ -308,7 +351,7 @@ export function DesktopCharacters({
         for (const { element } of entries.current.values()) {
           if (hit) break;
           for (const target of element.querySelectorAll(
-            "svg, .resident-wave, .chat-bubble",
+            "svg, .chat-composer",
           )) {
             const rect = target.getBoundingClientRect();
             if (
@@ -348,7 +391,7 @@ export function DesktopCharacters({
     if (
       event.button !== 0 ||
       drag.current ||
-      (event.target as Element).closest("button, .chat-bubble")
+      (event.target as Element).closest("button, .chat-composer")
     )
       return;
     const resident = entries.current.get(id)!;
@@ -474,19 +517,34 @@ export function DesktopCharacters({
   }
 
   function startNextAttack() {
-    if (attack.current || drag.current || paused || !connected) return;
+    if (
+      attack.current ||
+      drag.current ||
+      chatTargetRef.current ||
+      paused ||
+      !connected
+    )
+      return;
     let event: AttackEvent | undefined;
     while ((event = nextAttack(attackInbox, performance.now())))
       if (startAttack(event.attackerId, event.targetId)) break;
   }
 
-  async function activateResident(id: string) {
-    const targetProfile = residents.find((resident) => resident.id === id);
-    if (!targetProfile) return;
-    if (targetProfile.isSelf) {
-      void openChat(id);
+  function activateResident(id: string) {
+    if (!residents.find((resident) => resident.id === id)?.isSelf) {
+      void attackResident(id);
       return;
     }
+    if (!profileKey || !self) return;
+    stopAttack();
+    setChatTarget(id);
+  }
+
+  async function attackResident(id: string) {
+    const targetProfile = residents.find((resident) => resident.id === id);
+    if (!targetProfile) return;
+    if (targetProfile.isSelf) return;
+    setChatTarget(null);
     if (paused) {
       setAttackNotice("움직임을 다시 시작하면 공격할 수 있어요.");
       return;
@@ -527,16 +585,6 @@ export function DesktopCharacters({
     }
   }
 
-  async function openChat(id: string) {
-    if (!profileKey) return;
-    try {
-      await emitTo("main", OPEN_CHAT_EVENT, { profileKey, friendId: id });
-      setFailedChat(null);
-    } catch {
-      setFailedChat(id);
-    }
-  }
-
   return (
     <section
       className={`desktop-characters ${paused ? "is-paused" : ""}`}
@@ -555,8 +603,7 @@ export function DesktopCharacters({
           <figure
             key={resident.id}
             className={`desktop-resident ${resident.online ? "" : "is-resting"}`}
-            data-wave={!!resident.wave}
-            data-chat={!!chat}
+            data-composing={chatTarget === resident.id}
             ref={(element) => {
               if (!element) return;
               const entry = {
@@ -577,7 +624,10 @@ export function DesktopCharacters({
             onPointerUp={(event) => endDrag(event)}
             onPointerCancel={(event) => endDrag(event, true)}
             onLostPointerCapture={(event) => endDrag(event, true)}
-            onContextMenu={(event) => event.preventDefault()}
+            onContextMenu={(event) => {
+              if (!(event.target as Element).closest(".chat-composer"))
+                event.preventDefault();
+            }}
           >
             <div
               className="resident-rotation"
@@ -586,7 +636,7 @@ export function DesktopCharacters({
               aria-label={
                 resident.isSelf
                   ? profileKey
-                    ? `${name} 캐릭터로 채팅 열기`
+                    ? `${name} 캐릭터 위에 채팅 입력창 열기`
                     : undefined
                   : `내 캐릭터로 ${name} 공격하기`
               }
@@ -607,45 +657,16 @@ export function DesktopCharacters({
             <span className="resident-impact" aria-hidden="true">
               팡!
             </span>
-            <figcaption
-              className={resident.wave ? "has-wave" : undefined}
-              onClick={(event) => {
-                if ((event.target as Element).closest(".chat-bubble"))
-                  void openChat(resident.id);
-              }}
-            >
-              <ChatBubble message={chat} />
-              {failedChat === resident.id && (
-                <span role="alert">
-                  채팅을 열지 못했어요. 말풍선이나 친구 목록에서 다시 열어
-                  주세요.
-                </span>
-              )}
-              {resident.wave && (
-                <button
-                  type="button"
-                  className="resident-wave"
-                  aria-label={`${resident.name} 님의 인사 보기`}
-                  title={
-                    failedGreeting === resident.id
-                      ? "열지 못했어요. 다시 누르거나 트레이에서 사이드바를 열어 주세요."
-                      : "사이드바에서 인사 보기"
-                  }
-                  onClick={async () => {
-                    if (!profileKey) return;
-                    try {
-                      await emitTo("main", OPEN_GREETING_EVENT, {
-                        profileKey,
-                        friendId: resident.id,
-                      });
-                      setFailedGreeting(null);
-                    } catch {
-                      setFailedGreeting(resident.id);
-                    }
-                  }}
-                >
-                  {failedGreeting === resident.id ? "다시 열기" : "👋 안녕!"}
-                </button>
+            <figcaption>
+              {chatTarget === resident.id && self && profileKey ? (
+                <ChatComposer
+                  senderName={self.name}
+                  connected={connected && messages !== undefined}
+                  onSend={(text) => requestDesktopChat(profileKey, text)}
+                  onClose={() => setChatTarget(null)}
+                />
+              ) : (
+                <ChatBubble message={chat} />
               )}
               <span className="resident-name">{name}</span>
             </figcaption>

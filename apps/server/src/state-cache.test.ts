@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { CHAT_TTL_MS, ONLINE_TIMEOUT_MS, WAVE_TTL_MS } from "@wappy/api";
+import { CHAT_TTL_MS, ONLINE_TIMEOUT_MS } from "@wappy/api";
 import { createApp } from "./server.ts";
 
 test("conditional state remains fresh across writes, presence/TTL transitions and token revocation", async (t) => {
@@ -126,27 +126,12 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
     "a friend's heartbeat wakes cached presence",
   );
 
-  await write("/friends/wave", { friendId: alice.profile.id }, bob.token);
-  a = await state(alice.token);
-  assert.ok(a.body.friends[0].wave);
-  await write(
-    "/waves/read",
-    { waveId: a.body.friends[0].wave.id },
-    alice.token,
-  );
-  assert.equal(
-    (await state(alice.token, a.etag)).body.friends[0].wave,
-    undefined,
-  );
-  now += 30_001;
-  await write("/friends/wave", { friendId: alice.profile.id }, bob.token);
   await write("/chat", { text: "hello" }, bob.token);
   a = await state(alice.token);
   assert.equal(a.body.messages.length, 1);
-  now += Math.max(CHAT_TTL_MS, WAVE_TTL_MS);
+  now += CHAT_TTL_MS;
   next = await state(alice.token, a.etag);
   assert.equal(next.body.messages.length, 0);
-  assert.equal(next.body.friends[0].wave, undefined);
   await write("/chat", { text: "new" }, bob.token);
   a = await state(alice.token);
   await write("/friends/remove", { friendId: bob.profile.id }, alice.token);

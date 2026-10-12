@@ -11,7 +11,6 @@ test("friend search combines literal words and live filters without changing sha
       status: "책 읽는 중",
       character: "hachiware",
       online: false,
-      wave: { id: "older", sentAt: 1 },
     },
     {
       id: "two",
@@ -26,7 +25,6 @@ test("friend search combines literal words and live filters without changing sha
       status: "함께 .*",
       character: "shisa",
       online: true,
-      wave: { id: "newer", sentAt: 2 },
     },
   ];
   const original = structuredClone(friends);
@@ -48,11 +46,6 @@ test("friend search combines literal words and live filters without changing sha
     "IDs are not searchable profile text",
   );
   assert.deepEqual(ids(filterFriends(friends, "alice", "online", true)), []);
-  assert.deepEqual(ids(filterFriends(friends, "", "waves", true)), [
-    "three",
-    "one",
-  ]);
-  assert.deepEqual(ids(filterFriends(friends, "책", "waves", false)), ["one"]);
   assert.deepEqual(
     filterFriends(friends, "", "online", false),
     [],
@@ -72,7 +65,7 @@ test("friend search combines literal words and live filters without changing sha
   assert.deepEqual(
     friends,
     original,
-    "filtering must not reorder shared friends or consume waves",
+    "filtering must not reorder shared friends",
   );
   assert.equal(filterFriends(friends, "alice", "all", true)[0], friends[0]);
 });

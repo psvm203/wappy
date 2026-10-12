@@ -80,11 +80,10 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
       200,
     );
   }
-  async function send(token: string, friendId?: string) {
+  async function send(token: string) {
     now += 1001;
-    const result = await call(friendId ? "/chat/direct" : "/chat", token, {
+    const result = await call("/chat", token, {
       text: "함께",
-      ...(friendId ? { friendId } : {}),
     });
     assert.equal(result.status, 201);
     return result.body;
@@ -96,9 +95,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   await connect(alice.token, carol.token);
   await connect(bob.token, carol.token);
   const broadcast = await send(bob.token);
-  await send(bob.token, alice.profile.id);
-  await send(alice.token, bob.profile.id);
-  await call("/friends/wave", bob.token, { friendId: alice.profile.id });
   // Model upgrading a database from before blocking existed.
   await close();
   const legacy = new DatabaseSync(databasePath);
@@ -144,7 +140,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   logged.mock.restore();
   inspection.exec("DROP TRIGGER fail_disconnect");
   assert.equal((await state(alice.token)).friends.length, 2);
-  assert.equal((await state(alice.token)).messages?.length, 3);
+  assert.equal((await state(alice.token)).messages?.length, 1);
   assert.deepEqual((await state(alice.token)).blocking, {
     revision: 0,
     profiles: [],
@@ -174,11 +170,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     [carol.profile.id],
   );
   assert.deepEqual(afterAlice.messages, []);
-  assert.deepEqual(afterAlice.unreadChatIds, []);
-  assert.equal(
-    afterAlice.friends.some((friend) => friend.wave),
-    false,
-  );
   assert.deepEqual(afterBob.messages, [broadcast]);
   assert.deepEqual((await state(carol.token)).messages, [broadcast]);
   assert.equal(
@@ -195,19 +186,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
       .status,
     304,
   );
-  for (const [token, friendId] of [
-    [alice.token, bob.profile.id],
-    [bob.token, alice.profile.id],
-  ]) {
-    assert.equal(
-      (await call("/friends/wave", token, { friendId })).status,
-      404,
-    );
-    assert.equal(
-      (await call("/chat/direct", token, { friendId, text: "차단 후" })).status,
-      404,
-    );
-  }
   assert.equal(
     (await call("/invites/accept", bob.token, fromAlice)).status,
     409,
@@ -280,7 +258,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     [],
     "reconnecting does not restore revoked history",
   );
-  const fresh = await send(bob.token, alice.profile.id);
+  const fresh = await send(bob.token);
   assert.deepEqual((await state(alice.token)).messages, [fresh]);
   await call("/friends/block", alice.token, { friendId: bob.profile.id });
   assert.equal((await state(alice.token)).blocking?.revision, 3);

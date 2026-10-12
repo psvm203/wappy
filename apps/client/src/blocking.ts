@@ -11,12 +11,9 @@ export function applyBlockingSettings(
     state.self.id,
     ...friends.map((friend) => friend.id),
   ]);
-  const messages = state.messages?.filter(
-    (message) =>
-      visible.has(message.senderId) &&
-      (message.recipientId === undefined || visible.has(message.recipientId)),
+  const messages = state.messages?.filter((message) =>
+    visible.has(message.senderId),
   );
-  const messageIds = new Set(messages?.map((message) => message.id));
   return {
     ...state,
     blocking,
@@ -30,11 +27,6 @@ export function applyBlockingSettings(
           ),
         }),
     ...(messages === undefined ? {} : { messages }),
-    ...(state.unreadChatIds === undefined
-      ? {}
-      : {
-          unreadChatIds: state.unreadChatIds.filter((id) => messageIds.has(id)),
-        }),
   };
 }
 
