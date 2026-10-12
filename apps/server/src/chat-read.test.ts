@@ -229,8 +229,8 @@ test("chat acknowledgements are recipient-private, atomic, durable, bounded and 
   assert.equal((await state(bob.token)).unreadChatIds?.length, 1);
   assert.equal(
     (
-      await call("/profile/delete", carol.token, {
-        profileId: carol.profile.id,
+      await call("/friends/remove", carol.token, {
+        friendId: bob.profile.id,
       })
     ).status,
     200,

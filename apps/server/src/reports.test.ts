@@ -348,30 +348,6 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
     direct.text,
     "evidence outlives normal chat retention",
   );
-  assert.equal(
-    (await call("/profile/delete", bob.token, { profileId: bob.profile.id }))
-      .status,
-    200,
-  );
-  assert.equal(
-    reports.inspect(privateReceipt.id),
-    undefined,
-    "reporter deletion purges their submissions",
-  );
-  assert.ok(reports.inspect(carolReceipt.id));
-  assert.equal(
-    (
-      await call("/profile/delete", alice.token, {
-        profileId: alice.profile.id,
-      })
-    ).status,
-    200,
-  );
-  assert.equal(
-    reports.inspect(carolReceipt.id),
-    undefined,
-    "sender deletion also purges associated evidence",
-  );
   await connect(carol.token, stranger.token);
   const expires = await send(stranger.token, carol.profile.id);
   const expiringReport = (

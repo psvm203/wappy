@@ -53,7 +53,6 @@ import {
 } from "./chat";
 import { LocalPreview } from "./LocalPreview";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
-import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
@@ -67,7 +66,6 @@ import { applyBlockingSettings, reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
-  forgetDeletedProfile,
   loadSavedSessions,
   parkSession,
   saveSession,
@@ -78,6 +76,7 @@ import {
   formatInvitation,
   isLocalServer,
   parseInvitation,
+  WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
@@ -112,7 +111,6 @@ function App() {
     "ready" | "pending" | "unknown"
   >("ready");
   const [error, setError] = useState("");
-  const [deleteError, setDeleteError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
   >("connecting");
@@ -241,7 +239,6 @@ function App() {
     setSession(next);
     setLocalPreview(null);
     setPresenceStatus("ready");
-    setDeleteError("");
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
@@ -555,44 +552,6 @@ function App() {
         "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
-  }
-
-  function deleteProfile() {
-    if (!session || !state || connection !== "online") return;
-    const deleted = { ...session, profile: state.self };
-    void action(async () => {
-      setDeleteError("");
-      try {
-        const result = await request(session, "POST /profile/delete", {
-          profileId: deleted.profile.id,
-        });
-        if (!isRecord(result) || result.ok !== true)
-          throw new Error("Unconfirmed deletion");
-      } catch (cause) {
-        let failure = cause;
-        if (cause instanceof ApiError && cause.status === 404)
-          failure = new ApiError(
-            404,
-            "이 서버는 프로필 삭제를 지원하지 않습니다. 서버를 업데이트한 뒤 다시 시도해 주세요.",
-          );
-        else if (!(cause instanceof ApiError) || cause.status >= 500)
-          failure = new ApiError(
-            503,
-            "서버의 삭제 결과를 확인하지 못했습니다. 자동으로 다시 요청하지 않습니다. 연결 상태를 확인해 주세요.",
-          );
-        setDeleteError(errorMessage(failure));
-        throw failure;
-      }
-      const cleaned = forgetDeletedProfile(deleted);
-      setSavedSessions(loadSavedSessions());
-      if (currentSession.current !== session) return;
-      showOnboarding("create");
-      setNotice("서버에서 프로필과 친구 연결을 삭제했어요.");
-      if (!cleaned)
-        setError(
-          "서버의 프로필은 삭제됐지만 기기의 로그인 정보나 캐릭터 선택을 일부 지우지 못했습니다. 저장소 접근을 확인하고 남은 프로필은 보관 해제해 주세요.",
-        );
-    });
   }
 
   function selectedServer() {
@@ -1138,8 +1097,8 @@ function App() {
                   />
                 </label>
                 <p className="hint">
-                  코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
-                  붙여넣으면 초대장의 서버를 사용해요.
+                  기본 서버에서는 초대 코드만 입력하면 돼요. 별도 서버를
+                  사용하는 경우에만 주소를 바꿔 주세요.
                 </p>
                 <ServerCheck key={server} server={server} busy={busy} />
               </details>
@@ -1606,7 +1565,7 @@ function App() {
                 <p className="eyebrow">BETTER TOGETHER</p>
                 <h1>작은 초대, 큰 반가움.</h1>
                 <p className="muted">
-                  같이 있고 싶은 친구에게 초대장을 보내세요.
+                  같이 있고 싶은 친구에게 5자리 초대 코드를 보내세요.
                 </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
@@ -1614,24 +1573,20 @@ function App() {
                   </span>
                   <h2>내 초대 코드</h2>
                   <p>
-                    한 명에게, 하루 동안 유효해요.
-                    <br />새 코드를 만들면 이전 코드는 만료돼요.
+                    인원과 기간 제한 없이 사용할 수 있어요.
+                    <br />새 코드를 만들면 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
                     <>
                       <label className="field">
-                        친구에게 보낼 초대장
-                        <textarea
+                        친구에게 보낼 코드
+                        <input
+                          className="invite-code"
                           readOnly
-                          rows={5}
-                          value={formatInvitation(session.server, invite.code)}
+                          value={invite.code}
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
-                      <p className="hint">
-                        만료:{" "}
-                        {new Date(invite.expiresAt).toLocaleString("ko-KR")}
-                      </p>
                       <button
                         className="primary"
                         onClick={async () => {
@@ -1640,49 +1595,20 @@ function App() {
                             await navigator.clipboard.writeText(
                               formatInvitation(session.server, invite.code),
                             );
-                            setNotice(
-                              "서버 주소와 초대 코드를 함께 복사했어요.",
-                            );
+                            setNotice("초대 코드를 복사했어요.");
                           } catch {
                             setError(
-                              "초대장 입력란을 선택한 뒤 직접 복사해 주세요.",
+                              "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
                             );
                           }
                         }}
                       >
-                        초대장 복사 <span aria-hidden="true">↗</span>
+                        초대 코드 복사 <span aria-hidden="true">↗</span>
                       </button>
                       <p className="hint">
                         친구가 첫 화면의 ‘초대받았어요’에 붙여넣으면 바로 시작할
                         수 있어요.
                       </p>
-                      <details className="server-settings">
-                        <summary>코드만 따로 보내기</summary>
-                        <label className="field">
-                          친구에게 보낼 코드
-                          <input
-                            className="invite-code"
-                            readOnly
-                            value={invite.code}
-                            onFocus={(event) => event.target.select()}
-                          />
-                        </label>
-                        <button
-                          className="primary"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(invite.code);
-                              setNotice("초대 코드를 복사했어요.");
-                            } catch {
-                              setError(
-                                "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
-                              );
-                            }
-                          }}
-                        >
-                          초대 코드 복사 <span aria-hidden="true">↗</span>
-                        </button>
-                      </details>
                     </>
                   )}
                   <button
@@ -1706,11 +1632,13 @@ function App() {
                         ? "새 코드 만들기"
                         : "초대 코드 만들기"}
                   </button>
-                  <p className="hint server-address">
-                    친구도 같은 서버에 연결해야 해요.
-                    <br />
-                    <strong>{session.server}</strong>
-                  </p>
+                  {session.server !== WAPPY_SERVER && (
+                    <p className="hint server-address">
+                      친구도 같은 서버에 연결해야 해요.
+                      <br />
+                      <strong>{session.server}</strong>
+                    </p>
+                  )}
                   {isLocalServer(session.server) && (
                     <p className="hint">
                       현재 주소는 이 컴퓨터 안에서만 사용할 수 있어요. 다른
@@ -1758,15 +1686,6 @@ function App() {
                       onUnblock={(id) =>
                         void action(() => changeBlocking(id, false))
                       }
-                    />
-                    <DeleteProfile
-                      key={session.server + session.token}
-                      profile={state.self}
-                      server={session.server}
-                      busy={busy}
-                      connected={connection === "online"}
-                      error={deleteError}
-                      onDelete={deleteProfile}
                     />
                   </>
                 )}

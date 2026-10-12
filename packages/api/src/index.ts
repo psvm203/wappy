@@ -42,7 +42,6 @@ export const CHARACTER_NAMES: Record<Character, string> = {
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
-export const INVITE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const MAX_NAME_LENGTH = 24;
 export const MAX_STATUS_LENGTH = 60;
 export const WAVE_COOLDOWN_MS = 30_000;
@@ -142,12 +141,10 @@ export interface Session {
 }
 export interface Invite {
   code: string;
-  expiresAt: number;
 }
 export interface InvitePreview {
   name: string;
   character: Character;
-  expiresAt: number;
 }
 export interface ApiErrorBody {
   error: string;
@@ -186,10 +183,6 @@ export interface ApiRoutes {
   "POST /chat/report": { input: ChatReportInput; output: ChatReportReceipt };
   "GET /chat/reports": { input: undefined; output: ChatReportReceipt[] };
   "PATCH /profile": { input: ProfileInput; output: Profile };
-  "POST /profile/delete": {
-    input: { profileId: string };
-    output: { ok: true };
-  };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
@@ -422,16 +415,9 @@ function parseProfileSnapshot(value: unknown): ProfileInput {
 }
 
 export function parseInvitePreview(value: unknown): InvitePreview {
-  if (
-    !isRecord(value) ||
-    typeof value.expiresAt !== "number" ||
-    !Number.isSafeInteger(value.expiresAt) ||
-    value.expiresAt <= 0 ||
-    value.expiresAt > 8_640_000_000_000_000
-  )
-    throw new Error("잘못된 초대 응답입니다.");
+  if (!isRecord(value)) throw new Error("잘못된 초대 응답입니다.");
   const { name, character } = parseProfileSnapshot({ ...value, status: "" });
-  return { name, character, expiresAt: value.expiresAt };
+  return { name, character };
 }
 
 /** Validate state from a server before using it to render either desktop window. */

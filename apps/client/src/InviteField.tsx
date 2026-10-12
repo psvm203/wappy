@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { InvitePreview } from "@wappy/api";
-import { parseInvitation, serverUrl } from "./invitations";
+import { parseInvitation, serverUrl, WAPPY_SERVER } from "./invitations";
 import { ApiError, errorMessage, previewInvitation } from "./api";
 import { Character } from "./Character";
 
@@ -76,21 +76,21 @@ export function InviteField({
   return (
     <>
       <label className="field">
-        친구의 초대 코드 또는 초대장
+        친구의 초대 코드
         <textarea
           required
-          rows={5}
+          rows={1}
           maxLength={2048}
           autoCapitalize="none"
           autoComplete="off"
           spellCheck={false}
-          placeholder="친구가 보낸 초대장을 통째로 붙여넣어 주세요"
+          placeholder="5자리 코드 (예: A7K3M)"
           value={value}
           disabled={busy}
           onChange={(event) => onChange(event.target.value)}
         />
       </label>
-      {destination && (
+      {destination && destination !== WAPPY_SERVER && (
         <p className="hint invitation-destination" role="status">
           초대받은 서버: <strong>{destination}</strong>
         </p>
@@ -113,10 +113,7 @@ export function InviteField({
           <Character kind={current.preview.character} />
           <div>
             <strong>{current.preview.name} 님의 초대예요.</strong>
-            <p className="hint">
-              만료:{" "}
-              {new Date(current.preview.expiresAt).toLocaleString("ko-KR")}
-            </p>
+            <p className="hint">인원과 기간 제한 없이 사용할 수 있어요.</p>
             <p className="hint">아직 친구로 연결되지 않았어요.</p>
           </div>
         </div>

@@ -304,23 +304,6 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   assert.equal((await callback(expired)).status, 400);
   assert.equal((await poll(expired)).status, 410);
 
-  // Deleting a profile also removes its account link; the next login creates a fresh profile.
-  assert.equal(
-    (
-      await call(
-        "/profile/delete",
-        { profileId: restored.profile.id },
-        restored.token,
-      )
-    ).status,
-    200,
-  );
-  nickname = "";
-  const fresh = await start();
-  await callback(fresh);
-  const freshSession = (await poll(fresh)).body.session;
-  assert.notEqual(freshSession.profile.id, original.profile.id);
-  assert.equal(freshSession.profile.name, "카카오 친구");
   const db = new DatabaseSync(databasePath);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM kakao_accounts").get()!.count,

@@ -40,12 +40,15 @@
 .desktop-resident .character-pose {
   transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
 }
+/* Physics samples both walking animations at the same accumulated step phase. */
 .desktop-resident[data-motion="walk"] .character .character-body {
-  animation: character-waddle var(--step-duration, 0.7s) linear infinite;
+  animation: character-waddle 1s linear infinite paused;
+  animation-delay: var(--step-delay, 0s);
 }
 .desktop-resident[data-motion="walk"] .character-shadow {
   transform-origin: 50px 101px;
-  animation: step-shadow var(--step-duration, 0.7s) linear infinite;
+  animation: step-shadow 1s linear infinite paused;
+  animation-delay: var(--step-delay, 0s);
 }
 .desktop-resident[data-motion="drag"] .character-pose {
   transform: rotate(var(--drag-tilt, 0rad));

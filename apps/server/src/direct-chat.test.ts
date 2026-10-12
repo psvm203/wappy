@@ -234,12 +234,12 @@ test("direct chat migrates existing history, isolates recipients, survives recov
   assert.deepEqual((await state(bob.token)).messages, []);
   assert.deepEqual((await state(alice.token)).messages, []);
   const last = await call("/chat/direct", alice.token, {
-    text: "삭제 전 이야기",
+    text: "연결 해제 전 이야기",
     friendId: bob.profile.id,
   });
   assert.equal(last.status, 201);
   assert.equal(
-    (await call("/profile/delete", bob.token, { profileId: bob.profile.id }))
+    (await call("/friends/remove", bob.token, { friendId: alice.profile.id }))
       .status,
     200,
   );

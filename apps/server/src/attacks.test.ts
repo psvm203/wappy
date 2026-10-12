@@ -222,7 +222,7 @@ test(
       201,
     );
     assert.equal(
-      (await call("/profile/delete", b.token, { profileId: b.profile.id }))
+      (await call("/friends/remove", b.token, { friendId: a.profile.id }))
         .status,
       200,
     );

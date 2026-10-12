@@ -85,10 +85,7 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
     "--drag-tilt",
     `${-body.direction * body.dragTilt}rad`,
   );
-  element.style.setProperty(
-    "--step-duration",
-    `${Math.max(0.32, Math.min(0.85, 28 / Math.max(1, body.walkSpeed)))}s`,
-  );
+  element.style.setProperty("--step-delay", `${-body.stepPhase}s`);
   const flight = Math.min(1, Math.hypot(body.vx, body.vy) / 1600);
   element.style.setProperty("--flight-x", `${1 - flight * 0.08}`);
   element.style.setProperty("--flight-y", `${1 + flight * 0.14}`);
@@ -103,9 +100,16 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
     Math.min(innerWidth - nameInset, body.x + Math.sin(body.angle) * 92),
   );
   const labelInset = hasChat ? 64 : element.dataset.wave === "true" ? 24 : 12;
+  const labelOffsetY = Math.cos(body.angle) * 68;
+  const preferredNameY = body.y - labelOffsetY;
   const nameY = Math.max(
     labelInset,
-    Math.min(innerHeight - labelInset, body.y - Math.cos(body.angle) * 68),
+    Math.min(
+      innerHeight - labelInset,
+      preferredNameY < labelInset || preferredNameY > innerHeight - labelInset
+        ? body.y + labelOffsetY
+        : preferredNameY,
+    ),
   );
   element.style.setProperty("--name-x", `${nameX - body.x}px`);
   element.style.setProperty("--name-y", `${nameY - body.y}px`);
@@ -433,7 +437,7 @@ export function DesktopCharacters({
     if (resident && current.moved) {
       Object.assign(
         resident.body,
-        cancelled || !resident.walking
+        cancelled
           ? { vx: 0, vy: 0 }
           : releaseVelocity(current.samples, event.timeStamp),
       );
@@ -568,7 +572,6 @@ export function DesktopCharacters({
                 character: resident.character,
               };
               entries.current.set(resident.id, entry);
-              if (!resident.online) entry.body.vx = entry.body.vy = 0;
               draw(entry, attack.current);
             }}
             title={`${name} · ${resident.isSelf ? "클릭해서 채팅" : "클릭해서 공격"} · 드래그해서 이동`}

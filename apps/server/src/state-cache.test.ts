@@ -161,10 +161,5 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
     401,
     "a cache hit never skips authentication",
   );
-  await write(
-    "/profile/delete",
-    { profileId: alice.profile.id },
-    recovered.token,
-  );
-  assert.equal((await state(recovered.token, a.etag)).status, 401);
+  assert.equal((await state(recovered.token)).status, 200);
 });

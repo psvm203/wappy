@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
@@ -9,7 +9,6 @@ import { isIP } from "node:net";
 import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
 import { createReports, ReportError } from "./reports.ts";
 import {
-  INVITE_TTL_MS,
   REMOVED_CHARACTERS,
   ONLINE_TIMEOUT_MS,
   WAVE_COOLDOWN_MS,
@@ -45,6 +44,7 @@ class HttpError extends Error {
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
+const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const KAKAO_LOGIN_TTL_MS = 10 * 60_000;
 
 interface KakaoAttempt {
@@ -102,6 +102,12 @@ function field(body: unknown, key: string): string {
   return body[key].trim();
 }
 
+function inviteCode(body: unknown): string {
+  const code = field(body, "code");
+  // Older 43-character invitations remain case-sensitive.
+  return code.length === 5 ? code.toUpperCase() : code;
+}
+
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -153,8 +159,7 @@ export function createApp(options: {
       revision INTEGER NOT NULL CHECK (revision >= 1)
     ) STRICT;
     CREATE TABLE IF NOT EXISTS invites (
-      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
-      expires_at INTEGER NOT NULL
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
     CREATE TABLE IF NOT EXISTS recovery_codes (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
@@ -224,6 +229,13 @@ export function createApp(options: {
     db.exec(
       "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
     );
+  if (
+    db
+      .prepare("PRAGMA table_info(invites)")
+      .all()
+      .some((column) => column.name === "expires_at")
+  )
+    db.exec("ALTER TABLE invites DROP COLUMN expires_at");
   for (const table of ["users", "profile_blocks"]) {
     db.prepare(
       `UPDATE ${table} SET character = 'chiikawa'
@@ -332,7 +344,6 @@ export function createApp(options: {
       if (limit.until <= time) limits.delete(ip);
     for (const [state, attempt] of kakaoAttempts)
       if (attempt.expiresAt <= time) kakaoAttempts.delete(state);
-    db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
     db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
     db.prepare("DELETE FROM attack_events WHERE sent_at <= ?").run(
       time - ATTACK_TTL_MS,
@@ -950,38 +961,6 @@ export function createApp(options: {
           reply(res, route, { ...input, id: self!.id });
           break;
         }
-        case "POST /profile/delete": {
-          if (field(body, "profileId") !== self!.id)
-            throw new HttpError(409, "삭제할 프로필을 다시 확인해 주세요.");
-          // Existing databases use restrictive user foreign keys. Keep removal atomic
-          // without rebuilding their tables; waves already cascade with friendships.
-          db.exec("BEGIN IMMEDIATE");
-          try {
-            db.prepare(
-              "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
-            ).run(self!.id, self!.id);
-            db.prepare("DELETE FROM invites WHERE owner_id = ?").run(self!.id);
-            db.prepare("DELETE FROM recovery_codes WHERE owner_id = ?").run(
-              self!.id,
-            );
-            db.prepare("DELETE FROM presence_settings WHERE user_id = ?").run(
-              self!.id,
-            );
-            db.prepare(
-              `UPDATE blocking_settings SET revision = revision + 1
-              WHERE user_id IN (SELECT user_id FROM profile_blocks WHERE blocked_id = ?)`,
-            ).run(self!.id);
-            db.prepare("DELETE FROM users WHERE id = ?").run(self!.id);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
-          lastSeen.delete(self!.id);
-          validators.delete(self!.id);
-          reply(res, route, { ok: true });
-          break;
-        }
         case "PATCH /presence": {
           if (!isRecord(body) || typeof body.sharing !== "boolean")
             throw new HttpError(400, "접속 공개 여부를 확인해 주세요.");
@@ -1003,44 +982,60 @@ export function createApp(options: {
           break;
         }
         case "POST /invites": {
-          const code = secret();
-          const expiresAt = now() + INVITE_TTL_MS;
-          db.prepare(
-            `INSERT INTO invites VALUES (?, ?, ?) ON CONFLICT(owner_id)
-            DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at`,
-          ).run(hash(code), self!.id, expiresAt);
-          reply(res, route, { code, expiresAt }, 201);
+          // Reserve atomically: a collision must never replace another invitation
+          // or reuse this owner's previous code, including across server processes.
+          const issue = db.prepare(
+            `INSERT INTO invites SELECT ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM invites WHERE code_hash = ?)
+            ON CONFLICT(owner_id)
+            DO UPDATE SET code_hash = excluded.code_hash`,
+          );
+          let invitation: Output<"POST /invites"> | undefined;
+          for (let attempt = 0; attempt < 10; attempt++) {
+            const code = Array.from(
+              { length: 5 },
+              () => INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)],
+            ).join("");
+            const digest = hash(code);
+            if (issue.run(digest, self!.id, digest).changes) {
+              invitation = { code };
+              break;
+            }
+          }
+          if (!invitation)
+            throw new HttpError(
+              503,
+              "초대 코드를 만들지 못했어요. 다시 시도해 주세요.",
+            );
+          reply(res, route, invitation, 201);
           break;
         }
         case "POST /invites/preview": {
           const invite = db
             .prepare(
-              `SELECT users.name, users.character, invites.expires_at AS expiresAt
+              `SELECT users.name, users.character
                FROM invites JOIN users ON users.id = invites.owner_id
-               WHERE invites.code_hash = ? AND invites.expires_at > ?`,
+               WHERE invites.code_hash = ?`,
             )
-            .get(hash(field(body, "code")), now());
+            .get(hash(inviteCode(body)));
           if (!invite)
-            throw new HttpError(404, "초대 코드가 없거나 만료되었습니다.");
+            throw new HttpError(404, "유효하지 않은 초대 코드입니다.");
           reply(res, route, {
             name: invite.name as string,
             character: invite.character as Profile["character"],
-            expiresAt: invite.expiresAt as number,
           });
           break;
         }
         case "POST /invites/accept": {
-          const code = field(body, "code");
-          // The transaction consumes a code exactly once, even across server processes.
+          const code = inviteCode(body);
+          // Keep validation and friendship creation atomic across server processes.
           db.exec("BEGIN IMMEDIATE");
           try {
             const invite = db
-              .prepare(
-                "SELECT owner_id FROM invites WHERE code_hash = ? AND expires_at > ?",
-              )
-              .get(hash(code), now());
+              .prepare("SELECT owner_id FROM invites WHERE code_hash = ?")
+              .get(hash(code));
             if (!invite)
-              throw new HttpError(404, "초대 코드가 없거나 만료되었습니다.");
+              throw new HttpError(404, "유효하지 않은 초대 코드입니다.");
             if (invite.owner_id === self!.id)
               throw new HttpError(
                 400,
@@ -1058,9 +1053,6 @@ export function createApp(options: {
               .run(pair[0]!, pair[1]!);
             if (!result.changes)
               throw new HttpError(409, "이미 연결된 친구입니다.");
-            db.prepare("DELETE FROM invites WHERE code_hash = ?").run(
-              hash(code),
-            );
             db.exec("COMMIT");
             reply(res, route, profile(friendId));
           } catch (error) {
