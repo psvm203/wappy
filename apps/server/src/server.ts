@@ -1,14 +1,10 @@
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
-import {
-  createServer,
-  type IncomingMessage,
-  type ServerResponse,
-} from "node:http";
-import { DatabaseSync } from "node:sqlite";
+import { createServer, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
+import { HttpError, field, json, readBody, reply } from "./http.ts";
+import { openDatabase, transaction } from "./database.ts";
 import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
 import {
-  REMOVED_CHARACTERS,
   ONLINE_TIMEOUT_MS,
   ATTACK_COOLDOWN_MS,
   ATTACK_TTL_MS,
@@ -23,18 +19,10 @@ import {
   type ApiErrorBody,
   type Output,
   type Profile,
-  type Route,
   type ChatMessage,
   type BlockedProfile,
 } from "@wappy/api";
 
-class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
@@ -64,58 +52,10 @@ function loginPage(res: ServerResponse, status: number, message: string) {
   );
 }
 
-async function readBody(req: IncomingMessage): Promise<unknown> {
-  if (
-    req.headers["content-type"]?.split(";")[0]?.trim() !== "application/json"
-  ) {
-    throw new HttpError(415, "JSON 형식으로 요청해 주세요.");
-  }
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > 4096) throw new HttpError(413, "요청이 너무 큽니다.");
-    chunks.push(chunk);
-  }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString());
-  } catch {
-    throw new HttpError(400, "올바른 JSON이 아닙니다.");
-  }
-}
-
-function field(body: unknown, key: string): string {
-  if (
-    !isRecord(body) ||
-    typeof body[key] !== "string" ||
-    !body[key].trim() ||
-    body[key].length > 128
-  ) {
-    throw new HttpError(400, "입력값을 확인해 주세요.");
-  }
-  return body[key].trim();
-}
-
 function inviteCode(body: unknown): string {
   const code = field(body, "code");
   // Older 43-character invitations remain case-sensitive.
   return code.length === 5 ? code.toUpperCase() : code;
-}
-
-function json(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-  });
-  res.end(JSON.stringify(body));
-}
-function reply<R extends Route>(
-  res: ServerResponse,
-  _route: R,
-  body: Output<R>,
-  status = 200,
-) {
-  json(res, status, body);
 }
 
 export function createApp(options: {
@@ -126,102 +66,7 @@ export function createApp(options: {
   kakao?: KakaoConfig;
   kakaoFetch?: typeof fetch;
 }) {
-  const db = new DatabaseSync(options.databasePath);
-  db.exec(`
-    PRAGMA foreign_keys = ON;
-    PRAGMA journal_mode = WAL;
-    PRAGMA busy_timeout = 5000;
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL, character TEXT NOT NULL
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS friendships (
-      user_id TEXT NOT NULL REFERENCES users(id),
-      friend_id TEXT NOT NULL REFERENCES users(id),
-      PRIMARY KEY (user_id, friend_id), CHECK (user_id < friend_id)
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS profile_blocks (
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL, character TEXT NOT NULL,
-      PRIMARY KEY (user_id, blocked_id), CHECK (user_id <> blocked_id)
-    ) STRICT;
-    CREATE INDEX IF NOT EXISTS blocks_target ON profile_blocks(blocked_id);
-    CREATE TABLE IF NOT EXISTS blocking_settings (
-      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      revision INTEGER NOT NULL CHECK (revision >= 1)
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS invites (
-      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
-    ) STRICT;
-    DROP TABLE IF EXISTS recovery_codes;
-    CREATE TABLE IF NOT EXISTS kakao_accounts (
-      kakao_id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS presence_settings (
-      user_id TEXT PRIMARY KEY REFERENCES users(id),
-      sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
-      revision INTEGER NOT NULL CHECK (revision >= 1)
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE,
-      text TEXT NOT NULL, sent_at INTEGER NOT NULL
-    ) STRICT;
-    CREATE TABLE IF NOT EXISTS attack_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
-      attacker_id TEXT NOT NULL, target_id TEXT NOT NULL, sent_at INTEGER NOT NULL,
-      CHECK ((attacker_id = user_id AND target_id = friend_id) OR
-        (attacker_id = friend_id AND target_id = user_id)),
-      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
-    ) STRICT;
-    CREATE INDEX IF NOT EXISTS attacks_sender ON attack_events(attacker_id, sent_at);
-    CREATE INDEX IF NOT EXISTS attacks_target ON attack_events(target_id, sent_at);
-    CREATE INDEX IF NOT EXISTS attacks_expiry ON attack_events(sent_at);
-    CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
-    CREATE INDEX IF NOT EXISTS chat_expiry ON chat_messages(sent_at);
-    CREATE TABLE IF NOT EXISTS chat_recipients (
-      message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
-      PRIMARY KEY (message_id, user_id, friend_id),
-      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
-    ) STRICT;
-    CREATE INDEX IF NOT EXISTS friendships_friend ON friendships(friend_id, user_id);
-    CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
-    CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
-  `);
-  if (
-    db
-      .prepare("PRAGMA table_info(users)")
-      .all()
-      .some((column) => column.name === "status")
-  )
-    db.exec("ALTER TABLE users DROP COLUMN status");
-  if (
-    !db
-      .prepare("PRAGMA table_info(chat_messages)")
-      .all()
-      .some((column) => column.name === "recipient_id")
-  )
-    db.exec(
-      "ALTER TABLE chat_messages ADD COLUMN recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE",
-    );
-  if (
-    db
-      .prepare("PRAGMA table_info(invites)")
-      .all()
-      .some((column) => column.name === "expires_at")
-  )
-    db.exec("ALTER TABLE invites DROP COLUMN expires_at");
-  for (const table of ["users", "profile_blocks"]) {
-    db.prepare(
-      `UPDATE ${table} SET character = 'chiikawa'
-       WHERE character IN (${REMOVED_CHARACTERS.map(() => "?").join(",")})`,
-    ).run(...REMOVED_CHARACTERS);
-  }
+  const db = openDatabase(options.databasePath);
   const now = options.now ?? Date.now;
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
@@ -548,9 +393,8 @@ export function createApp(options: {
           }
           const identity = attempt.identity;
           const token = secret();
-          let user: Profile;
-          db.exec("BEGIN IMMEDIATE");
-          try {
+          const user = transaction(db, () => {
+            let user: Profile;
             const account = db
               .prepare("SELECT user_id FROM kakao_accounts WHERE kakao_id = ?")
               .get(identity.id);
@@ -577,11 +421,8 @@ export function createApp(options: {
                 user.id,
               );
             }
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
+            return user;
+          });
           kakaoAttempts.delete(state);
           lastSeen.set(user.id, now());
           reply(res, route, {
@@ -735,10 +576,8 @@ export function createApp(options: {
             res.setHeader("Retry-After", "1");
             throw new HttpError(429, "메시지는 1초에 한 번 보낼 수 있어요.");
           }
-          db.exec("BEGIN IMMEDIATE");
-          let id: number;
-          try {
-            id = Number(
+          const id = transaction(db, () => {
+            const id = Number(
               db
                 .prepare(
                   "INSERT INTO chat_messages (sender_id, text, sent_at) VALUES (?, ?, ?)",
@@ -756,11 +595,8 @@ export function createApp(options: {
               SELECT id FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT ?
             )`,
             ).run(self!.id, self!.id, CHAT_HISTORY_LIMIT);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
+            return id;
+          });
           reply(
             res,
             route,
@@ -855,8 +691,7 @@ export function createApp(options: {
         case "POST /invites/accept": {
           const code = inviteCode(body);
           // Keep validation and friendship creation atomic across server processes.
-          db.exec("BEGIN IMMEDIATE");
-          try {
+          const friendId = transaction(db, () => {
             const invite = db
               .prepare("SELECT owner_id FROM invites WHERE code_hash = ?")
               .get(hash(code));
@@ -879,12 +714,9 @@ export function createApp(options: {
               .run(pair[0]!, pair[1]!);
             if (!result.changes)
               throw new HttpError(409, "이미 연결된 친구입니다.");
-            db.exec("COMMIT");
-            reply(res, route, profile(friendId));
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
+            return friendId;
+          });
+          reply(res, route, profile(friendId));
           break;
         }
         case "POST /friends/remove":
@@ -893,8 +725,7 @@ export function createApp(options: {
           if (route === "POST /friends/block" && friendId === self!.id)
             throw new HttpError(400, "내 프로필은 차단할 수 없어요.");
           const pair = [self!.id, friendId].sort();
-          db.exec("BEGIN IMMEDIATE");
-          try {
+          transaction(db, () => {
             if (route === "POST /friends/block") {
               if (!profile(friendId))
                 throw new HttpError(404, "프로필을 찾을 수 없어요.");
@@ -913,11 +744,7 @@ export function createApp(options: {
             db.prepare(
               "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
             ).run(pair[0]!, pair[1]!);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
+          });
           if (route === "POST /friends/block")
             reply(res, route, blocking(self!.id));
           else reply(res, route, { ok: true });
@@ -925,19 +752,14 @@ export function createApp(options: {
         }
         case "POST /friends/unblock": {
           const friendId = field(body, "friendId");
-          db.exec("BEGIN IMMEDIATE");
-          try {
+          transaction(db, () => {
             const result = db
               .prepare(
                 "DELETE FROM profile_blocks WHERE user_id = ? AND blocked_id = ?",
               )
               .run(self!.id, friendId);
             if (result.changes) advanceBlocking.run(self!.id);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
+          });
           reply(res, route, blocking(self!.id));
           break;
         }
