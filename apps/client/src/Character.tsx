@@ -11,6 +11,14 @@ import {
   BlackWidow,
   Hawkeye,
 } from "./Avengers";
+import {
+  Pochacco,
+  BadtzMaru,
+  Hangyodon,
+  Pekkle,
+  Tuxedosam,
+  Keroppi,
+} from "./Sanrio";
 
 const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   chiikawa: Chiikawa,
@@ -27,6 +35,12 @@ const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   hulk: Hulk,
   "black-widow": BlackWidow,
   hawkeye: Hawkeye,
+  pochacco: Pochacco,
+  "badtz-maru": BadtzMaru,
+  hangyodon: Hangyodon,
+  pekkle: Pekkle,
+  tuxedosam: Tuxedosam,
+  keroppi: Keroppi,
 };
 
 export function Character({

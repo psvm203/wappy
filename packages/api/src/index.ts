@@ -22,6 +22,12 @@ export const CHARACTERS = [
   "hulk",
   "black-widow",
   "hawkeye",
+  "pochacco",
+  "badtz-maru",
+  "hangyodon",
+  "pekkle",
+  "tuxedosam",
+  "keroppi",
 ] as const;
 export type Character = (typeof CHARACTERS)[number];
 export const CHARACTER_NAMES: Record<Character, string> = {
@@ -39,6 +45,12 @@ export const CHARACTER_NAMES: Record<Character, string> = {
   hulk: "헐크",
   "black-widow": "블랙 위도우",
   hawkeye: "호크아이",
+  pochacco: "포차코",
+  "badtz-maru": "배드바츠마루",
+  hangyodon: "한교동",
+  pekkle: "아히루노페클",
+  tuxedosam: "턱시도샘",
+  keroppi: "케로케로케로피",
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
