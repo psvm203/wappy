@@ -67,7 +67,7 @@ export interface AttackEvent {
 export const MAX_CHAT_LENGTH = 200;
 export const CHAT_HISTORY_LIMIT = 50;
 export const CHAT_TTL_MS = 24 * 60 * 60 * 1_000;
-export const CHAT_BUBBLE_MS = 60_000;
+export const CHAT_BUBBLE_MS = 5_000;
 export const CHAT_COOLDOWN_MS = 1_000;
 export interface ChatMessage {
   id: number;

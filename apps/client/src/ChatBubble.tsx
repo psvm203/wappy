@@ -7,16 +7,11 @@ export function ChatBubble({ message }: { message?: ChatMessage }) {
     if (!message) return;
     const timer = window.setTimeout(
       () => setExpired(message.id),
-      Math.max(0, message.sentAt + CHAT_BUBBLE_MS - Date.now()),
+      CHAT_BUBBLE_MS,
     );
     return () => window.clearTimeout(timer);
-  }, [message?.id, message?.sentAt]);
-  if (
-    !message ||
-    message.id === expired ||
-    message.sentAt + CHAT_BUBBLE_MS <= Date.now()
-  )
-    return null;
+  }, [message?.id]);
+  if (!message || message.id === expired) return null;
   return (
     <p className="chat-bubble" title={message.text}>
       {message.text}

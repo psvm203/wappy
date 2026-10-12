@@ -3,12 +3,10 @@ import { MAX_CHAT_LENGTH, parseChatText } from "@wappy/api";
 import "./ChatComposer.css";
 
 export function ChatComposer({
-  senderName,
   connected,
   onSend,
   onClose,
 }: {
-  senderName: string;
   connected: boolean;
   onSend: (text: string) => Promise<unknown>;
   onClose: () => void;
@@ -54,7 +52,6 @@ export function ChatComposer({
       }}
     >
       <div className="chat-composer-heading">
-        <span>{senderName} · 친구 모두에게</span>
         <button
           type="button"
           aria-label="채팅 입력창 닫기"

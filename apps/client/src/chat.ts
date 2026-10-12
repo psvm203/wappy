@@ -1,4 +1,4 @@
-import { CHAT_BUBBLE_MS, type ChatMessage } from "@wappy/api";
+import type { ChatMessage } from "@wappy/api";
 
 export function latestChat(
   messages: readonly ChatMessage[] | undefined,
@@ -7,7 +7,8 @@ export function latestChat(
 ) {
   for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
     const message = messages![i];
-    if (message.senderId === senderId && message.sentAt + CHAT_BUBBLE_MS > now)
+    // Allow polling delays; ChatBubble starts its five-second timer on display.
+    if (message.senderId === senderId && message.sentAt + 60_000 > now)
       return message;
   }
 }

@@ -20,9 +20,8 @@
   justify-content: space-between;
   gap: 6px;
 }
-.chat-composer-heading span {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.chat-composer-heading {
+  justify-content: flex-end;
 }
 .chat-composer button {
   padding: 4px 7px;
