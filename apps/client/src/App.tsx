@@ -12,7 +12,6 @@ import {
   parsePresenceSettings,
   parseProfile,
   parseChatMessage,
-  parseChatMessageIds,
   parseBlockingSettings,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
@@ -35,22 +34,17 @@ import {
 import { Character } from "./Character";
 import {
   useCharacterPreferences,
-  useDesktopGreeting,
-  OPEN_CHAT_EVENT,
   useDesktopSync,
   useResidentSelection,
-  type GreetingTarget,
 } from "./desktop";
 import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { KakaoLogin } from "./KakaoLogin";
-import { ChatPanel, ChatBubble } from "./ChatPanel";
-import {
-  latestChat,
-  reconcileChatReads,
-  unreadChatByConversation,
-} from "./chat";
+import { ChatBubble } from "./ChatBubble";
+import { ChatComposer } from "./ChatComposer";
+import { latestChat } from "./chat";
+import { useDesktopChatRequests } from "./chat-bridge";
 import { LocalPreview } from "./LocalPreview";
 import { RecoveryCode, RecoveryForm } from "./Recovery";
 import { DeleteProfile } from "./DeleteProfile";
@@ -59,7 +53,6 @@ import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
 import { ServerCheck } from "./ServerCheck";
 import { SupportPanel } from "./SupportPanel";
-import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
 import { BlockedProfiles } from "./BlockedProfiles";
@@ -100,7 +93,7 @@ function App() {
   const [state, setState] = useState<SidebarState | null>(null);
   const [localPreview, setLocalPreview] = useState<SidebarState | null>(null);
   const previewStart = useRef<HTMLButtonElement>(null);
-  const [panel, setPanel] = useState<"friends" | "chat" | "invite" | "profile">(
+  const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -123,11 +116,7 @@ function App() {
   const [friendQuery, setFriendQuery] = useState("");
   const [friendView, setFriendView] = useState<FriendView>("all");
   const friendSearch = useRef<HTMLInputElement>(null);
-  const [chatFocus, setChatFocus] = useState(0);
-  const [chatRecipient, setChatRecipient] = useState<string | null>(null);
-  const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
-    null,
-  );
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
   const {
     preferences,
     setPreferences,
@@ -141,38 +130,7 @@ function App() {
       ? residentSelectionKey(session.server, state.self.id)
       : null;
   const selection = useResidentSelection(desktop ? profileKey : null);
-  const greetingError = useDesktopGreeting((target) => {
-    if (
-      !session ||
-      currentSession.current !== session ||
-      target.profileKey !== profileKey ||
-      !state?.friends.some((friend) => friend.id === target.friendId)
-    )
-      return;
-    void windowAction(async () => {
-      await invoke("open_sidebar");
-      if (currentSession.current !== session) return;
-      if (compact) await invoke("set_sidebar_compact", { compact: false });
-      if (currentSession.current !== session) return;
-      setCompact(false);
-      setPanel("friends");
-      setFriendQuery("");
-      setFriendView("all");
-      setGreetingTarget(target);
-    });
-  });
-  const chatError = useDesktopGreeting((target) => {
-    if (
-      !session ||
-      currentSession.current !== session ||
-      target.profileKey !== profileKey ||
-      !state ||
-      (target.friendId !== state.self.id &&
-        !state.friends.some((friend) => friend.id === target.friendId))
-    )
-      return;
-    openChat(target.friendId === state.self.id ? null : target.friendId);
-  }, OPEN_CHAT_EVENT);
+  const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
     state: session ? (selection.ready ? state : null) : localPreview,
     profileKey,
@@ -216,24 +174,9 @@ function App() {
   const desktopError =
     preferencesError ||
     selection.error ||
-    greetingError ||
     chatError ||
     attackError ||
     syncError;
-
-  useEffect(() => {
-    if (!greetingTarget) return;
-    if (
-      greetingTarget.profileKey === profileKey &&
-      !compact &&
-      panel === "friends"
-    ) {
-      const card = document.getElementById(`friend-${greetingTarget.friendId}`);
-      card?.focus({ preventScroll: true });
-      card?.scrollIntoView({ block: "center" });
-    }
-    setGreetingTarget(null);
-  }, [greetingTarget, profileKey, compact, panel]);
 
   function changeSession(next: SavedSession | null) {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
@@ -245,123 +188,65 @@ function App() {
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
-    setChatRecipient(null);
+    setChatTarget(null);
     setBlockingFriend(null);
   }
 
   function applyState(next: SidebarState) {
     setState((current) =>
-      reconcileChatReads(
-        current,
-        reconcilePresence(current, reconcileBlocking(current, next)),
-      ),
+      reconcilePresence(current, reconcileBlocking(current, next)),
     );
   }
 
-  function openChat(recipientId: string | null = null) {
-    if (!session) return;
-    const active = session;
-    void windowAction(async () => {
-      if (desktop) {
-        await invoke("open_sidebar");
-        if (currentSession.current !== active) return;
-        if (compact) await invoke("set_sidebar_compact", { compact: false });
-      }
-      if (currentSession.current !== active) return;
-      setCompact(false);
-      setPanel("chat");
-      setChatRecipient(recipientId);
-      setChatFocus((value) => value + 1);
-    });
-  }
-
-  async function sendChat(text: string, recipientId: string | null) {
-    if (!session || connection !== "online")
-      throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
-    const active = session;
-    if (
-      recipientId !== null &&
-      (!state?.directChat ||
-        !state.friends.some((friend) => friend.id === recipientId))
-    )
-      throw new ApiError(
-        409,
-        "1:1 채팅 지원 여부와 친구 연결을 다시 확인해 주세요.",
-      );
-    const message = parseChatMessage(
-      recipientId === null
-        ? await request(active, "POST /chat", { text })
-        : await request(active, "POST /chat/direct", {
-            text,
-            friendId: recipientId,
-          }),
-    );
-    if (
-      message.senderId !== state?.self.id ||
-      message.recipientId !== (recipientId ?? undefined)
-    )
-      throw new ApiError(
-        502,
-        "메시지 전송 결과를 확인하지 못했어요. 대화 목록을 확인해 주세요.",
-      );
-    if (currentSession.current !== active) return;
-    setState((current) => {
-      if (
-        !current ||
-        (recipientId !== null &&
-          !current.friends.some((friend) => friend.id === recipientId))
-      )
-        return current;
-      const messages = [
-        ...(current.messages ?? []).filter((item) => item.id !== message.id),
-        message,
-      ]
-        .sort((a, b) => a.id - b.id)
-        .slice(-CHAT_HISTORY_LIMIT);
-      return {
-        ...current,
-        messages,
-        ...(current.unreadChatIds === undefined
-          ? {}
-          : {
-              unreadChatIds: current.unreadChatIds.filter((id) =>
-                messages.some((item) => item.id === id),
-              ),
-            }),
-      };
-    });
-  }
-
-  async function readChat(messageIds: number[]) {
+  async function sendChat(text: string) {
     if (
       !session ||
+      currentSession.current !== session ||
       connection !== "online" ||
-      state?.unreadChatIds === undefined
+      state?.messages === undefined
     )
-      throw new ApiError(503, "서버에 다시 연결된 뒤 확인해 주세요.");
+      throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
     const active = session;
-    const result = await request(active, "POST /chat/read", { messageIds });
-    const confirmed = parseChatMessageIds(
-      isRecord(result) ? result.messageIds : undefined,
+    const message = parseChatMessage(
+      await request(active, "POST /chat", { text }),
     );
-    if (
-      confirmed.length !== messageIds.length ||
-      confirmed.some((id) => !messageIds.includes(id))
-    )
+    if (message.senderId !== state.self.id)
+      throw new ApiError(502, "메시지 전송 결과를 확인하지 못했어요.");
+    if (currentSession.current !== active)
       throw new ApiError(
-        502,
-        "메시지 확인 결과를 받지 못했어요. 다시 확인해 주세요.",
+        409,
+        "프로필이 바뀌었어요. 현재 프로필에서 다시 보내 주세요.",
       );
-    if (currentSession.current !== active) return;
     setState((current) =>
-      current?.unreadChatIds
+      current
         ? {
             ...current,
-            unreadChatIds: current.unreadChatIds.filter(
-              (id) => !confirmed.includes(id),
-            ),
+            messages: [
+              ...(current.messages ?? []).filter(
+                (item) => item.id !== message.id,
+              ),
+              message,
+            ]
+              .sort((a, b) => a.id - b.id)
+              .slice(-CHAT_HISTORY_LIMIT),
           }
         : current,
+    );
+    return message;
+  }
+
+  function chatComposer(id: string) {
+    return (
+      chatTarget === id &&
+      state && (
+        <ChatComposer
+          key={profileKey ?? state.self.id}
+          senderName={state.self.name}
+          connected={connection === "online" && state.messages !== undefined}
+          onSend={sendChat}
+          onClose={() => setChatTarget(null)}
+        />
+      )
     );
   }
 
@@ -739,12 +624,6 @@ function App() {
     connection === "online"
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
-  const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
-  const unreadChats = unreadChatByConversation(state);
-  const unreadChatCount = [...unreadChats.values()].reduce(
-    (total, ids) => total + ids.length,
-    0,
-  );
   const listedFriends = filterFriends(
     state?.friends ?? [],
     friendQuery,
@@ -884,33 +763,13 @@ function App() {
             <span className="compact-presence">접속 숨김</span>
           )}
         </button>
-        {unreadChatCount > 0 && (
-          <button
-            className="compact-chat text-button"
-            aria-label={`새 메시지 ${unreadChatCount}개 확인하러 가기`}
-            onClick={() => openChat(unreadChats.keys().next().value ?? null)}
-          >
-            채팅 <span className="wave-count">{unreadChatCount}</span>
-          </button>
-        )}
         <div className="compact-friends">
           {state.friends.map((friend) => (
-            <div
-              key={friend.id}
-              title={`${friend.name}${friend.wave ? " · 새 인사" : ""}`}
-            >
+            <div key={friend.id} title={friend.name}>
               <Character
                 kind={friend.character}
                 asleep={!friend.online || connection !== "online"}
               />
-              {friend.wave && (
-                <span
-                  className="compact-wave"
-                  aria-label={`${friend.name} 님의 새 인사`}
-                >
-                  👋
-                </span>
-              )}
             </div>
           ))}
         </div>
@@ -1228,7 +1087,6 @@ function App() {
             {(
               [
                 ["friends", "친구들"],
-                ["chat", "채팅"],
                 ["invite", "초대하기"],
                 ["profile", "내 모습"],
               ] as const
@@ -1244,42 +1102,10 @@ function App() {
                 }}
               >
                 {label}
-                {id === "friends" && waveCount > 0 && (
-                  <span
-                    className="wave-count"
-                    aria-label={`새 인사 ${waveCount}개`}
-                  >
-                    {waveCount}
-                  </span>
-                )}
-                {id === "chat" && unreadChatCount > 0 && (
-                  <span
-                    className="wave-count"
-                    aria-label={`새 메시지 ${unreadChatCount}개`}
-                  >
-                    {unreadChatCount}
-                  </span>
-                )}
               </button>
             ))}
           </nav>
           <div className="scroll-area content">
-            {state && (
-              <div hidden={panel !== "chat"}>
-                <ChatPanel
-                  key={`${session.server}:${session.token}:${state.self.id}`}
-                  session={session}
-                  state={state}
-                  connected={connection === "online"}
-                  focusRequest={chatFocus}
-                  active={panel === "chat"}
-                  recipientId={chatRecipient}
-                  onRecipientChange={setChatRecipient}
-                  onSend={sendChat}
-                  onRead={readChat}
-                />
-              </div>
-            )}
             {desktopError && (
               <p className="error" role="alert">
                 {desktopError}
@@ -1312,10 +1138,6 @@ function App() {
                 {presenceControls}
                 {state.friends.length > 0 && (
                   <>
-                    <p className="hint greeting-hint">
-                      손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
-                      전까지 최근 인사 하나를 하루 동안 보관해요.
-                    </p>
                     <section className="friend-filters" aria-label="친구 찾기">
                       <label className="field friend-search">
                         이름이나 상태로 찾기
@@ -1339,7 +1161,6 @@ function App() {
                           [
                             ["all", "전체", state.friends.length],
                             ["online", "접속 중", onlineCount],
-                            ["waves", "새 인사", waveCount],
                           ] as const
                         ).map(([view, label, count]) => (
                           <button
@@ -1389,13 +1210,11 @@ function App() {
                     <h2>
                       {friendView === "online" && connection !== "online"
                         ? "접속 상태를 확인할 수 없어요."
-                        : friendView === "waves" && !friendQuery.trim()
-                          ? "새 인사가 아직 없어요."
-                          : "조건에 맞는 친구가 없어요."}
+                        : "조건에 맞는 친구가 없어요."}
                     </h2>
                     <p>
                       {friendView === "online" && connection !== "online"
-                        ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록과 받은 인사는 계속 볼 수 있어요."
+                        ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록은 계속 볼 수 있어요."
                         : "검색어나 목록 보기를 바꾸면 다른 친구도 볼 수 있어요."}
                     </p>
                   </div>
@@ -1409,18 +1228,13 @@ function App() {
                         className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
                         key={friend.id}
                       >
-                        <button
-                          type="button"
-                          className="friend-scene character-chat"
-                          aria-label={`${friend.name} 캐릭터로 1:1 채팅 열기`}
-                          onClick={() => openChat(friend.id)}
-                        >
+                        <div className="friend-scene">
                           <Character
                             kind={friend.character}
                             asleep={!friend.online || connection !== "online"}
                           />
                           <div className="scene-floor" />
-                        </button>
+                        </div>
                         <div className="friend-info">
                           <div className="friend-name">
                             <strong>{friend.name}</strong>
@@ -1432,20 +1246,6 @@ function App() {
                           <ChatBubble
                             message={latestChat(state.messages, friend.id)}
                           />
-                          <button
-                            className="text-button"
-                            onClick={() => openChat(friend.id)}
-                          >
-                            1:1 채팅
-                            {!!unreadChats.get(friend.id)?.length && (
-                              <span
-                                className="wave-count"
-                                aria-label={`새 메시지 ${unreadChats.get(friend.id)!.length}개`}
-                              >
-                                {unreadChats.get(friend.id)!.length}
-                              </span>
-                            )}
-                          </button>
                           <small>
                             {connection !== "online"
                               ? "접속 상태 확인 중"
@@ -1453,38 +1253,6 @@ function App() {
                                 ? "지금 함께 있어요"
                                 : "잠시 쉬고 있어요"}
                           </small>
-                          <FriendGreeting
-                            friend={friend}
-                            disabled={busy || connection !== "online"}
-                            onSend={() =>
-                              void action(async () => {
-                                await request(session, "POST /friends/wave", {
-                                  friendId: friend.id,
-                                });
-                                setNotice(
-                                  `${friend.name} 님에게 인사를 보냈어요.`,
-                                );
-                              })
-                            }
-                            onRead={() =>
-                              void action(async () => {
-                                if (!friend.wave) return;
-                                // The read button is disabled, then removed. Move focus before
-                                // waiting so a late response cannot interrupt new input.
-                                document
-                                  .getElementById(
-                                    friendView === "waves"
-                                      ? "friend-view-waves"
-                                      : `friend-${friend.id}`,
-                                  )
-                                  ?.focus({ preventScroll: true });
-                                await request(session, "POST /waves/read", {
-                                  waveId: friend.wave.id,
-                                });
-                                await refresh();
-                              })
-                            }
-                          />
                           <button
                             type="button"
                             className="text-button danger"
@@ -1554,9 +1322,8 @@ function App() {
                               <strong>{friend.name} 님을 차단할까요?</strong>
                             </p>
                             <p>
-                              친구 연결과 둘 사이의 1:1 대화·인사를 삭제하고,
-                              초대로 다시 연결되는 것도 막아요. 차단 해제는 내
-                              모습에서 할 수 있어요.
+                              친구 연결을 삭제하고, 초대로 다시 연결되는 것도
+                              막아요. 차단 해제는 내 모습에서 할 수 있어요.
                             </p>
                             <div>
                               <button
@@ -1595,10 +1362,6 @@ function App() {
                     ))}
                   </ul>
                 )}
-                <div className="little-note">
-                  <span aria-hidden="true">✧</span> 말하지 않아도, 곁에 있다는
-                  것.
-                </div>
               </>
             )}
             {state && panel === "invite" && (
@@ -1807,20 +1570,23 @@ function App() {
           </div>
           {state && (
             <footer className="self-card">
-              <button
-                type="button"
-                className="character-chat"
-                aria-label="내 캐릭터로 채팅 열기"
-                onClick={() => openChat()}
-              >
-                <Character kind={state.self.character} />
-              </button>
+              <div className="character-chat-anchor">
+                {chatComposer(state.self.id)}
+                <button
+                  type="button"
+                  className="character-chat"
+                  aria-label="내 캐릭터 위에 채팅 입력창 열기"
+                  onClick={() => setChatTarget(state.self.id)}
+                >
+                  <Character kind={state.self.character} />
+                </button>
+              </div>
               <div>
                 <strong>
                   {state.self.name}
                   <span className="me-badge">나</span>
                 </strong>
-                <p>{state.self.status || "함께 있는 것만으로도 좋아요"}</p>
+                {state.self.status && <p>{state.self.status}</p>}
                 <ChatBubble
                   message={latestChat(state.messages, state.self.id)}
                 />

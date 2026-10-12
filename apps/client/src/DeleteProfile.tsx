@@ -30,13 +30,10 @@ export function DeleteProfile({
     >
       <h2>이 프로필과 작별하기</h2>
       <p>
-        이 서버의 내 프로필, 친구 연결, 초대와 주고받은 인사를 삭제합니다. 복구
-        코드로도 되돌릴 수 없어요. 다른 프로필은 유지됩니다.
+        이 서버의 내 프로필, 친구 연결과 초대를 삭제합니다. 복구 코드로도 되돌릴
+        수 없어요. 다른 프로필은 유지됩니다.
       </p>
-      <p className="hint">
-        내가 보내거나 받은 1:1 메시지와 나에 관련된 메시지 신고 기록도
-        삭제합니다.
-      </p>
+      <p className="hint">내가 보낸 채팅 메시지도 삭제합니다.</p>
       <p className="hint server-address">
         삭제할 프로필: <strong>{profile.name}</strong>
         <br />
