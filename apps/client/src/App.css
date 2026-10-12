@@ -718,25 +718,6 @@
   padding: 13px 14px;
   font-weight: 600;
 }
-.kakao-login {
-  margin: 18px 0;
-}
-.kakao-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 45px;
-  border-radius: 12px;
-  background: #fee500;
-  color: rgb(0 0 0 / 85%);
-  font-size: 14px;
-  font-weight: 600;
-}
-.kakao-login .hint {
-  margin: 8px 0;
-}
 .primary {
   display: flex;
   align-items: center;

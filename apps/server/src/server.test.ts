@@ -556,7 +556,7 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   }
 });
 
-test("startup removes recovery codes and retired profile fields while preserving existing accounts", async () => {
+test("startup removes retired authentication data and profile fields while preserving existing accounts", async () => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-migration-"));
   const databasePath = join(directory, "test.sqlite");
   const token = "a".repeat(43);
@@ -571,6 +571,10 @@ test("startup removes recovery codes and retired profile fields while preserving
     ) STRICT;
     CREATE TABLE recovery_codes (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
+    ) STRICT;
+    CREATE TABLE kakao_accounts (
+      kakao_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;
     CREATE TABLE friendships (
       user_id TEXT NOT NULL REFERENCES users(id),
@@ -591,6 +595,7 @@ test("startup removes recovery codes and retired profile fields while preserving
   legacy
     .prepare("INSERT INTO recovery_codes VALUES (?, ?)")
     .run(hash(code), "alice");
+  legacy.exec("INSERT INTO kakao_accounts VALUES ('123456789', 'alice')");
   legacy.exec("INSERT INTO friendships VALUES ('alice', 'bob')");
   legacy
     .prepare("INSERT INTO invites VALUES (?, ?, ?)")
@@ -605,15 +610,23 @@ test("startup removes recovery codes and retired profile fields while preserving
         const address = server.address();
         assert.ok(address && typeof address !== "string");
         const base = `http://127.0.0.1:${address.port}`;
-        for (const path of ["/recovery-code", "/session/recover"]) {
+        for (const [method, path] of [
+          ["POST", "/recovery-code"],
+          ["POST", "/session/recover"],
+          ["POST", "/auth/kakao/start"],
+          ["POST", "/auth/kakao/poll"],
+          ["POST", "/auth/kakao/cancel"],
+          ["GET", "/auth/kakao/authorize?state=retired"],
+          ["GET", "/auth/kakao/callback?state=retired&code=retired"],
+        ]) {
           for (const authenticated of [false, true]) {
             const response = await fetch(base + path, {
-              method: "POST",
+              method,
               headers: {
                 "Content-Type": "application/json",
                 ...(authenticated ? { Authorization: `Bearer ${token}` } : {}),
               },
-              body: JSON.stringify({ code }),
+              ...(method === "POST" ? { body: JSON.stringify({ code }) } : {}),
             });
             assert.equal(response.status, authenticated ? 404 : 401);
             assert.deepEqual(Object.keys(await response.json()), ["error"]);
@@ -637,7 +650,7 @@ test("startup removes recovery codes and retired profile fields while preserving
           assert.equal(
             inspection
               .prepare(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recovery_codes'",
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('recovery_codes', 'kakao_accounts')",
               )
               .get(),
             undefined,

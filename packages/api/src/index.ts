@@ -130,18 +130,6 @@ export interface ApiErrorBody {
 
 /** The client and server share method, path, request and response types. */
 export interface ApiRoutes {
-  "POST /auth/kakao/start": {
-    input: Record<string, never>;
-    output: { loginToken: string; authorizationUrl: string; expiresAt: number };
-  };
-  "POST /auth/kakao/poll": {
-    input: { loginToken: string };
-    output: { status: "pending" } | { status: "complete"; session: Session };
-  };
-  "POST /auth/kakao/cancel": {
-    input: { loginToken: string };
-    output: { ok: true };
-  };
   "POST /session": { input: ProfileInput; output: Session };
   "GET /state": { input: undefined; output: SidebarState };
   "POST /chat": { input: { text: string }; output: ChatMessage };
