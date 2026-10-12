@@ -5,6 +5,7 @@ import {
   residentSelectionKey,
   loadHiddenResidents,
   saveHiddenResidents,
+  toggleResidentVisibility,
   visibleResidents,
 } from "../src/resident-selection.ts";
 
@@ -64,6 +65,31 @@ test("character selections isolate profiles and servers without changing friends
     presence: { sharing: false, revision: 1 },
   };
   const original = structuredClone(state);
+  const hiddenBob = toggleResidentVisibility(state, [], true, "bob");
+  assert.deepEqual(hiddenBob, ["bob"]);
+  saveHiddenResidents(key, hiddenBob, storage);
+  assert.deepEqual(loadHiddenResidents(key, storage), ["bob"]);
+  assert.deepEqual(toggleResidentVisibility(state, hiddenBob, true, "bob"), []);
+  assert.deepEqual(toggleResidentVisibility(state, hiddenBob, true, "alice"), [
+    "bob",
+    "alice",
+  ]);
+  const onlyBob = toggleResidentVisibility(
+    state,
+    ["removed-friend"],
+    false,
+    "bob",
+  );
+  assert.deepEqual(onlyBob, ["removed-friend", "alice", "carol"]);
+  assert.deepEqual(
+    visibleResidents(state, true, onlyBob).map(({ id }) => id),
+    ["bob"],
+  );
+  assert.deepEqual(
+    hiddenBob,
+    ["bob"],
+    "toggling must not mutate saved selections",
+  );
   const everyone = visibleResidents(state, true, []);
   assert.deepEqual(
     everyone.map(({ id, online, isSelf }) => ({ id, online, isSelf })),

@@ -38,8 +38,10 @@ import {
   useResidentSelection,
 } from "./desktop";
 import { DesktopControls } from "./DesktopControls";
-import { ResidentSelection } from "./ResidentSelection";
-import { residentSelectionKey } from "./resident-selection";
+import {
+  residentSelectionKey,
+  toggleResidentVisibility,
+} from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { KakaoLogin } from "./KakaoLogin";
 import { ChatBubble } from "./ChatBubble";
@@ -85,6 +87,8 @@ const emptyProfile: ProfileInput = {
 function App() {
   const [session, setSession] = useState(loadSession);
   const currentSession = useRef(session);
+  const profileSave = useRef<Promise<void>>(Promise.resolve());
+  const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
   const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join">("create");
@@ -111,11 +115,8 @@ function App() {
   >("connecting");
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
-  const [blockingFriend, setBlockingFriend] = useState<string | null>(null);
   const [compact, setCompact] = useState(false);
-  const [friendQuery, setFriendQuery] = useState("");
   const [friendView, setFriendView] = useState<FriendView>("all");
-  const friendSearch = useRef<HTMLInputElement>(null);
   const [chatTarget, setChatTarget] = useState<string | null>(null);
   const {
     preferences,
@@ -123,7 +124,6 @@ function App() {
     error: preferencesError,
   } = useCharacterPreferences();
   const { paused: motionPaused, visible: charactersVisible } = preferences;
-  const [pinned, setPinned] = useState(true);
   const desktop = isTauri();
   const profileKey =
     session && state
@@ -188,13 +188,12 @@ function App() {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
     currentSession.current = next;
     setSession(next);
+    setProfileDraft(null);
     setLocalPreview(null);
     setPresenceStatus("ready");
     setVerifiedInvitation("");
-    setFriendQuery("");
     setFriendView("all");
     setChatTarget(null);
-    setBlockingFriend(null);
   }
 
   function applyState(next: SidebarState) {
@@ -254,7 +253,7 @@ function App() {
     );
   }
 
-  async function changeBlocking(friendId: string, blocked: boolean) {
+  async function unblockFriend(friendId: string) {
     if (!session || connection !== "online" || state?.blocking === undefined)
       throw new ApiError(
         503,
@@ -262,15 +261,11 @@ function App() {
       );
     const active = session;
     const result = parseBlockingSettings(
-      await request(
-        active,
-        blocked ? "POST /friends/block" : "POST /friends/unblock",
-        { friendId },
-      ),
+      await request(active, "POST /friends/unblock", { friendId }),
     );
     if (
       result.profiles.some((profile) => profile.id === state.self.id) ||
-      result.profiles.some((profile) => profile.id === friendId) !== blocked
+      result.profiles.some((profile) => profile.id === friendId)
     )
       throw new ApiError(
         502,
@@ -280,13 +275,8 @@ function App() {
     setState((current) =>
       current ? applyBlockingSettings(current, result) : current,
     );
-    setBlockingFriend(null);
     setRemoving(null);
-    setNotice(
-      blocked
-        ? "친구를 차단했어요. 내 모습에서 차단을 관리할 수 있어요."
-        : "차단을 해제했어요. 다시 함께하려면 초대로 연결해 주세요.",
-    );
+    setNotice("차단을 해제했어요. 다시 함께하려면 초대로 연결해 주세요.");
   }
 
   function previewLocally(profile: ProfileInput) {
@@ -456,54 +446,70 @@ function App() {
     }
   }
 
-  function saveProfile(profile: ProfileInput) {
+  function updateProfile(profile: ProfileInput) {
+    if (session && currentSession.current === session) setProfileDraft(profile);
+    // Keep writes ordered even when the editor is closed and reopened.
+    const save = profileSave.current.catch(() => {}).then(async () => {
+      if (!session || currentSession.current !== session)
+        throw new ApiError(409, "현재 프로필에서 다시 시도해 주세요.");
+      const updated = parseSidebarState({
+        self: await request(session, "PATCH /profile", profile),
+        friends: [],
+      }).self;
+      if (updated.id !== state?.self.id)
+        throw new ApiError(502, "프로필 저장 결과를 확인하지 못했어요.");
+      if (currentSession.current !== session) return;
+      setState((current) =>
+        current ? { ...current, self: updated } : current,
+      );
+    });
+    const completed = save.finally(() => {
+      if (currentSession.current === session)
+        setProfileDraft((current) => (current === profile ? null : current));
+    });
+    profileSave.current = completed;
+    return completed;
+  }
+
+  function createProfile(profile: ProfileInput) {
     void action(async () => {
-      if (session) {
-        const updated = await request(session, "PATCH /profile", profile);
-        setState((current) =>
-          current ? { ...current, self: updated } : current,
-        );
-        setPanel("friends");
-        setNotice("새로운 모습으로 바꿨어요.");
-      } else {
-        const received = onboarding === "join" ? receivedInvitation() : null;
-        const address = received?.server ?? selectedServer();
-        if (received) {
-          if (verifiedInvitation !== invitationSource)
-            throw new ApiError(400, "초대장을 먼저 확인해 주세요.");
-          try {
-            // A preview does not reserve the code. Check again before creating a profile.
-            await previewInvitation(address, received.code);
-          } catch (cause) {
-            setVerifiedInvitation("");
-            throw cause;
-          }
+      const received = onboarding === "join" ? receivedInvitation() : null;
+      const address = received?.server ?? selectedServer();
+      if (received) {
+        if (verifiedInvitation !== invitationSource)
+          throw new ApiError(400, "초대장을 먼저 확인해 주세요.");
+        try {
+          // A preview does not reserve the code. Check again before creating a profile.
+          await previewInvitation(address, received.code);
+        } catch (cause) {
+          setVerifiedInvitation("");
+          throw cause;
         }
-        const created = await request(
-          { server: address },
-          "POST /session",
-          profile,
-        );
-        connectSession(address, created);
-        if (received) {
-          // Save the new session before accepting: failed acceptance must stay retryable.
-          setCode(code);
-          setPanel("invite");
-          try {
-            await joinRoom(
-              { server: address, token: created.token },
-              received.code,
-            );
-          } catch (cause) {
-            throw new ApiError(
-              400,
-              `프로필은 만들었어요. 방 참여 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
-            );
-          }
-          return;
-        }
-        setNotice("프로필을 만들었어요. 친구를 초대해 보세요.");
       }
+      const created = await request(
+        { server: address },
+        "POST /session",
+        profile,
+      );
+      connectSession(address, created);
+      if (received) {
+        // Save the new session before accepting: failed acceptance must stay retryable.
+        setCode(code);
+        setPanel("invite");
+        try {
+          await joinRoom(
+            { server: address, token: created.token },
+            received.code,
+          );
+        } catch (cause) {
+          throw new ApiError(
+            400,
+            `프로필은 만들었어요. 방 참여 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
+          );
+        }
+        return;
+      }
+      setNotice("프로필을 만들었어요. 친구를 초대해 보세요.");
     });
   }
 
@@ -526,7 +532,6 @@ function App() {
     setSavedInvite(null);
     setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
-    setFriendQuery("");
     setFriendView("all");
     applyState(
       parseSidebarState(await request(current, "GET /state", undefined)),
@@ -577,14 +582,42 @@ function App() {
       : 0;
   const listedFriends = filterFriends(
     state?.friends ?? [],
-    friendQuery,
     friendView,
     connection === "online",
   );
   function resetFriendFilters() {
-    setFriendQuery("");
     setFriendView("all");
-    friendSearch.current?.focus();
+    document.getElementById("friend-view-all")?.focus();
+  }
+  function characterVisibility(profile: { id: string; name: string }) {
+    if (!desktop || !state) return null;
+    const visible =
+      charactersVisible && !selection.hiddenIds.includes(profile.id);
+    return (
+      <button
+        type="button"
+        className="character-visibility"
+        role="switch"
+        aria-label={`${profile.name} 캐릭터 표시`}
+        aria-checked={selection.ready && visible}
+        disabled={!selection.ready}
+        title={visible ? "바탕화면에서 숨기기" : "바탕화면에 표시"}
+        onClick={() => {
+          selection.setHiddenIds((current) =>
+            toggleResidentVisibility(
+              state,
+              current,
+              charactersVisible,
+              profile.id,
+            ),
+          );
+          if (!charactersVisible)
+            setPreferences((current) => ({ ...current, visible: true }));
+        }}
+      >
+        {selection.ready ? (visible ? "ON" : "OFF") : "…"}
+      </button>
+    );
   }
   const presenceHidden =
     connection === "online" &&
@@ -608,17 +641,7 @@ function App() {
       compact={compact}
       preferences={preferences}
       onChange={setPreferences}
-    >
-      {state && (
-        <ResidentSelection
-          state={state}
-          hiddenIds={selection.hiddenIds}
-          ready={selection.ready}
-          visible={charactersVisible}
-          onChange={selection.setHiddenIds}
-        />
-      )}
-    </DesktopControls>
+    />
   );
 
   const support = (
@@ -706,20 +729,6 @@ function App() {
         </div>
         {desktop && (
           <div className="window-controls">
-            <button
-              className={`icon-button ${pinned ? "active" : ""}`}
-              aria-label="항상 위에 표시"
-              aria-pressed={pinned}
-              title="항상 위에 표시"
-              onClick={() =>
-                void windowAction(async () => {
-                  await invoke("set_sidebar_pinned", { pinned: !pinned });
-                  setPinned(!pinned);
-                })
-              }
-            >
-              ⌖
-            </button>
             <button
               className="icon-button"
               aria-label="최소화"
@@ -845,7 +854,7 @@ function App() {
           <ProfileForm
             initial={emptyProfile}
             busy={busy}
-            onSave={saveProfile}
+            onSave={createProfile}
             canSave={
               onboarding !== "join" || verifiedInvitation === invitationSource
             }
@@ -1014,24 +1023,12 @@ function App() {
                   </h1>
                   <span className="count-badge">{onlineCount} online</span>
                 </div>
-                {desktopControls}
-                {presenceControls}
                 {state.friends.length > 0 && (
                   <>
-                    <section className="friend-filters" aria-label="친구 찾기">
-                      <label className="field friend-search">
-                        이름으로 찾기
-                        <input
-                          ref={friendSearch}
-                          type="search"
-                          maxLength={120}
-                          value={friendQuery}
-                          placeholder="이름 검색"
-                          onChange={(event) =>
-                            setFriendQuery(event.target.value)
-                          }
-                        />
-                      </label>
+                    <section
+                      className="friend-filters"
+                      aria-label="친구 목록 필터"
+                    >
                       <div
                         className="friend-views"
                         role="group"
@@ -1058,7 +1055,7 @@ function App() {
                           {listedFriends.length}명 표시 · 전체{" "}
                           {state.friends.length}명
                         </p>
-                        {(friendQuery || friendView !== "all") && (
+                        {friendView !== "all" && (
                           <button
                             className="text-button"
                             onClick={resetFriendFilters}
@@ -1090,12 +1087,12 @@ function App() {
                     <h2>
                       {friendView === "online" && connection !== "online"
                         ? "접속 상태를 확인할 수 없어요."
-                        : "조건에 맞는 친구가 없어요."}
+                        : "지금 접속 중인 친구가 없어요."}
                     </h2>
                     <p>
                       {friendView === "online" && connection !== "online"
                         ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록은 계속 볼 수 있어요."
-                        : "검색어나 목록 보기를 바꾸면 다른 친구도 볼 수 있어요."}
+                        : "전체 목록으로 바꾸면 모든 친구를 볼 수 있어요."}
                     </p>
                   </div>
                 ) : (
@@ -1107,22 +1104,10 @@ function App() {
                         connected={connection === "online"}
                         message={latestChat(state.messages, friend.id)}
                         busy={busy}
-                        blockingSupported={state.blocking !== undefined}
-                        confirmation={
-                          removing === friend.id
-                            ? "remove"
-                            : blockingFriend === friend.id
-                              ? "block"
-                              : null
+                        removing={removing === friend.id}
+                        onRemovingChange={(removing) =>
+                          setRemoving(removing ? friend.id : null)
                         }
-                        onConfirmationChange={(confirmation) => {
-                          setRemoving(
-                            confirmation === "remove" ? friend.id : null,
-                          );
-                          setBlockingFriend(
-                            confirmation === "block" ? friend.id : null,
-                          );
-                        }}
                         onRemove={() =>
                           void action(async () => {
                             await request(session, "POST /friends/remove", {
@@ -1132,10 +1117,9 @@ function App() {
                             await refresh();
                           })
                         }
-                        onBlock={() =>
-                          void action(() => changeBlocking(friend.id, true))
-                        }
-                      />
+                      >
+                        {characterVisibility(friend)}
+                      </FriendCard>
                     ))}
                   </ul>
                 )}
@@ -1282,16 +1266,18 @@ function App() {
                     <p className="eyebrow">THIS IS ME</p>
                     <h1 className="profile-title">오늘의 나는.</h1>
                     <ProfileForm
-                      key={state.self.id}
-                      initial={state.self}
+                      key={profileKey}
+                      initial={profileDraft ?? state.self}
                       busy={busy}
-                      onSave={saveProfile}
+                      onSave={updateProfile}
+                      autoSave
                     />
+                    {presenceControls}
                     <BlockedProfiles
                       blocking={state.blocking}
                       disabled={busy || connection !== "online"}
                       onUnblock={(id) =>
-                        void action(() => changeBlocking(id, false))
+                        void action(() => unblockFriend(id))
                       }
                     />
                   </>
@@ -1322,6 +1308,7 @@ function App() {
                   message={latestChat(state.messages, state.self.id)}
                 />
               </div>
+              {characterVisibility(state.self)}
               <button
                 className="icon-button"
                 aria-label="내 프로필 수정"

@@ -2,23 +2,13 @@ import type { Friend } from "@wappy/api";
 
 export type FriendView = "all" | "online";
 
-function searchText(value: string) {
-  return value.normalize("NFKC").toLowerCase();
-}
-
 export function filterFriends(
   friends: readonly Friend[],
-  query: string,
   view: FriendView,
   connected: boolean,
 ) {
-  const terms = searchText(query).split(/\s+/).filter(Boolean);
   return friends
-    .filter((friend) => {
-      if (view === "online" && (!connected || !friend.online)) return false;
-      const text = searchText(friend.name);
-      return terms.every((term) => text.includes(term));
-    })
+    .filter((friend) => view === "all" || (connected && friend.online))
     .sort(
       (a, b) => Number(connected && b.online) - Number(connected && a.online),
     );

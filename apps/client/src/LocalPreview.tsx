@@ -43,7 +43,7 @@ export function LocalPreview({
         initial={profile}
         busy={false}
         onSave={onChange}
-        submitLabel="체험 모습 바꾸기"
+        autoSave
       />
       <p className="hint">
         체험 모습은 서버에 저장되지 않으며, 체험을 끝내거나 앱을 종료하면

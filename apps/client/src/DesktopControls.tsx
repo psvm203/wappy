@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { CharacterPreferences } from "./preferences";
 
 export function DesktopControls({
@@ -6,7 +5,6 @@ export function DesktopControls({
   compact,
   preferences,
   onChange,
-  children,
 }: {
   desktop: boolean;
   compact: boolean;
@@ -14,7 +12,6 @@ export function DesktopControls({
   onChange: (
     update: (current: CharacterPreferences) => CharacterPreferences,
   ) => void;
-  children?: ReactNode;
 }) {
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   return (
@@ -74,7 +71,6 @@ export function DesktopControls({
               : "캐릭터 표시"}
         </button>
       </div>
-      {desktop && !compact && children}
       {desktop && (
         <p className="hint">
           닫아도 캐릭터는 남아요. 메뉴 막대·트레이에서 다시 열거나 종료할 수
