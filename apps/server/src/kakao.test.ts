@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { request as httpRequest } from "node:http";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import { createApp } from "./server.ts";
@@ -46,6 +47,7 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   let providerMode = "success";
   let providerCalls = 0;
   let nickname = "카카오 이름";
+  let kakaoId = 123456789;
   const kakaoFetch: typeof fetch = async (input, init) => {
     providerCalls++;
     assert.equal(init?.redirect, "error");
@@ -82,7 +84,7 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
     if (providerMode === "bad-user")
       return Response.json({ id: "untrusted-id" });
     return Response.json({
-      id: 123456789,
+      id: kakaoId,
       kakao_account: { profile: { nickname } },
     });
   };
@@ -228,13 +230,12 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
     body: JSON.stringify({
       name: "내가 고른 이름",
       character: "shisa",
-      status: "산책 중",
     }),
   });
   assert.equal(changed.status, 200);
   await changed.body?.cancel();
   const friend = (
-    await call("/session", { name: "친구", character: "hachiware", status: "" })
+    await call("/session", { name: "친구", character: "hachiware" })
   ).body;
   const invite = (await call("/invites", {}, friend.token)).body;
   assert.equal(
@@ -242,7 +243,6 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
       .status,
     200,
   );
-  const recovery = (await call("/recovery-code", {}, original.token)).body;
   await close();
   server = createApp(options);
   await listen();
@@ -251,7 +251,22 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   assert.equal((await callback(second)).status, 200);
   // Existing credentials are rotated only when the initiating app claims the login.
   assert.equal((await call("/state", undefined, original.token)).status, 200);
+  const pending = httpRequest(base + "/invites", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${original.token}`,
+    },
+  });
+  const responsePromise = once(pending, "response");
+  const arrived = once(server, "request");
+  pending.write("{");
+  await arrived;
   const renewed = (await poll(second)).body.session;
+  pending.end("}");
+  const [rejectedWrite] = await responsePromise;
+  assert.equal(rejectedWrite.statusCode, 401);
+  rejectedWrite.resume();
   assert.equal(renewed.profile.id, original.profile.id);
   assert.equal(renewed.profile.name, "내가 고른 이름");
   assert.equal(renewed.profile.character, "shisa");
@@ -259,8 +274,6 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   const state = (await call("/state", undefined, renewed.token)).body;
   assert.equal(state.friends[0].id, friend.profile.id);
   assert.ok(!JSON.stringify(state).includes("kakao_id"));
-  const restored = (await call("/session/recover", recovery)).body;
-  assert.equal(restored.profile.id, original.profile.id);
 
   // Provider denial and failures cannot create accounts or expose upstream secrets.
   now += 60_001;
@@ -304,17 +317,8 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   assert.equal((await callback(expired)).status, 400);
   assert.equal((await poll(expired)).status, 410);
 
-  // Deleting a profile also removes its account link; the next login creates a fresh profile.
-  assert.equal(
-    (
-      await call(
-        "/profile/delete",
-        { profileId: restored.profile.id },
-        restored.token,
-      )
-    ).status,
-    200,
-  );
+  // A different Kakao account gets its own profile, even without a nickname.
+  kakaoId++;
   nickname = "";
   const fresh = await start();
   await callback(fresh);
@@ -324,11 +328,11 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   const db = new DatabaseSync(databasePath);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM kakao_accounts").get()!.count,
-    1,
+    2,
   );
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM users").get()!.count,
-    2,
+    3,
   );
   db.close();
 });

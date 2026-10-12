@@ -40,12 +40,15 @@
 .desktop-resident .character-pose {
   transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
 }
+/* Physics samples both walking animations at the same accumulated step phase. */
 .desktop-resident[data-motion="walk"] .character .character-body {
-  animation: character-waddle var(--step-duration, 0.7s) linear infinite;
+  animation: character-waddle 1s linear infinite paused;
+  animation-delay: var(--step-delay, 0s);
 }
 .desktop-resident[data-motion="walk"] .character-shadow {
   transform-origin: 50px 101px;
-  animation: step-shadow var(--step-duration, 0.7s) linear infinite;
+  animation: step-shadow 1s linear infinite paused;
+  animation-delay: var(--step-delay, 0s);
 }
 .desktop-resident[data-motion="drag"] .character-pose {
   transform: rotate(var(--drag-tilt, 0rad));
@@ -220,8 +223,17 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%) translate(var(--name-x), var(--name-y));
-  width: 84px;
+  /* Center above the 84px character, keeping the label inside the viewport. */
+  transform: translate(
+    clamp(
+      calc(4px - var(--resident-x)),
+      -50%,
+      calc(100vw - 4px - var(--resident-x) - 100%)
+    ),
+    var(--caption-y, max(calc(4px - var(--resident-y)), calc(-100% - 46px)))
+  );
+  width: max-content;
+  max-width: 84px;
   padding: 3px 4px;
   border-radius: 6px;
   background: #fbfbf7e8;
@@ -233,20 +245,18 @@
   text-overflow: ellipsis;
   pointer-events: none;
 }
-.desktop-resident figcaption.has-wave {
-  background: #e9f2d9;
-  box-shadow: 0 2px 6px #23311a26;
+.desktop-resident[data-ceiling="true"] figcaption {
+  --caption-y: 46px;
 }
 .desktop-resident figcaption:has(.chat-bubble) {
   width: 184px;
+  max-width: 184px;
   white-space: normal;
   overflow: visible;
 }
 .desktop-resident .chat-bubble {
   margin: 0 0 4px;
   font-size: 11px;
-  pointer-events: auto;
-  cursor: pointer;
 }
 .resident-rotation:focus-visible {
   outline: 2px solid #73985c;
@@ -298,26 +308,6 @@
   .desktop-attack-effect .flying-shield {
     transform: none;
   }
-}
-.resident-wave {
-  display: block;
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  font-family: inherit;
-  pointer-events: auto;
-  cursor: pointer;
-  color: #3f5932;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.5;
-}
-.resident-wave:hover,
-.resident-wave:focus-visible {
-  background: #d5e7bb;
-  outline: 1px solid #60764e;
 }
 .resident-name {
   display: block;
@@ -413,4 +403,20 @@
   to {
     transform: translateY(7px);
   }
+}
+
+.desktop-resident[data-composing="true"] {
+  z-index: 4;
+}
+.desktop-resident[data-composing="true"] .character * {
+  animation-play-state: paused;
+}
+.desktop-resident figcaption:has(.chat-composer) {
+  width: max-content;
+  max-width: calc(100vw - 8px);
+  padding: 0;
+  overflow: visible;
+}
+.desktop-resident figcaption:has(.chat-composer) .resident-name {
+  padding: 3px 4px;
 }

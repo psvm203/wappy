@@ -46,21 +46,18 @@ test("character selections isolate profiles and servers without changing friends
     ["bob"],
   );
   const state: SidebarState = {
-    self: { id: "alice", name: "Alice", character: "hachiware", status: "" },
+    self: { id: "alice", name: "Alice", character: "hachiware" },
     friends: [
       {
         id: "bob",
         name: "Bob",
         character: "shisa",
-        status: "",
         online: true,
-        wave: { id: "greeting", sentAt: 1_800_000_000_000 },
       },
       {
         id: "carol",
         name: "Carol",
         character: "chiikawa",
-        status: "",
         online: false,
       },
     ],
@@ -76,7 +73,6 @@ test("character selections isolate profiles and servers without changing friends
       { id: "carol", online: false, isSelf: false },
     ],
   );
-  assert.equal(everyone[1]?.wave?.id, "greeting");
   assert.deepEqual(
     visibleResidents(state, true, ["alice", "bob"]).map(({ id }) => id),
     ["carol"],
@@ -93,7 +89,7 @@ test("character selections isolate profiles and servers without changing friends
   assert.deepEqual(
     state,
     original,
-    "selection must not delete a friend, consume a greeting or publish presence",
+    "selection must not delete a friend or publish presence",
   );
   saveHiddenResidents(key, [], storage);
   assert.deepEqual(loadHiddenResidents(key, storage), []);

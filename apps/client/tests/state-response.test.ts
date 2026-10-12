@@ -14,10 +14,38 @@ import {
 import { reconcilePresence } from "../src/presence.ts";
 import { loadSavedSessions, SAVED_SESSIONS_KEY } from "../src/sessions.ts";
 
+test("legacy status messages are discarded from profiles, server snapshots and saved sessions", () => {
+  const input = { name: "Alice", character: "chiikawa" };
+  const profile = { id: "self", ...input };
+  const legacy = { ...profile, status: "previous status" };
+  assert.deepEqual(parseProfile(input), input);
+  assert.deepEqual(parseProfile(legacy), input);
+  assert.deepEqual(
+    parseSidebarState({
+      self: legacy,
+      friends: [{ ...legacy, id: "friend", online: true }],
+    }),
+    { self: profile, friends: [{ ...profile, id: "friend", online: true }] },
+  );
+  const session = {
+    server: "https://one.test",
+    token: "a".repeat(43),
+    profile: legacy,
+  };
+  assert.deepEqual(
+    loadSavedSessions({
+      getItem: () => JSON.stringify([session]),
+      setItem() {},
+      removeItem() {},
+    }),
+    [{ ...session, profile }],
+  );
+});
+
 test("retired characters are rejected for new profiles but old snapshots and saved sessions remain usable", () => {
   assert.equal(CHARACTERS.length, 20);
   for (const character of REMOVED_CHARACTERS) {
-    const input = { name: "기존 친구", character, status: "함께" };
+    const input = { name: "기존 친구", character };
     const profile = { id: "self", ...input };
     const migrated = { ...profile, character: "chiikawa" };
     assert.throws(() => parseProfile(input));
@@ -37,7 +65,7 @@ test("retired characters are rejected for new profiles but old snapshots and sav
     );
     assert.deepEqual(
       parseInvitePreview({ ...input, expiresAt: 1_800_000_000_000 }),
-      { name: input.name, character: "chiikawa", expiresAt: 1_800_000_000_000 },
+      { name: input.name, character: "chiikawa" },
     );
     assert.deepEqual(
       parseBlockingSettings({ revision: 2, profiles: [profile] }),
@@ -70,13 +98,11 @@ test("every selectable character survives profile, invitation and friend-state v
     const input = {
       name: CHARACTER_NAMES[character],
       character,
-      status: "함께",
     };
     assert.deepEqual(parseProfile(input), input);
     const preview = {
       name: input.name,
       character,
-      expiresAt: 1_800_000_000_000,
     };
     assert.deepEqual(parseInvitePreview(preview), preview);
     const state = {
@@ -95,7 +121,6 @@ test("invalid server states cannot become online or corrupt character rendering"
     id: "self",
     name: "Alice",
     character: "momonga",
-    status: "함께",
   };
   const friend = { ...self, id: "friend", character: "rakko", online: true };
   const state = { self, friends: [friend] };
@@ -106,7 +131,8 @@ test("invalid server states cannot become online or corrupt character rendering"
       self,
       friends: [{ ...friend, wave: { ...wave, private: "discard" } }],
     }),
-    { self, friends: [{ ...friend, wave }] },
+    state,
+    "old server greetings are discarded",
   );
   assert.deepEqual(
     parseSidebarState({ self: { ...self, token: "private" }, friends: [] }),
@@ -120,36 +146,16 @@ test("invalid server states cannot become online or corrupt character rendering"
     { self: { ...self, id: null }, friends: [] },
     { self, friends: [{ ...friend, character: "missing" }] },
     { self, friends: [{ ...friend, online: "false" }] },
-    { self, friends: [{ ...friend, status: null }] },
+    { self, friends: [{ ...friend, name: null }] },
     { self, friends: [friend, friend] },
     { self, friends: [{ ...friend, id: self.id }] },
-    ...[
-      null,
-      {},
-      { ...wave, id: "" },
-      { ...wave, id: 123 },
-      { ...wave, id: "x".repeat(129) },
-      { ...wave, sentAt: "today" },
-      { ...wave, sentAt: NaN },
-      { ...wave, sentAt: -1 },
-      { ...wave, sentAt: 0.5 },
-      { ...wave, sentAt: Infinity },
-      { ...wave, sentAt: 8_640_000_000_000_001 },
-    ].map((wave) => ({ self, friends: [{ ...friend, wave }] })),
-    {
-      self,
-      friends: [
-        { ...friend, wave },
-        { ...friend, id: "other", wave },
-      ],
-    },
   ])
     assert.throws(() => parseSidebarState(invalid));
 });
 
 test("private presence settings are validated and older polls cannot undo a confirmed change", () => {
   const state: SidebarState = {
-    self: { id: "alice", name: "Alice", character: "hachiware", status: "" },
+    self: { id: "alice", name: "Alice", character: "hachiware" },
     friends: [],
   };
   const hidden = { sharing: false, revision: 2 };
@@ -182,7 +188,7 @@ test("private presence settings are validated and older polls cannot undo a conf
   const current = { ...state, presence: hidden };
   const oldPoll = {
     ...state,
-    self: { ...state.self, status: "still update profiles" },
+    self: { ...state.self, name: "Updated Alice" },
     presence: { sharing: true, revision: 1 },
   };
   assert.deepEqual(reconcilePresence(current, oldPoll), {

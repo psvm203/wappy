@@ -21,16 +21,10 @@ test("startup replaces retired characters without changing accounts or block rel
     await restart();
     const db = new DatabaseSync(databasePath);
     try {
-      const insert = db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)");
-      insert.run("owner", "owner-token", "Owner", "hachiware", "함께");
+      const insert = db.prepare("INSERT INTO users VALUES (?, ?, ?, ?)");
+      insert.run("owner", "owner-token", "Owner", "hachiware");
       for (const character of [...REMOVED_CHARACTERS, "shisa", "unknown"]) {
-        insert.run(
-          character,
-          `${character}-token`,
-          character,
-          character,
-          "status",
-        );
+        insert.run(character, `${character}-token`, character, character);
         db.prepare("INSERT INTO profile_blocks VALUES (?, ?, ?, ?)").run(
           "owner",
           character,

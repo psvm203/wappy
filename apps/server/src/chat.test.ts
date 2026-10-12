@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { CHAT_HISTORY_LIMIT, CHAT_TTL_MS, MAX_CHAT_LENGTH } from "@wappy/api";
 import { createApp } from "./server.ts";
 
-test("chat reaches only friends at send time, persists, expires and is removed with friendships/profiles", async (t) => {
+test("chat reaches only friends at send time, persists, expires and is removed with friendships", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-chat-"));
   const databasePath = join(directory, "chat.sqlite");
   let now = Date.now();
@@ -49,9 +49,7 @@ test("chat reaches only friends at send time, persists, expires and is removed w
     return { status: response.status, body: await response.json() };
   }
   async function create(name: string) {
-    return (
-      await call("/session", { name, character: "hachiware", status: "" })
-    ).body;
+    return (await call("/session", { name, character: "hachiware" })).body;
   }
   async function connect(a: string, b: string) {
     const invite = (await call("/invites", {}, a)).body;
@@ -178,29 +176,6 @@ test("chat reaches only friends at send time, persists, expires and is removed w
     (await call("/state", undefined, bob.token)).body.messages,
     [],
     "expiration does not wait for housekeeping",
-  );
-  assert.equal(
-    (
-      await call(
-        "/profile/delete",
-        { profileId: alice.profile.id },
-        alice.token,
-      )
-    ).status,
-    200,
-  );
-  assert.equal(
-    inspection
-      .prepare(
-        "SELECT COUNT(*) AS count FROM chat_messages WHERE sender_id = ?",
-      )
-      .get(alice.profile.id)!.count,
-    0,
-  );
-  assert.equal(
-    inspection.prepare("SELECT COUNT(*) AS count FROM chat_recipients").get()!
-      .count,
-    0,
   );
   inspection.close();
 });

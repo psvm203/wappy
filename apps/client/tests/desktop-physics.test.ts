@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceBody,
+  CHARACTER_SIZE,
   createBody,
   moveBody,
   needsAnimation,
@@ -11,33 +12,28 @@ import {
 const width = 1470,
   height = 923;
 
-test("offline characters freeze in place, including mid-flight, and wake when online", () => {
+test("offline characters keep falling, rest after landing, and walk when online", () => {
   const body = createBody("idle", width, height);
   assert.equal(needsAnimation(body, false), false);
   assert.equal(needsAnimation(body, true), true);
   body.restTime = 1;
   assert.equal(needsAnimation(body, true), true);
   Object.assign(body, { mode: "air", x: 700, y: 400, vx: 1400, vy: 200 });
-  const position = {
-    x: body.x,
-    y: body.y,
-    angle: body.angle,
-    phase: body.phase,
-  };
+  assert.equal(needsAnimation(body, false), true);
+  advanceBody(body, 1 / 60, width, height, false);
+  assert.ok(body.x > 700 && body.vx > 0, "sleeping preserves flight momentum");
+  for (let i = 0; i < 1200 && body.mode !== "walk"; i++)
+    advanceBody(body, 1 / 60, width, height, false);
+  assert.equal(body.mode, "walk");
+  const landed = { ...body };
   for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, false);
-  assert.deepEqual(
-    { x: body.x, y: body.y, angle: body.angle, phase: body.phase },
-    position,
-  );
+  assert.deepEqual(body, landed, "sleeping characters stay put after landing");
   assert.equal(body.vx, 0);
   assert.equal(body.vy, 0);
   assert.equal(needsAnimation(body, false), false);
   assert.equal(needsAnimation(body, true), true);
   advanceBody(body, 1 / 60, width, height, true);
-  assert.notDeepEqual(
-    { x: body.x, y: body.y },
-    { x: position.x, y: position.y },
-  );
+  assert.notDeepEqual({ x: body.x, y: body.y }, { x: landed.x, y: landed.y });
   advanceBody(body, 1 / 60, 640, 480, false);
   assert.ok(
     body.x <= 580 && body.y <= 420,
@@ -113,13 +109,46 @@ test("automatic walking covers all four edges without leaving the screen", (t) =
   for (let i = 0; i < 9000; i++) {
     advanceBody(body, 1 / 60, width, height, true);
     assert.ok(body.x >= 60 && body.x <= width - 60);
-    assert.ok(body.y >= 60 && body.y <= height - 60);
+    assert.ok(body.y >= CHARACTER_SIZE / 2 && body.y <= height - 60);
     if (body.x === 60) edges.add("left");
     if (body.x === width - 60) edges.add("right");
-    if (body.y === 60) edges.add("top");
+    if (body.y === CHARACTER_SIZE / 2) edges.add("top");
     if (body.y === height - 60) edges.add("bottom");
   }
   assert.equal(edges.size, 4);
+});
+
+test("walking gait stays continuous through speed changes and freezes when not walking", () => {
+  const body = createBody("gait", width, height);
+  body.wanderTime = Infinity;
+  for (const fps of [30, 60, 120]) {
+    for (const speed of [25, 65, 35, 50]) {
+      body.speed = speed;
+      for (let frame = 0; frame < fps * 10; frame++) {
+        const previous = body.stepPhase;
+        advanceBody(body, 1 / fps, width, height, true);
+        const step = (body.stepPhase - previous + 1) % 1;
+        assert.ok(body.stepPhase >= 0 && body.stepPhase < 1);
+        assert.ok(step > 0 && step <= 1 / fps / 0.32 + 1e-9);
+      }
+    }
+  }
+  const previous = body.stepPhase;
+  advanceBody(body, 0.05, width, height, false);
+  assert.equal(body.stepPhase, previous, "offline freezes the gait");
+  body.restTime = 1;
+  advanceBody(body, 0.05, width, height, true);
+  assert.equal(body.stepPhase, previous, "resting freezes the gait");
+  body.restTime = 0;
+  for (const mode of ["drag", "air"] as const) {
+    Object.assign(body, { mode, x: 700, y: 400, vx: 0, vy: 0 });
+    advanceBody(body, 0.05, width, height, true);
+    assert.equal(body.stepPhase, previous, `${mode} freezes the gait`);
+  }
+  body.mode = "walk";
+  advanceBody(body, 1 / 60, width, height, true);
+  assert.ok((body.stepPhase - previous + 1) % 1 <= 1 / 60 / 0.32 + 1e-9);
+  assert.notEqual(body.stepPhase, previous, "walking resumes the gait");
 });
 
 test("release speed follows the recent drag, is capped, and expires when held still", () => {
@@ -161,18 +190,33 @@ test("release speed follows the recent drag, is capped, and expires when held st
   assert.deepEqual(releaseVelocity([], 0), { vx: 0, vy: 0 });
 });
 
-test("gravity pulls toward each nearest edge", () => {
-  for (const [x, y, nx, ny] of [
-    [700, 100, 0, -1],
-    [1370, 450, 1, 0],
-    [700, 823, 0, 1],
-    [100, 450, -1, 0],
-  ]) {
-    const body = createBody("fall", width, height);
-    Object.assign(body, { x, y, mode: "air", vx: 0, vy: 0 });
-    advanceBody(body, 1 / 60, width, height, true);
-    assert.ok(body.vx * nx + body.vy * ny > 0);
-  }
+test("awake and sleeping characters fall toward each nearest edge and land", () => {
+  for (const walking of [true, false])
+    for (const [x, y, nx, ny] of [
+      [700, 100, 0, -1],
+      [1370, 450, 1, 0],
+      [700, 823, 0, 1],
+      [100, 450, -1, 0],
+    ]) {
+      const body = createBody("fall", width, height);
+      Object.assign(body, { x, y, mode: "air", vx: 0, vy: 0 });
+      advanceBody(body, 1 / 60, width, height, walking);
+      assert.ok(body.vx * nx + body.vy * ny > 0);
+      assert.equal(needsAnimation(body, walking), true);
+      for (let frame = 0; frame < 600 && body.mode !== "walk"; frame++)
+        advanceBody(body, 1 / 60, width, height, walking);
+      assert.equal(body.mode, "walk");
+      assert.ok(
+        nx === 0
+          ? body.y === (ny < 0 ? CHARACTER_SIZE / 2 : height - 60)
+          : body.x === (nx < 0 ? 60 : width - 60),
+      );
+      if (!walking) {
+        assert.equal(needsAnimation(body, walking), false);
+        const alignment = Math.sin(body.angle) * nx - Math.cos(body.angle) * ny;
+        assert.ok(alignment < -0.999, "sleeping feet face the landing edge");
+      }
+    }
 });
 
 test("a fast throw bounces, loses energy, lands, and resumes walking", () => {
@@ -191,7 +235,7 @@ test("a fast throw bounces, loses energy, lands, and resumes walking", () => {
     assert.ok(
       body.x >= 60 &&
         body.x <= width - 60 &&
-        body.y >= 60 &&
+        body.y >= CHARACTER_SIZE / 2 &&
         body.y <= height - 60,
     );
   }
@@ -214,6 +258,24 @@ test("dragging and offline rest do not auto-walk; resized bounds still apply", (
   advanceBody(body, 10, 640, 480, true);
   assert.equal(body.x, 580);
   assert.equal(body.y, 400);
+});
+
+test("dragging and landing reach the ceiling without reserving label space", () => {
+  for (const walking of [true, false]) {
+    const body = createBody("ceiling", width, height);
+    body.mode = "drag";
+    moveBody(body, width / 2, -100, width, height);
+    assert.equal(body.y - CHARACTER_SIZE / 2, 0);
+    body.mode = "air";
+    advanceBody(body, 1 / 60, width, height, walking);
+    assert.equal(body.mode, "walk");
+    assert.equal(body.y - CHARACTER_SIZE / 2, 0);
+    advanceBody(body, 1 / 60, width, height, walking);
+    assert.equal(body.y - CHARACTER_SIZE / 2, 0);
+    body.mode = "drag";
+    moveBody(body, width / 2, -100, width, 40);
+    assert.equal(body.y, 20, "small windows keep the character centered");
+  }
 });
 
 test("random decisions change direction and speed, briefly rest, then resume", (t) => {
@@ -278,10 +340,16 @@ test("random walks stay on the perimeter through turns, pauses, and screen chang
     directions.add(body.direction);
     rested ||= body.restTime > 0;
     assert.ok(
-      body.x >= 60 && body.x <= w - 60 && body.y >= 60 && body.y <= h - 60,
+      body.x >= 60 &&
+        body.x <= w - 60 &&
+        body.y >= CHARACTER_SIZE / 2 &&
+        body.y <= h - 60,
     );
     assert.ok(
-      body.x === 60 || body.x === w - 60 || body.y === 60 || body.y === h - 60,
+      body.x === 60 ||
+        body.x === w - 60 ||
+        body.y === CHARACTER_SIZE / 2 ||
+        body.y === h - 60,
     );
   }
   assert.equal(directions.size, 2);

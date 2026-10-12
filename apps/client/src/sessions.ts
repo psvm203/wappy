@@ -1,6 +1,5 @@
 import { isRecord, parseSidebarState, type Profile } from "@wappy/api";
 import { serverUrl } from "./invitations.ts";
-import { residentSelectionKey } from "./resident-selection.ts";
 
 export const SESSION_KEY = "wappy.session.v1";
 export const SAVED_SESSIONS_KEY = "wappy.saved-sessions.v1";
@@ -83,7 +82,7 @@ export function saveSession(
   const saved = readSavedSessions(storage);
   const previous = saved.find((item) => sameProfile(item, session));
   if (previous) {
-    // Recovery rotates the token; update a previously saved copy as well.
+    // Kakao login rotates the token; update a previously saved copy as well.
     storage.setItem(
       SAVED_SESSIONS_KEY,
       JSON.stringify([
@@ -122,46 +121,4 @@ export function forgetSavedSession(
   );
   storage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(saved));
   return saved;
-}
-
-/** Only call after the server confirms deletion. Try every local cleanup independently. */
-export function forgetDeletedProfile(
-  session: SavedProfile & { profile: Profile },
-  storage?: SessionStorage,
-): boolean {
-  try {
-    storage ??= localStorage;
-  } catch {
-    return false;
-  }
-  let complete = true;
-  for (const cleanup of [
-    () => {
-      const active = parseSession(
-        JSON.parse(storage.getItem(SESSION_KEY) || "null"),
-      );
-      if (active?.server === session.server && active.token === session.token)
-        storage.removeItem(SESSION_KEY);
-    },
-    () =>
-      storage.setItem(
-        SAVED_SESSIONS_KEY,
-        JSON.stringify(
-          readSavedSessions(storage).filter(
-            (item) => !sameProfile(item, session),
-          ),
-        ),
-      ),
-    () =>
-      storage.removeItem(
-        residentSelectionKey(session.server, session.profile.id),
-      ),
-  ]) {
-    try {
-      cleanup();
-    } catch {
-      complete = false;
-    }
-  }
-  return complete;
 }

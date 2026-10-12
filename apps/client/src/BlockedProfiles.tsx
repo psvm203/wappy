@@ -14,7 +14,7 @@ export function BlockedProfiles({
     <section className="invite-card" aria-label="차단한 친구 관리">
       <h2>차단한 친구{blocking ? ` · ${blocking.profiles.length}` : ""}</h2>
       <p className="hint">
-        차단한 프로필과는 인사·채팅·접속 상태를 주고받지 않아요. 차단을 풀어도
+        차단한 프로필과는 채팅·접속 상태를 주고받지 않아요. 차단을 풀어도
         친구로 자동 연결되지는 않아요.
       </p>
       {blocking === undefined ? (

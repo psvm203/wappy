@@ -25,7 +25,7 @@ export function ResidentSelection({
         {ready ? `${selected}/${residents.length}` : "불러오는 중…"}
       </summary>
       <p className="hint">
-        이 기기에만 적용돼요. 친구 목록과 받은 인사는 계속 볼 수 있어요.
+        이 기기에만 적용돼요. 친구 목록은 계속 볼 수 있어요.
       </p>
       {!visible && <p className="hint">지금은 전체 캐릭터를 숨긴 상태예요.</p>}
       <fieldset disabled={!ready}>

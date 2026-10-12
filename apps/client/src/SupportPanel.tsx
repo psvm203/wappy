@@ -93,7 +93,7 @@ export function SupportPanel(state: SupportState) {
         문제 확인 정보 복사
       </button>
       <p className="hint">
-        GitHub 로그인이 필요하며 작성한 신고는 공개됩니다. 복구 코드와 초대장,
+        GitHub 로그인이 필요하며 작성한 신고는 공개됩니다. 로그인 정보와 초대장,
         개인정보가 담긴 화면은 올리지 마세요.
       </p>
       <a

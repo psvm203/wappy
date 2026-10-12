@@ -12,11 +12,9 @@ import {
   parsePresenceSettings,
   parseProfile,
   parseChatMessage,
-  parseChatMessageIds,
   parseBlockingSettings,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
-  isRecord,
   type Invite,
   type ProfileInput,
   type Session,
@@ -35,31 +33,23 @@ import {
 import { Character } from "./Character";
 import {
   useCharacterPreferences,
-  useDesktopGreeting,
-  OPEN_CHAT_EVENT,
   useDesktopSync,
   useResidentSelection,
-  type GreetingTarget,
 } from "./desktop";
 import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
 import { KakaoLogin } from "./KakaoLogin";
-import { ChatPanel, ChatBubble } from "./ChatPanel";
-import {
-  latestChat,
-  reconcileChatReads,
-  unreadChatByConversation,
-} from "./chat";
+import { ChatBubble } from "./ChatBubble";
+import { ChatComposer } from "./ChatComposer";
+import { latestChat } from "./chat";
+import { useDesktopChatRequests } from "./chat-bridge";
 import { LocalPreview } from "./LocalPreview";
-import { RecoveryCode, RecoveryForm } from "./Recovery";
-import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
 import { ServerCheck } from "./ServerCheck";
 import { SupportPanel } from "./SupportPanel";
-import { FriendGreeting } from "./FriendGreeting";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { PresenceControl } from "./PresenceControl";
 import { BlockedProfiles } from "./BlockedProfiles";
@@ -67,7 +57,6 @@ import { applyBlockingSettings, reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
-  forgetDeletedProfile,
   loadSavedSessions,
   parkSession,
   saveSession,
@@ -78,6 +67,7 @@ import {
   formatInvitation,
   isLocalServer,
   parseInvitation,
+  WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
@@ -86,7 +76,6 @@ import "./App.css";
 const emptyProfile: ProfileInput = {
   name: "",
   character: "chiikawa",
-  status: "",
 };
 
 function App() {
@@ -94,13 +83,11 @@ function App() {
   const currentSession = useRef(session);
   const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
-  const [onboarding, setOnboarding] = useState<"create" | "join" | "recover">(
-    "create",
-  );
+  const [onboarding, setOnboarding] = useState<"create" | "join">("create");
   const [state, setState] = useState<SidebarState | null>(null);
   const [localPreview, setLocalPreview] = useState<SidebarState | null>(null);
   const previewStart = useRef<HTMLButtonElement>(null);
-  const [panel, setPanel] = useState<"friends" | "chat" | "invite" | "profile">(
+  const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
   const [invite, setInvite] = useState<Invite | null>(null);
@@ -112,7 +99,6 @@ function App() {
     "ready" | "pending" | "unknown"
   >("ready");
   const [error, setError] = useState("");
-  const [deleteError, setDeleteError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
   >("connecting");
@@ -123,11 +109,7 @@ function App() {
   const [friendQuery, setFriendQuery] = useState("");
   const [friendView, setFriendView] = useState<FriendView>("all");
   const friendSearch = useRef<HTMLInputElement>(null);
-  const [chatFocus, setChatFocus] = useState(0);
-  const [chatRecipient, setChatRecipient] = useState<string | null>(null);
-  const [greetingTarget, setGreetingTarget] = useState<GreetingTarget | null>(
-    null,
-  );
+  const [chatTarget, setChatTarget] = useState<string | null>(null);
   const {
     preferences,
     setPreferences,
@@ -141,38 +123,7 @@ function App() {
       ? residentSelectionKey(session.server, state.self.id)
       : null;
   const selection = useResidentSelection(desktop ? profileKey : null);
-  const greetingError = useDesktopGreeting((target) => {
-    if (
-      !session ||
-      currentSession.current !== session ||
-      target.profileKey !== profileKey ||
-      !state?.friends.some((friend) => friend.id === target.friendId)
-    )
-      return;
-    void windowAction(async () => {
-      await invoke("open_sidebar");
-      if (currentSession.current !== session) return;
-      if (compact) await invoke("set_sidebar_compact", { compact: false });
-      if (currentSession.current !== session) return;
-      setCompact(false);
-      setPanel("friends");
-      setFriendQuery("");
-      setFriendView("all");
-      setGreetingTarget(target);
-    });
-  });
-  const chatError = useDesktopGreeting((target) => {
-    if (
-      !session ||
-      currentSession.current !== session ||
-      target.profileKey !== profileKey ||
-      !state ||
-      (target.friendId !== state.self.id &&
-        !state.friends.some((friend) => friend.id === target.friendId))
-    )
-      return;
-    openChat(target.friendId === state.self.id ? null : target.friendId);
-  }, OPEN_CHAT_EVENT);
+  const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
     state: session ? (selection.ready ? state : null) : localPreview,
     profileKey,
@@ -216,24 +167,9 @@ function App() {
   const desktopError =
     preferencesError ||
     selection.error ||
-    greetingError ||
     chatError ||
     attackError ||
     syncError;
-
-  useEffect(() => {
-    if (!greetingTarget) return;
-    if (
-      greetingTarget.profileKey === profileKey &&
-      !compact &&
-      panel === "friends"
-    ) {
-      const card = document.getElementById(`friend-${greetingTarget.friendId}`);
-      card?.focus({ preventScroll: true });
-      card?.scrollIntoView({ block: "center" });
-    }
-    setGreetingTarget(null);
-  }, [greetingTarget, profileKey, compact, panel]);
 
   function changeSession(next: SavedSession | null) {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
@@ -241,127 +177,68 @@ function App() {
     setSession(next);
     setLocalPreview(null);
     setPresenceStatus("ready");
-    setDeleteError("");
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
-    setChatRecipient(null);
+    setChatTarget(null);
     setBlockingFriend(null);
   }
 
   function applyState(next: SidebarState) {
     setState((current) =>
-      reconcileChatReads(
-        current,
-        reconcilePresence(current, reconcileBlocking(current, next)),
-      ),
+      reconcilePresence(current, reconcileBlocking(current, next)),
     );
   }
 
-  function openChat(recipientId: string | null = null) {
-    if (!session) return;
-    const active = session;
-    void windowAction(async () => {
-      if (desktop) {
-        await invoke("open_sidebar");
-        if (currentSession.current !== active) return;
-        if (compact) await invoke("set_sidebar_compact", { compact: false });
-      }
-      if (currentSession.current !== active) return;
-      setCompact(false);
-      setPanel("chat");
-      setChatRecipient(recipientId);
-      setChatFocus((value) => value + 1);
-    });
-  }
-
-  async function sendChat(text: string, recipientId: string | null) {
-    if (!session || connection !== "online")
-      throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
-    const active = session;
-    if (
-      recipientId !== null &&
-      (!state?.directChat ||
-        !state.friends.some((friend) => friend.id === recipientId))
-    )
-      throw new ApiError(
-        409,
-        "1:1 채팅 지원 여부와 친구 연결을 다시 확인해 주세요.",
-      );
-    const message = parseChatMessage(
-      recipientId === null
-        ? await request(active, "POST /chat", { text })
-        : await request(active, "POST /chat/direct", {
-            text,
-            friendId: recipientId,
-          }),
-    );
-    if (
-      message.senderId !== state?.self.id ||
-      message.recipientId !== (recipientId ?? undefined)
-    )
-      throw new ApiError(
-        502,
-        "메시지 전송 결과를 확인하지 못했어요. 대화 목록을 확인해 주세요.",
-      );
-    if (currentSession.current !== active) return;
-    setState((current) => {
-      if (
-        !current ||
-        (recipientId !== null &&
-          !current.friends.some((friend) => friend.id === recipientId))
-      )
-        return current;
-      const messages = [
-        ...(current.messages ?? []).filter((item) => item.id !== message.id),
-        message,
-      ]
-        .sort((a, b) => a.id - b.id)
-        .slice(-CHAT_HISTORY_LIMIT);
-      return {
-        ...current,
-        messages,
-        ...(current.unreadChatIds === undefined
-          ? {}
-          : {
-              unreadChatIds: current.unreadChatIds.filter((id) =>
-                messages.some((item) => item.id === id),
-              ),
-            }),
-      };
-    });
-  }
-
-  async function readChat(messageIds: number[]) {
+  async function sendChat(text: string) {
     if (
       !session ||
+      currentSession.current !== session ||
       connection !== "online" ||
-      state?.unreadChatIds === undefined
+      state?.messages === undefined
     )
-      throw new ApiError(503, "서버에 다시 연결된 뒤 확인해 주세요.");
+      throw new ApiError(503, "서버에 다시 연결된 뒤 보내 주세요.");
     const active = session;
-    const result = await request(active, "POST /chat/read", { messageIds });
-    const confirmed = parseChatMessageIds(
-      isRecord(result) ? result.messageIds : undefined,
+    const message = parseChatMessage(
+      await request(active, "POST /chat", { text }),
     );
-    if (
-      confirmed.length !== messageIds.length ||
-      confirmed.some((id) => !messageIds.includes(id))
-    )
+    if (message.senderId !== state.self.id)
+      throw new ApiError(502, "메시지 전송 결과를 확인하지 못했어요.");
+    if (currentSession.current !== active)
       throw new ApiError(
-        502,
-        "메시지 확인 결과를 받지 못했어요. 다시 확인해 주세요.",
+        409,
+        "프로필이 바뀌었어요. 현재 프로필에서 다시 보내 주세요.",
       );
-    if (currentSession.current !== active) return;
     setState((current) =>
-      current?.unreadChatIds
+      current
         ? {
             ...current,
-            unreadChatIds: current.unreadChatIds.filter(
-              (id) => !confirmed.includes(id),
-            ),
+            messages: [
+              ...(current.messages ?? []).filter(
+                (item) => item.id !== message.id,
+              ),
+              message,
+            ]
+              .sort((a, b) => a.id - b.id)
+              .slice(-CHAT_HISTORY_LIMIT),
           }
         : current,
+    );
+    return message;
+  }
+
+  function chatComposer(id: string) {
+    return (
+      chatTarget === id &&
+      state && (
+        <ChatComposer
+          key={profileKey ?? state.self.id}
+          senderName={state.self.name}
+          connected={connection === "online" && state.messages !== undefined}
+          onSend={sendChat}
+          onClose={() => setChatTarget(null)}
+        />
+      )
     );
   }
 
@@ -511,18 +388,18 @@ function App() {
       setSavedSessions(loadSavedSessions());
     } catch {
       setError(
-        "프로필을 기기에 저장하지 못했습니다. 앱을 닫기 전에 ‘내 모습’에서 복구 코드를 보관해 주세요.",
+        "프로필을 기기에 저장하지 못했습니다. 앱을 닫으면 로그인 정보가 사라질 수 있어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
   }
 
-  function showOnboarding(mode: "create" | "recover") {
+  function showOnboarding() {
     changeSession(null);
     setState(null);
     setInvite(null);
     setCode("");
     setRemoving(null);
-    setOnboarding(mode);
+    setOnboarding("create");
     setConnection("connecting");
     setPanel("friends");
     setNotice("");
@@ -535,7 +412,7 @@ function App() {
       setSavedSessions(
         parkSession({ ...session, ...(state ? { profile: state.self } : {}) }),
       );
-      showOnboarding("create");
+      showOnboarding();
     } catch {
       setError(
         "프로필을 보관하지 못해 현재 연결을 유지했어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
@@ -547,7 +424,7 @@ function App() {
     if (busy) return;
     try {
       saveSession(saved);
-      showOnboarding("create");
+      showOnboarding();
       setServer(saved.server);
       changeSession({ server: saved.server, token: saved.token });
     } catch {
@@ -555,44 +432,6 @@ function App() {
         "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
-  }
-
-  function deleteProfile() {
-    if (!session || !state || connection !== "online") return;
-    const deleted = { ...session, profile: state.self };
-    void action(async () => {
-      setDeleteError("");
-      try {
-        const result = await request(session, "POST /profile/delete", {
-          profileId: deleted.profile.id,
-        });
-        if (!isRecord(result) || result.ok !== true)
-          throw new Error("Unconfirmed deletion");
-      } catch (cause) {
-        let failure = cause;
-        if (cause instanceof ApiError && cause.status === 404)
-          failure = new ApiError(
-            404,
-            "이 서버는 프로필 삭제를 지원하지 않습니다. 서버를 업데이트한 뒤 다시 시도해 주세요.",
-          );
-        else if (!(cause instanceof ApiError) || cause.status >= 500)
-          failure = new ApiError(
-            503,
-            "서버의 삭제 결과를 확인하지 못했습니다. 자동으로 다시 요청하지 않습니다. 연결 상태를 확인해 주세요.",
-          );
-        setDeleteError(errorMessage(failure));
-        throw failure;
-      }
-      const cleaned = forgetDeletedProfile(deleted);
-      setSavedSessions(loadSavedSessions());
-      if (currentSession.current !== session) return;
-      showOnboarding("create");
-      setNotice("서버에서 프로필과 친구 연결을 삭제했어요.");
-      if (!cleaned)
-        setError(
-          "서버의 프로필은 삭제됐지만 기기의 로그인 정보나 캐릭터 선택을 일부 지우지 못했습니다. 저장소 접근을 확인하고 남은 프로필은 보관 해제해 주세요.",
-        );
-    });
   }
 
   function selectedServer() {
@@ -604,19 +443,6 @@ function App() {
         "올바른 서버 주소를 입력해 주세요. 예: http://localhost:3001",
       );
     }
-  }
-
-  function recoverProfile(recoveryCode: string) {
-    void action(async () => {
-      const address = selectedServer();
-      const recovered = await request(
-        { server: address },
-        "POST /session/recover",
-        { code: recoveryCode },
-      );
-      connectSession(address, recovered);
-      setNotice("프로필을 복구했어요. 기존 기기는 로그아웃됩니다.");
-    });
   }
 
   function saveProfile(profile: ProfileInput) {
@@ -665,9 +491,7 @@ function App() {
           }
           return;
         }
-        setNotice(
-          "‘내 모습’에서 복구 코드를 보관하면 기기를 바꿔도 돌아올 수 있어요.",
-        );
+        setNotice("프로필을 만들었어요. 친구를 초대해 보세요.");
       }
     });
   }
@@ -739,12 +563,6 @@ function App() {
     connection === "online"
       ? (state?.friends.filter((friend) => friend.online).length ?? 0)
       : 0;
-  const waveCount = state?.friends.filter((friend) => friend.wave).length ?? 0;
-  const unreadChats = unreadChatByConversation(state);
-  const unreadChatCount = [...unreadChats.values()].reduce(
-    (total, ids) => total + ids.length,
-    0,
-  );
   const listedFriends = filterFriends(
     state?.friends ?? [],
     friendQuery,
@@ -884,33 +702,13 @@ function App() {
             <span className="compact-presence">접속 숨김</span>
           )}
         </button>
-        {unreadChatCount > 0 && (
-          <button
-            className="compact-chat text-button"
-            aria-label={`새 메시지 ${unreadChatCount}개 확인하러 가기`}
-            onClick={() => openChat(unreadChats.keys().next().value ?? null)}
-          >
-            채팅 <span className="wave-count">{unreadChatCount}</span>
-          </button>
-        )}
         <div className="compact-friends">
           {state.friends.map((friend) => (
-            <div
-              key={friend.id}
-              title={`${friend.name}${friend.wave ? " · 새 인사" : ""}`}
-            >
+            <div key={friend.id} title={friend.name}>
               <Character
                 kind={friend.character}
                 asleep={!friend.online || connection !== "online"}
               />
-              {friend.wave && (
-                <span
-                  className="compact-wave"
-                  aria-label={`${friend.name} 님의 새 인사`}
-                >
-                  👋
-                </span>
-              )}
             </div>
           ))}
         </div>
@@ -1044,7 +842,6 @@ function App() {
               [
                 ["create", "처음이에요"],
                 ["join", "초대받았어요"],
-                ["recover", "다시 돌아왔어요"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -1089,62 +886,53 @@ function App() {
               onLogin={connectSession}
             />
           )}
-          {onboarding === "recover" ? (
-            <RecoveryForm
-              server={server}
-              onServerChange={setServer}
-              busy={busy}
-              onRecover={recoverProfile}
-            />
-          ) : (
-            <ProfileForm
-              initial={emptyProfile}
-              busy={busy}
-              onSave={saveProfile}
-              canSave={
-                onboarding !== "join" || verifiedInvitation === invitationSource
-              }
-              beforeProfile={
-                onboarding === "join" && (
-                  <InviteField
-                    value={code}
-                    onChange={(value) => {
-                      setCode(value);
-                      try {
-                        const destination = parseInvitation(value).server;
-                        if (destination) setServer(destination);
-                      } catch {
-                        /* Validate on submit. */
-                      }
-                    }}
-                    server={server}
-                    onVerified={(source) => {
-                      setVerifiedInvitation(source);
-                      if (source) setError("");
-                    }}
-                  />
-                )
-              }
-            >
-              <details className="server-settings">
-                <summary>연결할 서버</summary>
-                <label className="field">
-                  서버 주소
-                  <input
-                    type="url"
-                    required
-                    value={server}
-                    onChange={(event) => setServer(event.target.value)}
-                  />
-                </label>
-                <p className="hint">
-                  코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
-                  붙여넣으면 초대장의 서버를 사용해요.
-                </p>
-                <ServerCheck key={server} server={server} busy={busy} />
-              </details>
-            </ProfileForm>
-          )}
+          <ProfileForm
+            initial={emptyProfile}
+            busy={busy}
+            onSave={saveProfile}
+            canSave={
+              onboarding !== "join" || verifiedInvitation === invitationSource
+            }
+            beforeProfile={
+              onboarding === "join" && (
+                <InviteField
+                  value={code}
+                  onChange={(value) => {
+                    setCode(value);
+                    try {
+                      const destination = parseInvitation(value).server;
+                      if (destination) setServer(destination);
+                    } catch {
+                      /* Validate on submit. */
+                    }
+                  }}
+                  server={server}
+                  onVerified={(source) => {
+                    setVerifiedInvitation(source);
+                    if (source) setError("");
+                  }}
+                />
+              )
+            }
+          >
+            <details className="server-settings">
+              <summary>연결할 서버</summary>
+              <label className="field">
+                서버 주소
+                <input
+                  type="url"
+                  required
+                  value={server}
+                  onChange={(event) => setServer(event.target.value)}
+                />
+              </label>
+              <p className="hint">
+                기본 서버에서는 초대 코드만 입력하면 돼요. 별도 서버를 사용하는
+                경우에만 주소를 바꿔 주세요.
+              </p>
+              <ServerCheck key={server} server={server} busy={busy} />
+            </details>
+          </ProfileForm>
           {error && (
             <p className="error" role="alert">
               {error}
@@ -1195,14 +983,15 @@ function App() {
           {connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
               <p>
-                프로필 인증이 만료되었어요. 다른 기기에서 복구했다면 그 기기에서
-                계속 이용할 수 있어요.
+                프로필 인증이 만료되었어요. 다른 기기에서 로그인했다면 그
+                기기에서 계속 이용할 수 있어요.
               </p>
               <details>
                 <summary>이 기기에서 다시 시작하기</summary>
                 <p>
-                  복구 코드가 있으면 같은 서버의 프로필과 친구 목록을 불러올 수
-                  있어요.
+                  카카오로 만든 프로필은 같은 서버에서 같은 카카오 계정으로 다시
+                  로그인할 수 있어요. 보관한 다른 프로필을 선택하거나 새
+                  프로필로 시작할 수도 있어요.
                 </p>
                 <button
                   className="text-button danger"
@@ -1216,10 +1005,10 @@ function App() {
                       );
                       return;
                     }
-                    showOnboarding("recover");
+                    showOnboarding();
                   }}
                 >
-                  복구 화면으로 이동
+                  시작 화면으로 이동
                 </button>
               </details>
             </div>
@@ -1228,7 +1017,6 @@ function App() {
             {(
               [
                 ["friends", "친구들"],
-                ["chat", "채팅"],
                 ["invite", "초대하기"],
                 ["profile", "내 모습"],
               ] as const
@@ -1244,42 +1032,10 @@ function App() {
                 }}
               >
                 {label}
-                {id === "friends" && waveCount > 0 && (
-                  <span
-                    className="wave-count"
-                    aria-label={`새 인사 ${waveCount}개`}
-                  >
-                    {waveCount}
-                  </span>
-                )}
-                {id === "chat" && unreadChatCount > 0 && (
-                  <span
-                    className="wave-count"
-                    aria-label={`새 메시지 ${unreadChatCount}개`}
-                  >
-                    {unreadChatCount}
-                  </span>
-                )}
               </button>
             ))}
           </nav>
           <div className="scroll-area content">
-            {state && (
-              <div hidden={panel !== "chat"}>
-                <ChatPanel
-                  key={`${session.server}:${session.token}:${state.self.id}`}
-                  session={session}
-                  state={state}
-                  connected={connection === "online"}
-                  focusRequest={chatFocus}
-                  active={panel === "chat"}
-                  recipientId={chatRecipient}
-                  onRecipientChange={setChatRecipient}
-                  onSend={sendChat}
-                  onRead={readChat}
-                />
-              </div>
-            )}
             {desktopError && (
               <p className="error" role="alert">
                 {desktopError}
@@ -1312,19 +1068,15 @@ function App() {
                 {presenceControls}
                 {state.friends.length > 0 && (
                   <>
-                    <p className="hint greeting-hint">
-                      손 인사로 안부를 전해요. 같은 친구에게 30초에 한 번, 확인
-                      전까지 최근 인사 하나를 하루 동안 보관해요.
-                    </p>
                     <section className="friend-filters" aria-label="친구 찾기">
                       <label className="field friend-search">
-                        이름이나 상태로 찾기
+                        이름으로 찾기
                         <input
                           ref={friendSearch}
                           type="search"
                           maxLength={120}
                           value={friendQuery}
-                          placeholder="이름, 상태 검색"
+                          placeholder="이름 검색"
                           onChange={(event) =>
                             setFriendQuery(event.target.value)
                           }
@@ -1339,7 +1091,6 @@ function App() {
                           [
                             ["all", "전체", state.friends.length],
                             ["online", "접속 중", onlineCount],
-                            ["waves", "새 인사", waveCount],
                           ] as const
                         ).map(([view, label, count]) => (
                           <button
@@ -1389,13 +1140,11 @@ function App() {
                     <h2>
                       {friendView === "online" && connection !== "online"
                         ? "접속 상태를 확인할 수 없어요."
-                        : friendView === "waves" && !friendQuery.trim()
-                          ? "새 인사가 아직 없어요."
-                          : "조건에 맞는 친구가 없어요."}
+                        : "조건에 맞는 친구가 없어요."}
                     </h2>
                     <p>
                       {friendView === "online" && connection !== "online"
-                        ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록과 받은 인사는 계속 볼 수 있어요."
+                        ? "다시 연결되면 접속 중인 친구가 표시돼요. 전체 목록은 계속 볼 수 있어요."
                         : "검색어나 목록 보기를 바꾸면 다른 친구도 볼 수 있어요."}
                     </p>
                   </div>
@@ -1409,18 +1158,13 @@ function App() {
                         className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
                         key={friend.id}
                       >
-                        <button
-                          type="button"
-                          className="friend-scene character-chat"
-                          aria-label={`${friend.name} 캐릭터로 1:1 채팅 열기`}
-                          onClick={() => openChat(friend.id)}
-                        >
+                        <div className="friend-scene">
                           <Character
                             kind={friend.character}
                             asleep={!friend.online || connection !== "online"}
                           />
                           <div className="scene-floor" />
-                        </button>
+                        </div>
                         <div className="friend-info">
                           <div className="friend-name">
                             <strong>{friend.name}</strong>
@@ -1428,24 +1172,9 @@ function App() {
                               className={`online-dot ${!friend.online || connection !== "online" ? "offline" : ""}`}
                             />
                           </div>
-                          <p>{friend.status || "그냥, 함께 있는 중"}</p>
                           <ChatBubble
                             message={latestChat(state.messages, friend.id)}
                           />
-                          <button
-                            className="text-button"
-                            onClick={() => openChat(friend.id)}
-                          >
-                            1:1 채팅
-                            {!!unreadChats.get(friend.id)?.length && (
-                              <span
-                                className="wave-count"
-                                aria-label={`새 메시지 ${unreadChats.get(friend.id)!.length}개`}
-                              >
-                                {unreadChats.get(friend.id)!.length}
-                              </span>
-                            )}
-                          </button>
                           <small>
                             {connection !== "online"
                               ? "접속 상태 확인 중"
@@ -1453,38 +1182,6 @@ function App() {
                                 ? "지금 함께 있어요"
                                 : "잠시 쉬고 있어요"}
                           </small>
-                          <FriendGreeting
-                            friend={friend}
-                            disabled={busy || connection !== "online"}
-                            onSend={() =>
-                              void action(async () => {
-                                await request(session, "POST /friends/wave", {
-                                  friendId: friend.id,
-                                });
-                                setNotice(
-                                  `${friend.name} 님에게 인사를 보냈어요.`,
-                                );
-                              })
-                            }
-                            onRead={() =>
-                              void action(async () => {
-                                if (!friend.wave) return;
-                                // The read button is disabled, then removed. Move focus before
-                                // waiting so a late response cannot interrupt new input.
-                                document
-                                  .getElementById(
-                                    friendView === "waves"
-                                      ? "friend-view-waves"
-                                      : `friend-${friend.id}`,
-                                  )
-                                  ?.focus({ preventScroll: true });
-                                await request(session, "POST /waves/read", {
-                                  waveId: friend.wave.id,
-                                });
-                                await refresh();
-                              })
-                            }
-                          />
                           <button
                             type="button"
                             className="text-button danger"
@@ -1554,9 +1251,8 @@ function App() {
                               <strong>{friend.name} 님을 차단할까요?</strong>
                             </p>
                             <p>
-                              친구 연결과 둘 사이의 1:1 대화·인사를 삭제하고,
-                              초대로 다시 연결되는 것도 막아요. 차단 해제는 내
-                              모습에서 할 수 있어요.
+                              친구 연결을 삭제하고, 초대로 다시 연결되는 것도
+                              막아요. 차단 해제는 내 모습에서 할 수 있어요.
                             </p>
                             <div>
                               <button
@@ -1595,10 +1291,6 @@ function App() {
                     ))}
                   </ul>
                 )}
-                <div className="little-note">
-                  <span aria-hidden="true">✧</span> 말하지 않아도, 곁에 있다는
-                  것.
-                </div>
               </>
             )}
             {state && panel === "invite" && (
@@ -1606,7 +1298,7 @@ function App() {
                 <p className="eyebrow">BETTER TOGETHER</p>
                 <h1>작은 초대, 큰 반가움.</h1>
                 <p className="muted">
-                  같이 있고 싶은 친구에게 초대장을 보내세요.
+                  같이 있고 싶은 친구에게 5자리 초대 코드를 보내세요.
                 </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
@@ -1614,24 +1306,20 @@ function App() {
                   </span>
                   <h2>내 초대 코드</h2>
                   <p>
-                    한 명에게, 하루 동안 유효해요.
-                    <br />새 코드를 만들면 이전 코드는 만료돼요.
+                    인원과 기간 제한 없이 사용할 수 있어요.
+                    <br />새 코드를 만들면 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
                     <>
                       <label className="field">
-                        친구에게 보낼 초대장
-                        <textarea
+                        친구에게 보낼 코드
+                        <input
+                          className="invite-code"
                           readOnly
-                          rows={5}
-                          value={formatInvitation(session.server, invite.code)}
+                          value={invite.code}
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
-                      <p className="hint">
-                        만료:{" "}
-                        {new Date(invite.expiresAt).toLocaleString("ko-KR")}
-                      </p>
                       <button
                         className="primary"
                         onClick={async () => {
@@ -1640,49 +1328,20 @@ function App() {
                             await navigator.clipboard.writeText(
                               formatInvitation(session.server, invite.code),
                             );
-                            setNotice(
-                              "서버 주소와 초대 코드를 함께 복사했어요.",
-                            );
+                            setNotice("초대 코드를 복사했어요.");
                           } catch {
                             setError(
-                              "초대장 입력란을 선택한 뒤 직접 복사해 주세요.",
+                              "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
                             );
                           }
                         }}
                       >
-                        초대장 복사 <span aria-hidden="true">↗</span>
+                        초대 코드 복사 <span aria-hidden="true">↗</span>
                       </button>
                       <p className="hint">
                         친구가 첫 화면의 ‘초대받았어요’에 붙여넣으면 바로 시작할
                         수 있어요.
                       </p>
-                      <details className="server-settings">
-                        <summary>코드만 따로 보내기</summary>
-                        <label className="field">
-                          친구에게 보낼 코드
-                          <input
-                            className="invite-code"
-                            readOnly
-                            value={invite.code}
-                            onFocus={(event) => event.target.select()}
-                          />
-                        </label>
-                        <button
-                          className="primary"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(invite.code);
-                              setNotice("초대 코드를 복사했어요.");
-                            } catch {
-                              setError(
-                                "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
-                              );
-                            }
-                          }}
-                        >
-                          초대 코드 복사 <span aria-hidden="true">↗</span>
-                        </button>
-                      </details>
                     </>
                   )}
                   <button
@@ -1706,11 +1365,13 @@ function App() {
                         ? "새 코드 만들기"
                         : "초대 코드 만들기"}
                   </button>
-                  <p className="hint server-address">
-                    친구도 같은 서버에 연결해야 해요.
-                    <br />
-                    <strong>{session.server}</strong>
-                  </p>
+                  {session.server !== WAPPY_SERVER && (
+                    <p className="hint server-address">
+                      친구도 같은 서버에 연결해야 해요.
+                      <br />
+                      <strong>{session.server}</strong>
+                    </p>
+                  )}
                   {isLocalServer(session.server) && (
                     <p className="hint">
                       현재 주소는 이 컴퓨터 안에서만 사용할 수 있어요. 다른
@@ -1751,22 +1412,12 @@ function App() {
                       busy={busy}
                       onSave={saveProfile}
                     />
-                    <RecoveryCode key={session.token} session={session} />
                     <BlockedProfiles
                       blocking={state.blocking}
                       disabled={busy || connection !== "online"}
                       onUnblock={(id) =>
                         void action(() => changeBlocking(id, false))
                       }
-                    />
-                    <DeleteProfile
-                      key={session.server + session.token}
-                      profile={state.self}
-                      server={session.server}
-                      busy={busy}
-                      connected={connection === "online"}
-                      error={deleteError}
-                      onDelete={deleteProfile}
                     />
                   </>
                 )}
@@ -1789,8 +1440,9 @@ function App() {
                     수 있어요.
                   </p>
                   <p className="hint">
-                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다. 복구
-                    코드를 함께 보관해 주세요.
+                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다.
+                    이름으로 만든 프로필은 로그인 정보를 잃으면 다시 불러올 수
+                    없어요.
                   </p>
                   <button
                     className="secondary"
@@ -1807,20 +1459,22 @@ function App() {
           </div>
           {state && (
             <footer className="self-card">
-              <button
-                type="button"
-                className="character-chat"
-                aria-label="내 캐릭터로 채팅 열기"
-                onClick={() => openChat()}
-              >
-                <Character kind={state.self.character} />
-              </button>
+              <div className="character-chat-anchor">
+                {chatComposer(state.self.id)}
+                <button
+                  type="button"
+                  className="character-chat"
+                  aria-label="내 캐릭터 위에 채팅 입력창 열기"
+                  onClick={() => setChatTarget(state.self.id)}
+                >
+                  <Character kind={state.self.character} />
+                </button>
+              </div>
               <div>
                 <strong>
                   {state.self.name}
                   <span className="me-badge">나</span>
                 </strong>
-                <p>{state.self.status || "함께 있는 것만으로도 좋아요"}</p>
                 <ChatBubble
                   message={latestChat(state.messages, state.self.id)}
                 />

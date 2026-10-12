@@ -231,7 +231,7 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
             } else if health {
                 r#"{"ok":true}"#
             } else {
-                r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"shisa","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#
+                r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware"},"presence":{"sharing":false,"revision":1},"friends":[{"id":"presence-friend","name":"Friend","character":"shisa","online":true}]}"#
             };
             let _ = write!(socket, "HTTP/1.1 {status} Test\r\nETag: \"lifecycle-v1\"\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }
@@ -508,9 +508,6 @@ fn main() -> Result<(), String> {
                     value["state"]["self"]["id"] == "presence-check"
                         && value["connected"] == connected
                 })?;
-                if update["state"]["friends"][0]["wave"]["id"] != "native-wave" {
-                    return Err("The native connection dropped an incoming greeting".into());
-                }
                 if update["state"]["presence"]["sharing"] != false {
                     return Err("The native connection dropped the private presence setting".into());
                 }
@@ -537,7 +534,12 @@ fn main() -> Result<(), String> {
                 .emit_to("main", "wappy:tray-control", "toggle-visible")
                 .map_err(|error| error.to_string())?;
             let shown = snapshot(&received, |value| value["visible"] == true)?;
-            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            text_rendered(
+                &desktop,
+                ".desktop-resident:nth-of-type(2) .resident-name",
+                "Friend",
+                true,
+            )?;
             if shown["paused"] != true {
                 click_button(&sidebar, "캐릭터 움직임 멈추기")?;
             }
@@ -565,87 +567,41 @@ fn main() -> Result<(), String> {
                 true,
             )?;
             if sidebar.is_visible().unwrap_or(true) {
-                return Err("An incoming greeting unexpectedly opened the sidebar".into());
+                return Err("A presence update unexpectedly opened the sidebar".into());
             }
             if client_lib::open_sidebar(desktop.clone()).is_ok() {
                 return Err("The character window bypassed sidebar navigation validation".into());
             }
-            println!("CHECK: greeting shortcuts restore and focus the sidebar");
-            for target in [
-                serde_json::Value::Null,
-                serde_json::json!({ "profileKey": "previous-profile", "friendId": "greeting-friend" }),
-                serde_json::json!({ "profileKey": shown["profileKey"], "friendId": "removed-friend" }),
-            ] {
-                handle
-                    .emit_to("main", "wappy:open-greeting", target)
-                    .map_err(|error| error.to_string())?;
-            }
-            thread::sleep(Duration::from_millis(200));
-            if sidebar.is_visible().unwrap_or(true) {
-                return Err("An invalid or stale greeting shortcut opened the sidebar".into());
-            }
-            click_button(&sidebar, "새 인사 1")?;
-            sidebar.eval(r#"(() => {
-                const input = document.querySelector('.friend-search input');
-                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-matching-friend');
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-            })()"#).map_err(|error| error.to_string())?;
-            text_rendered(
-                &sidebar,
-                ".friend-filter-empty",
-                "조건에 맞는 친구가 없어요.",
-                true,
-            )?;
-            click_button(&sidebar, "접기 ⇥")?;
-            text_rendered(&sidebar, ".compact-sidebar", "", true)?;
-            click_button(&desktop, "Friend 님의 인사 보기")?;
-            until(|| sidebar.is_visible().unwrap_or(false))?;
-            text_rendered(&sidebar, ".sidebar:not(.compact-sidebar)", "", true)?;
-            println!("CHECK: friend card focus after restoring the compact hidden sidebar");
-            text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
-            text_rendered(
-                &sidebar,
-                ".friend-views [aria-pressed='true']",
-                "전체",
-                true,
-            )?;
-            text_rendered(&sidebar, ".received-wave", "인사를 보냈어요", true)?;
-            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
-            sidebar.minimize().map_err(|error| error.to_string())?;
-            until(|| sidebar.is_minimized().unwrap_or(false))?;
-            click_button(&desktop, "Friend 님의 인사 보기")?;
-            until(|| {
-                sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
-            })?;
-            println!("CHECK: friend card focus after restoring the minimized sidebar");
-            text_rendered(&sidebar, ".friend-card:focus", "Friend", true)?;
-            sidebar.close().map_err(|error| error.to_string())?;
-            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             sidebar
                 .eval("document.querySelector('.resident-selection').open = true;")
                 .map_err(|error| error.to_string())?;
             click_button(&sidebar, "내 캐릭터만")?;
             let selected = snapshot(&received, |value| {
-                value["hiddenIds"] == serde_json::json!(["greeting-friend"])
+                value["hiddenIds"] == serde_json::json!(["presence-friend"])
             })?;
-            if selected["state"]["friends"][0]["wave"]["id"] != "native-wave" {
-                return Err("Character selection removed a friend or its greeting".into());
+            if selected["state"]["friends"][0]["id"] != "presence-friend" {
+                return Err("Character selection removed a friend".into());
             }
-            text_rendered(&desktop, ".resident-wave", "", false)?;
+            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
-            text_rendered(&sidebar, ".received-wave", "인사를 보냈어요", true)?;
+            text_rendered(&sidebar, ".friend-card", "Friend", true)?;
             click_button(&sidebar, "Presence (나)")?;
             text_rendered(&desktop, ".desktop-characters", "", false)?;
             click_button(&sidebar, "모두 선택")?;
-            text_rendered(&desktop, ".resident-wave", "안녕!", true)?;
+            text_rendered(
+                &desktop,
+                ".desktop-resident:nth-of-type(2) .resident-name",
+                "Friend",
+                true,
+            )?;
             click_button(&sidebar, "내 캐릭터만")?;
-            text_rendered(&desktop, ".resident-wave", "", false)?;
+            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             // Exercise the real UI handlers without relying on WebView timers.
             println!("CHECK: profile switching and session cleanup");
             click_button(&sidebar, "내 모습")?;
             click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
             snapshot(&received, |value| value["state"].is_null())?;
-            text_rendered(&desktop, ".resident-wave", "", false)?;
+            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             // Requests made before the profile switch are not evidence of continued polling.
             while requests.try_recv().is_ok() {}
             if !matches!(
@@ -665,7 +621,7 @@ fn main() -> Result<(), String> {
                 return Err("Returning to a saved profile lost its credential".into());
             }
             text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
-            text_rendered(&desktop, ".resident-wave", "", false)?;
+            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             sidebar
                 .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
                 .map_err(|error| error.to_string())?;
@@ -696,7 +652,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: local preview without accounts/network, appearance changes, exit/reload cleanup, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence and greeting bubbles with WebView timers disabled, scoped greeting shortcut restores compact sidebar without consuming the wave, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: local preview without accounts/network, appearance changes, exit/reload cleanup, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);
