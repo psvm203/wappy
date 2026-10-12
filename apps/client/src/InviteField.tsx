@@ -95,14 +95,16 @@ export function InviteField({
           초대받은 서버: <strong>{destination}</strong>
         </p>
       )}
-      <button
-        type="button"
-        className="secondary"
-        disabled={busy || current?.loading || !value.trim()}
-        onClick={() => void check()}
-      >
-        {current?.loading ? "초대 확인 중…" : "초대장 미리 확인하기"}
-      </button>
+      {onVerified && (
+        <button
+          type="button"
+          className="secondary"
+          disabled={busy || current?.loading || !value.trim()}
+          onClick={() => void check()}
+        >
+          {current?.loading ? "초대 확인 중…" : "초대장 미리 확인하기"}
+        </button>
+      )}
       {current?.error && (
         <p className="error" role="alert">
           {current.error}

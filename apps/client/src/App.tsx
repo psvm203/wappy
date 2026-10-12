@@ -68,7 +68,10 @@ import {
 import {
   formatInvitation,
   isLocalServer,
+  loadSavedInvite,
   parseInvitation,
+  savedInviteKey,
+  saveInvite,
   WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
@@ -92,7 +95,10 @@ function App() {
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
-  const [invite, setInvite] = useState<Invite | null>(null);
+  const [savedInvite, setSavedInvite] = useState<{
+    key: string;
+    value: Invite | null;
+  } | null>(null);
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -124,6 +130,12 @@ function App() {
     session && state
       ? residentSelectionKey(session.server, state.self.id)
       : null;
+  const inviteStorageKey =
+    session && state
+      ? savedInviteKey(session.server, state.self.id, state.room?.id)
+      : null;
+  const invite =
+    savedInvite?.key === inviteStorageKey ? savedInvite.value : null;
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
@@ -302,6 +314,19 @@ function App() {
   }, [session]);
 
   useEffect(() => {
+    if (!inviteStorageKey || savedInvite?.key === inviteStorageKey) return;
+    try {
+      setSavedInvite({
+        key: inviteStorageKey,
+        value: loadSavedInvite(inviteStorageKey),
+      });
+    } catch {
+      setSavedInvite({ key: inviteStorageKey, value: null });
+      setError("저장된 초대 코드를 불러오지 못했어요. 새 코드를 만들어 주세요.");
+    }
+  }, [inviteStorageKey, savedInvite?.key]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 5000);
     return () => window.clearTimeout(timer);
@@ -379,7 +404,7 @@ function App() {
     changeSession(saved);
     setServer(address);
     setState({ self: created.profile, friends: [] });
-    setInvite(null);
+    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setPanel("friends");
@@ -397,7 +422,7 @@ function App() {
   function showOnboarding() {
     changeSession(null);
     setState(null);
-    setInvite(null);
+    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setOnboarding("create");
@@ -513,7 +538,7 @@ function App() {
       code: inviteCode,
     });
     setCode("");
-    setInvite(null);
+    setSavedInvite(null);
     setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
     setFriendQuery("");
@@ -1139,12 +1164,6 @@ function App() {
             )}
             {state && panel === "invite" && (
               <div className="invite-panel">
-                <p className="eyebrow">BETTER TOGETHER</p>
-                <h1>작은 초대, 큰 반가움.</h1>
-                <p className="muted">
-                  방의 5자리 초대 코드를 보내세요. 같은 방에 들어온 친구들은
-                  서로를 볼 수 있어요.
-                </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
                     ↗
@@ -1207,8 +1226,27 @@ function App() {
                           {},
                         );
                         formatInvitation(session.server, created.code);
-                        setInvite(created);
-                        await refresh();
+                        if (currentSession.current !== session) return;
+                        if (inviteStorageKey)
+                          setSavedInvite({
+                            key: inviteStorageKey,
+                            value: created,
+                          });
+                        const next = state.room ? state : await refresh();
+                        if (!next || currentSession.current !== session) return;
+                        const key = savedInviteKey(
+                          session.server,
+                          next.self.id,
+                          next.room?.id,
+                        );
+                        setSavedInvite({ key, value: created });
+                        try {
+                          saveInvite(key, created);
+                        } catch {
+                          setError(
+                            "초대 코드를 기기에 저장하지 못했어요. 앱을 닫기 전에 코드를 복사해 주세요.",
+                          );
+                        }
                       })
                     }
                   >
