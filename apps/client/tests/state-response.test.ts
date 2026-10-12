@@ -223,6 +223,14 @@ test("current room metadata is validated without exposing extra server fields", 
     { ...state, room },
   );
   assert.equal(parseSidebarState(state).room, undefined);
+  assert.deepEqual(
+    parseSidebarState({ ...state, room: { ...room, inviteCode: "A7K3M" } }).room,
+    { ...room, inviteCode: "A7K3M" },
+  );
+  for (const inviteCode of [null, 12345, "", "bad-code", "A0K3M", "a7k3m"])
+    assert.throws(() =>
+      parseSidebarState({ ...state, room: { ...room, inviteCode } }),
+    );
   for (const room of [
     null,
     [],

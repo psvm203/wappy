@@ -1,8 +1,8 @@
-import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { isIP } from "node:net";
 import { HttpError, field, json, readBody, reply } from "./http.ts";
-import { openDatabase, transaction } from "./database.ts";
+import { createRoom, openDatabase, transaction } from "./database.ts";
 import {
   ONLINE_TIMEOUT_MS,
   ATTACK_COOLDOWN_MS,
@@ -25,7 +25,6 @@ import {
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
-const INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function inviteCode(body: unknown): string {
   const code = field(body, "code");
@@ -83,7 +82,8 @@ export function createApp(options: {
     WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id
   `);
   const selectRoom = db.prepare(`
-    SELECT r.id, r.name FROM room_members m JOIN rooms r ON r.id = m.room_id
+    SELECT r.id, r.name, r.invite_code AS inviteCode
+    FROM room_members m JOIN rooms r ON r.id = m.room_id
     WHERE m.user_id = ?
   `);
   const selectPresence = db.prepare(
@@ -217,12 +217,15 @@ export function createApp(options: {
           }
           const token = secret();
           const user = { id: randomUUID(), ...input };
-          db.prepare("INSERT INTO users VALUES (?, ?, ?, ?)").run(
-            user.id,
-            hash(token),
-            user.name,
-            user.character,
-          );
+          transaction(db, () => {
+            db.prepare("INSERT INTO users VALUES (?, ?, ?, ?)").run(
+              user.id,
+              hash(token),
+              user.name,
+              user.character,
+            );
+            createRoom(db, user);
+          });
           lastSeen.set(user.id, now());
           reply(res, route, { token, profile: user }, 201);
           break;
@@ -424,46 +427,9 @@ export function createApp(options: {
           break;
         }
         case "POST /invites": {
-          const invitation = transaction(db, () => {
-            let roomId = selectRoom.get(self!.id)?.id as string | undefined;
-            if (!roomId) {
-              roomId = randomUUID();
-              db.prepare("INSERT INTO rooms VALUES (?, ?)").run(
-                roomId,
-                `${self!.name}의 방`,
-              );
-              db.prepare("INSERT INTO room_members VALUES (?, ?)").run(
-                roomId,
-                self!.id,
-              );
-            }
-            // Every member issues a code for the same room. Rotation and collision
-            // checks are atomic, including initial room creation.
-            const collision = db.prepare(
-              "SELECT 1 FROM invites WHERE code_hash = ?",
-            );
-            for (let attempt = 0; attempt < 10; attempt++) {
-              const code = Array.from(
-                { length: 5 },
-                () => INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)],
-              ).join("");
-              const digest = hash(code);
-              if (!collision.get(digest)) {
-                db.prepare("DELETE FROM invites WHERE room_id = ?").run(roomId);
-                db.prepare("INSERT INTO invites VALUES (?, ?, ?)").run(
-                  digest,
-                  self!.id,
-                  roomId,
-                );
-                return { code };
-              }
-            }
-            throw new HttpError(
-              503,
-              "초대 코드를 만들지 못했어요. 다시 시도해 주세요.",
-            );
-          });
-          reply(res, route, invitation, 201);
+          // Older clients can retrieve the room's code, but cannot replace it.
+          const room = selectRoom.get(self!.id)!;
+          reply(res, route, { code: room.inviteCode as string });
           break;
         }
         case "POST /invites/preview": {
@@ -495,11 +461,6 @@ export function createApp(options: {
               throw new HttpError(404, "유효하지 않은 초대 코드입니다.");
             const roomId = invite.room_id as string;
             const currentRoom = selectRoom.get(self!.id)?.id;
-            if (invite.owner_id === self!.id && currentRoom === roomId)
-              throw new HttpError(
-                400,
-                "자신의 초대 코드는 사용할 수 없습니다.",
-              );
             const friendId = invite.owner_id as string;
             if (blockedPair.get(self!.id, friendId, friendId, self!.id))
               throw new HttpError(

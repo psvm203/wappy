@@ -1,5 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
-import { REMOVED_CHARACTERS } from "@wappy/api";
+import { createHash, randomInt, randomUUID } from "node:crypto";
+import { REMOVED_CHARACTERS, type Profile } from "@wappy/api";
+import { HttpError } from "./http.ts";
 
 export function openDatabase(databasePath: string) {
   const db = new DatabaseSync(databasePath);
@@ -119,7 +121,7 @@ export function openDatabase(databasePath: string) {
         db.prepare("SELECT 1 FROM room_members WHERE user_id = ?").get(user.id!)
       )
         continue;
-      db.prepare("INSERT INTO rooms VALUES (?, ?)").run(
+      db.prepare("INSERT INTO rooms (id, name) VALUES (?, ?)").run(
         user.id!,
         `${user.name}의 방`,
       );
@@ -144,6 +146,37 @@ export function openDatabase(databasePath: string) {
       DROP TABLE legacy_invites;
     `);
   });
+  transaction(db, () => {
+    if (
+      !db
+        .prepare("PRAGMA table_info(rooms)")
+        .all()
+        .some((column) => column.name === "invite_code")
+    ) {
+      db.exec("ALTER TABLE rooms ADD COLUMN invite_code TEXT");
+      db.exec("CREATE UNIQUE INDEX rooms_invite_code ON rooms(invite_code)");
+    }
+    // Profiles created before automatic rooms may still have no membership.
+    for (const user of db
+      .prepare(
+        `SELECT id, name FROM users
+      WHERE id NOT IN (SELECT user_id FROM room_members)`,
+      )
+      .all())
+      createRoom(db, user as unknown as Pick<Profile, "id" | "name">);
+    // Old codes were stored as hashes only. Keep them usable as aliases while
+    // assigning one readable, permanent code to each existing room.
+    for (const room of db
+      .prepare(
+        `SELECT r.id,
+      COALESCE(
+        (SELECT owner_id FROM invites WHERE room_id = r.id ORDER BY rowid LIMIT 1),
+        (SELECT user_id FROM room_members WHERE room_id = r.id ORDER BY user_id LIMIT 1)
+      ) AS owner_id FROM rooms r WHERE r.invite_code IS NULL`,
+      )
+      .all())
+      assignRoomInvite(db, room.id as string, room.owner_id as string);
+  });
   for (const table of ["users", "profile_blocks"]) {
     db.prepare(
       `UPDATE ${table} SET character = 'chiikawa'
@@ -151,6 +184,44 @@ export function openDatabase(databasePath: string) {
     ).run(...REMOVED_CHARACTERS);
   }
   return db;
+}
+
+/** Called within the transaction that creates the profile or migrates old data. */
+export function createRoom(
+  db: DatabaseSync,
+  owner: Pick<Profile, "id" | "name">,
+) {
+  const roomId = randomUUID();
+  db.prepare("INSERT INTO rooms (id, name) VALUES (?, ?)").run(
+    roomId,
+    `${owner.name}의 방`,
+  );
+  db.prepare("INSERT INTO room_members VALUES (?, ?)").run(roomId, owner.id);
+  assignRoomInvite(db, roomId, owner.id);
+}
+
+function assignRoomInvite(db: DatabaseSync, roomId: string, ownerId: string) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const collision = db.prepare("SELECT 1 FROM invites WHERE code_hash = ?");
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = Array.from(
+      { length: 5 },
+      () => alphabet[randomInt(alphabet.length)],
+    ).join("");
+    const digest = createHash("sha256").update(code).digest("hex");
+    if (collision.get(digest)) continue;
+    db.prepare("INSERT INTO invites VALUES (?, ?, ?)").run(
+      digest,
+      ownerId,
+      roomId,
+    );
+    db.prepare("UPDATE rooms SET invite_code = ? WHERE id = ?").run(
+      code,
+      roomId,
+    );
+    return;
+  }
+  throw new HttpError(503, "초대 코드를 만들지 못했어요. 다시 시도해 주세요.");
 }
 
 /** Keep each synchronous group of writes atomic, including commit failures. */
