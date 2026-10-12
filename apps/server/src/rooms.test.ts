@@ -1,0 +1,289 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { once } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { parseSidebarState, type Session } from "@wappy/api";
+import { openDatabase } from "./database.ts";
+import { createApp } from "./server.ts";
+
+test("room invitations connect every participant, survive rotation/restart, and move only the accepting profile", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-rooms-"));
+  const databasePath = join(directory, "rooms.sqlite");
+  let now = 1_800_000_000_000;
+  let server = createApp({ databasePath, now: () => now });
+  let base = "";
+  let inspection: DatabaseSync | undefined;
+  async function listen() {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    base = `http://127.0.0.1:${address.port}`;
+  }
+  async function close() {
+    if (!server.listening) return;
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+  }
+  t.after(async () => {
+    inspection?.close();
+    await close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  await listen();
+  async function call(
+    path: string,
+    token?: string,
+    body?: unknown,
+    etag?: string,
+  ) {
+    const response = await fetch(base + path, {
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(etag ? { "If-None-Match": etag } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return {
+      status: response.status,
+      etag: response.headers.get("ETag")!,
+      body: response.status === 304 ? null : await response.json(),
+    };
+  }
+  async function create(name: string): Promise<Session> {
+    const response = await call("/session", undefined, {
+      name,
+      character: "chiikawa",
+    });
+    assert.equal(response.status, 201);
+    return response.body;
+  }
+  const [a, b, c, d, e, f] = await Promise.all(
+    ["A", "B", "C", "D", "E", "F"].map(create),
+  );
+  assert.ok(a && b && c && d && e && f);
+  async function state(person: Session) {
+    const response = await call("/state", person.token);
+    assert.equal(response.status, 200);
+    return parseSidebarState(response.body);
+  }
+  async function peers(person: Session, expected: Session[]) {
+    assert.deepEqual(
+      (await state(person)).friends.map((friend) => friend.id).sort(),
+      expected.map((peer) => peer.profile.id).sort(),
+    );
+  }
+  async function invite(person: Session) {
+    const response = await call("/invites", person.token, {});
+    assert.equal(response.status, 201);
+    return response.body;
+  }
+  const first = await invite(a);
+  assert.equal((await call("/invites/accept", b.token, first)).status, 200);
+  const beforeB = await call("/state", b.token);
+  // A fresh code still targets the existing room and keeps B in it.
+  const second = await invite(a);
+  assert.equal((await call("/invites/accept", c.token, first)).status, 404);
+  assert.equal((await call("/invites/accept", c.token, second)).status, 200);
+  await peers(a, [b, c]);
+  await peers(b, [a, c]);
+  await peers(c, [a, b]);
+  assert.equal(
+    (await call("/state", b.token, undefined, beforeB.etag)).status,
+    200,
+  );
+  assert.equal(
+    (await state(b)).friends.find((friend) => friend.id === c.profile.id)
+      ?.online,
+    true,
+  );
+  const chat = await call("/chat", b.token, { text: "방 친구들 안녕" });
+  assert.equal(chat.status, 201);
+  assert.deepEqual((await state(c)).messages, [chat.body]);
+  assert.equal(
+    (await call("/friends/attack", b.token, { friendId: c.profile.id })).status,
+    201,
+  );
+
+  // Any participant can rotate the room's code and invite the next participant.
+  const fromB = await invite(b);
+  assert.equal((await call("/invites/preview", undefined, second)).status, 404);
+  assert.equal((await call("/invites/accept", d.token, fromB)).status, 200);
+  for (const person of [a, b, c, d]) {
+    await peers(
+      person,
+      [a, b, c, d].filter((other) => other !== person),
+    );
+    assert.equal((await state(person)).room?.id, (await state(a)).room?.id);
+  }
+  assert.deepEqual(
+    (await state(d)).messages,
+    [],
+    "new members cannot read old room chat",
+  );
+  await peers(e, []);
+  const otherRoom = await invite(e);
+  assert.equal((await call("/invites/accept", f.token, otherRoom)).status, 200);
+  await peers(f, [e]);
+  const otherChat = await call("/chat", e.token, {
+    text: "다른 방의 이전 대화",
+  });
+  assert.equal(otherChat.status, 201);
+
+  await call("/friends/block", e.token, { friendId: d.profile.id });
+  assert.equal((await call("/invites/accept", d.token, otherRoom)).status, 409);
+  await peers(d, [a, b, c]);
+  await call("/friends/unblock", e.token, { friendId: d.profile.id });
+
+  // A failure after leaving the original room must roll the entire move back.
+  inspection = new DatabaseSync(databasePath);
+  inspection.exec(
+    "CREATE TRIGGER fail_join BEFORE INSERT ON room_members BEGIN SELECT RAISE(ABORT, 'test rollback'); END",
+  );
+  const logged = t.mock.method(console, "error", () => {});
+  assert.equal((await call("/invites/accept", d.token, otherRoom)).status, 500);
+  logged.mock.restore();
+  inspection.exec("DROP TRIGGER fail_join");
+  await peers(d, [a, b, c]);
+  assert.equal((await state(d)).room?.id, (await state(a)).room?.id);
+  const beforeA = await call("/state", a.token);
+  assert.equal((await call("/invites/accept", d.token, otherRoom)).status, 200);
+  await peers(d, [e, f]);
+  await peers(e, [d, f]);
+  await peers(a, [b, c]);
+  await peers(b, [a, c]);
+  assert.equal(
+    (await call("/state", a.token, undefined, beforeA.etag)).status,
+    200,
+  );
+  assert.deepEqual((await state(d)).messages, []);
+  assert.equal(
+    (await call("/friends/attack", b.token, { friendId: d.profile.id })).status,
+    404,
+  );
+  now += 2001;
+  const later = await call("/chat", b.token, { text: "이전 방에만" });
+  assert.equal(later.status, 201);
+  assert.deepEqual((await state(d)).messages, []);
+
+  // Blocking a non-inviter still applies when joining their room through someone else.
+  await call("/friends/block", c.token, { friendId: d.profile.id });
+  assert.equal((await call("/invites/accept", d.token, fromB)).status, 200);
+  await peers(d, [a, b]);
+  await peers(c, [a, b]);
+  await peers(e, [f]);
+  assert.deepEqual(
+    (await state(d)).messages,
+    [],
+    "returning members do not regain revoked chat",
+  );
+  assert.equal((await call("/invites/accept", d.token, fromB)).status, 409);
+
+  await close();
+  server = createApp({ databasePath, now: () => now });
+  await listen();
+  await peers(d, [a, b]);
+  await peers(e, [f]);
+  // Even the original inviter can leave and return using a code for the old room.
+  assert.equal((await call("/invites/accept", b.token, otherRoom)).status, 200);
+  assert.equal((await call("/invites/accept", b.token, fromB)).status, 200);
+  await peers(b, [a, c, d]);
+  const shared = await invite(d);
+  assert.equal((await call("/invites/accept", f.token, shared)).status, 200);
+  await peers(f, [a, b, c, d]);
+  await peers(e, []);
+  assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
+  assert.equal(
+    inspection.prepare("SELECT COUNT(*) AS count FROM room_members").get()!
+      .count,
+    6,
+  );
+});
+
+test("legacy connected groups migrate once into separate rooms without exposing old chat or restoring removed links", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-room-migration-"));
+  const path = join(directory, "legacy.sqlite");
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const seed = new DatabaseSync(path);
+  seed.exec(`
+    CREATE TABLE users (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL, character TEXT NOT NULL) STRICT;
+    CREATE TABLE friendships (user_id TEXT NOT NULL REFERENCES users(id), friend_id TEXT NOT NULL REFERENCES users(id), PRIMARY KEY (user_id, friend_id), CHECK (user_id < friend_id)) STRICT;
+    CREATE TABLE invites (code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id), expires_at INTEGER NOT NULL) STRICT;
+    CREATE TABLE chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, sender_id TEXT NOT NULL REFERENCES users(id),
+      recipient_id TEXT REFERENCES users(id), text TEXT NOT NULL, sent_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE chat_recipients (
+      message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
+      PRIMARY KEY (message_id, user_id, friend_id),
+      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
+    ) STRICT;
+    INSERT INTO users VALUES ('a', 'a', 'A', 'chiikawa'), ('b', 'b', 'B', 'chiikawa'), ('c', 'c', 'C', 'chiikawa'), ('d', 'd', 'D', 'chiikawa'), ('e', 'e', 'E', 'chiikawa');
+    INSERT INTO friendships VALUES ('a', 'b'), ('a', 'c'), ('d', 'e');
+    INSERT INTO chat_messages (sender_id, text, sent_at) VALUES ('b', 'before rooms', 1800000000000);
+    INSERT INTO chat_recipients VALUES (1, 'a', 'b');
+  `);
+  for (const id of ["a", "b", "d"])
+    seed
+      .prepare("INSERT INTO invites VALUES (?, ?, 1)")
+      .run(createHash("sha256").update(id.repeat(5)).digest("hex"), id);
+  seed.close();
+  let db = openDatabase(path);
+  try {
+    const room = (id: string) =>
+      db.prepare("SELECT room_id FROM room_members WHERE user_id = ?").get(id)!
+        .room_id;
+    assert.equal(room("a"), room("b"));
+    assert.equal(room("b"), room("c"));
+    assert.equal(room("d"), room("e"));
+    assert.notEqual(room("a"), room("d"));
+    assert.ok(
+      db
+        .prepare(
+          "SELECT 1 FROM friendships WHERE user_id = 'b' AND friend_id = 'c'",
+        )
+        .get(),
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM friendships").get()!.count,
+      4,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM invites").get()!.count,
+      3,
+    );
+    for (const invite of db.prepare("SELECT * FROM invites").all())
+      assert.equal(invite.room_id, room(invite.owner_id as string));
+    assert.deepEqual(
+      db
+        .prepare("SELECT * FROM chat_recipients")
+        .all()
+        .map((row) => ({ ...row })),
+      [{ message_id: 1, user_id: "a", friend_id: "b" }],
+      "newly connected C does not gain access to B's earlier message",
+    );
+    db.exec("DELETE FROM friendships WHERE user_id = 'b' AND friend_id = 'c'");
+    db.close();
+    db = openDatabase(path);
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM rooms").get()!.count,
+      2,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM friendships").get()!.count,
+      3,
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally {
+    db.close();
+  }
+});

@@ -76,7 +76,7 @@ export function InviteField({
   return (
     <>
       <label className="field">
-        친구의 초대 코드
+        방 초대 코드
         <textarea
           required
           rows={1}
@@ -112,9 +112,12 @@ export function InviteField({
         <div className="invitation-preview" role="status">
           <Character kind={current.preview.character} />
           <div>
-            <strong>{current.preview.name} 님의 초대예요.</strong>
+            <strong>{current.preview.name} 님이 보낸 방 초대예요.</strong>
             <p className="hint">인원과 기간 제한 없이 사용할 수 있어요.</p>
-            <p className="hint">아직 친구로 연결되지 않았어요.</p>
+            <p className="hint">
+              참여하면 같은 방의 친구들을 모두 만날 수 있어요.
+            </p>
+            <p className="hint">아직 방에 참여하지 않았어요.</p>
           </div>
         </div>
       )}

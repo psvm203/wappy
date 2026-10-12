@@ -92,7 +92,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     carol = await create("Carol");
   await connect(alice.token, bob.token);
   await connect(alice.token, carol.token);
-  await connect(bob.token, carol.token);
   const broadcast = await send(bob.token);
   // Model upgrading a database from before blocking existed.
   await close();
@@ -106,8 +105,8 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     revision: 0,
     profiles: [],
   });
-  const fromAlice = await invite(alice.token),
-    fromBob = await invite(bob.token);
+  // A third member's room invitation cannot bypass either direction of a block.
+  const roomInvite = await invite(carol.token);
   for (const path of ["/friends/block", "/friends/unblock"]) {
     assert.equal(
       (await call(path, undefined, { friendId: bob.profile.id })).status,
@@ -186,11 +185,11 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     304,
   );
   assert.equal(
-    (await call("/invites/accept", bob.token, fromAlice)).status,
+    (await call("/invites/accept", bob.token, roomInvite)).status,
     409,
   );
   assert.equal(
-    (await call("/invites/accept", alice.token, fromBob)).status,
+    (await call("/invites/accept", alice.token, roomInvite)).status,
     409,
   );
   const later = await send(bob.token);
@@ -214,7 +213,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   await listen();
   assert.deepEqual((await state(alice.token)).blocking, blocked.body);
   assert.equal(
-    (await call("/invites/accept", bob.token, fromAlice)).status,
+    (await call("/invites/accept", bob.token, roomInvite)).status,
     409,
   );
   assert.deepEqual(
@@ -238,13 +237,13 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
     [carol.profile.id],
   );
   assert.equal(
-    (await call("/invites/accept", bob.token, fromAlice)).status,
+    (await call("/invites/accept", bob.token, roomInvite)).status,
     409,
     "a reverse-direction block still prevents connection",
   );
   await call("/friends/unblock", bob.token, { friendId: alice.profile.id });
   assert.equal(
-    (await call("/invites/accept", bob.token, fromAlice)).status,
+    (await call("/invites/accept", bob.token, roomInvite)).status,
     200,
     "failed blocked accepts never consume invitations",
   );

@@ -211,3 +211,28 @@ test("private presence settings are validated and older polls cannot undo a conf
     "missing support must not keep claiming a hidden state",
   );
 });
+
+test("current room metadata is validated without exposing extra server fields", () => {
+  const state = {
+    self: { id: "self", name: "A", character: "chiikawa" },
+    friends: [],
+  };
+  const room = { id: "room", name: "A의 방" };
+  assert.deepEqual(
+    parseSidebarState({ ...state, room: { ...room, code: "private" } }),
+    { ...state, room },
+  );
+  assert.equal(parseSidebarState(state).room, undefined);
+  for (const room of [
+    null,
+    [],
+    {},
+    { id: "", name: "방" },
+    { id: 1, name: "방" },
+    { id: "r", name: " " },
+    { id: "r", name: "x".repeat(28) },
+    { id: "r", name: "bad\nroom" },
+  ]) {
+    assert.throws(() => parseSidebarState({ ...state, room }));
+  }
+});
