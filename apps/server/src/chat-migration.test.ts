@@ -44,6 +44,7 @@ test("removed social features reject requests and legacy data stays hidden", asy
   legacy.close();
   let server = createApp({ databasePath, now: () => now });
   let base = "";
+  let inspection: DatabaseSync | undefined;
   async function listen() {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
@@ -58,6 +59,7 @@ test("removed social features reject requests and legacy data stays hidden", asy
     await closed;
   }
   t.after(async () => {
+    inspection?.close();
     await close();
     rmSync(directory, { recursive: true, force: true });
   });
@@ -110,8 +112,7 @@ test("removed social features reject requests and legacy data stays hidden", asy
     carol = await create("Carol");
   await connect(alice.token, bob.token);
   await connect(alice.token, carol.token);
-  const inspection = new DatabaseSync(databasePath);
-  t.after(() => inspection.close());
+  inspection = new DatabaseSync(databasePath);
   const privateId = Number(
     inspection
       .prepare(

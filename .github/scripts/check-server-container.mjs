@@ -116,9 +116,9 @@ try {
   assert.equal((await call("/invites/preview", invite)).name, "Alice");
   await call("/invites/accept", invite, bob.token);
   const pendingInvite = await call("/invites", {}, alice.token);
-  const wave = await call(
-    "/friends/wave",
-    { friendId: bob.profile.id },
+  const message = await call(
+    "/chat",
+    { text: "컨테이너 재시작 후에도 남는 이야기" },
     alice.token,
   );
   await call("/presence", { sharing: false }, alice.token, "PATCH");
@@ -158,14 +158,14 @@ try {
   const state = await call("/state", undefined, bob.token);
   assert.equal(state.friends[0].id, alice.profile.id);
   assert.equal(state.friends[0].online, false);
-  assert.equal(state.friends[0].wave.id, wave.id);
+  assert.deepEqual(state.messages, [message]);
   assert.equal(
     (await call("/state", undefined, alice.token)).presence.sharing,
     false,
   );
   assert.equal((await call("/invites/preview", pendingInvite)).name, "Alice");
   console.log(
-    "PASS non-root startup, CORS, graceful stop, recreation and persisted profiles/friends/waves/privacy/invites",
+    "PASS non-root startup, CORS, graceful stop, recreation and persisted profiles/friends/chat/privacy/invites",
   );
 
   // Restore the backup into a new, empty test volume, as documented.
@@ -268,9 +268,9 @@ try {
   assert.equal(restored.body.self.id, alice.profile.id);
   assert.equal(restored.body.presence.sharing, false);
   assert.equal(restored.body.friends[0].id, bob.profile.id);
-  assert.equal(
-    (await httpsCall("/state", undefined, bob.token)).body.friends[0].wave.id,
-    wave.id,
+  assert.deepEqual(
+    (await httpsCall("/state", undefined, bob.token)).body.messages,
+    [message],
   );
   assert.equal(
     (await httpsCall("/invites/preview", pendingInvite)).body.name,
