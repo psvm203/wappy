@@ -84,7 +84,6 @@ test(
       c = await create("C");
     await connect(a.token, b.token);
     await connect(a.token, c.token);
-    await connect(b.token, c.token);
     const beforeB = await call("/state", b.token),
       beforeC = await call("/state", c.token);
     assert.deepEqual(parseSidebarState(beforeB.body).attacks, []);

@@ -481,14 +481,14 @@ function App() {
           setCode(code);
           setPanel("invite");
           try {
-            await connectFriend(
+            await joinRoom(
               { server: address, token: created.token },
               received.code,
             );
           } catch (cause) {
             throw new ApiError(
               400,
-              `프로필은 만들었어요. 친구 연결 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
+              `프로필은 만들었어요. 방 참여 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
             );
           }
           return;
@@ -506,15 +506,16 @@ function App() {
     }
   }
 
-  async function connectFriend(
+  async function joinRoom(
     current: { server: string; token: string },
     inviteCode: string,
   ) {
-    const friend = await request(current, "POST /invites/accept", {
+    await request(current, "POST /invites/accept", {
       code: inviteCode,
     });
     setCode("");
-    setNotice(`${friend.name} 님과 친구가 되었어요.`);
+    setInvite(null);
+    setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
     setFriendQuery("");
     setFriendView("all");
@@ -534,7 +535,7 @@ function App() {
           400,
           "다른 서버의 초대장이에요. 현재 프로필과 같은 서버의 초대장을 받아 주세요.",
         );
-      await connectFriend(session, received.code);
+      await joinRoom(session, received.code);
     });
   }
 
@@ -1142,16 +1143,24 @@ function App() {
                 <p className="eyebrow">BETTER TOGETHER</p>
                 <h1>작은 초대, 큰 반가움.</h1>
                 <p className="muted">
-                  같이 있고 싶은 친구에게 5자리 초대 코드를 보내세요.
+                  방의 5자리 초대 코드를 보내세요. 같은 방에 들어온 친구들은
+                  서로를 볼 수 있어요.
                 </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
                     ↗
                   </span>
-                  <h2>내 초대 코드</h2>
+                  <h2>방 초대 코드</h2>
+                  {state.room && (
+                    <p>
+                      현재 방: <strong>{state.room.name}</strong>
+                    </p>
+                  )}
                   <p>
+                    참여자 누구나 같은 방으로 초대할 수 있어요.
+                    <br />
                     인원과 기간 제한 없이 사용할 수 있어요.
-                    <br />새 코드를 만들면 이전 코드는 사용할 수 없어요.
+                    <br />새 코드를 만들면 이 방의 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
                     <>
@@ -1200,6 +1209,7 @@ function App() {
                         );
                         formatInvitation(session.server, created.code);
                         setInvite(created);
+                        await refresh();
                       })
                     }
                   >
@@ -1238,8 +1248,14 @@ function App() {
                     disabled={busy || !code.trim()}
                     type="submit"
                   >
-                    {busy ? "연결하는 중…" : "친구와 연결하기"}
+                    {busy ? "참여하는 중…" : "방에 참여하기"}
                   </button>
+                  {state.room && (
+                    <p className="hint">
+                      다른 방의 초대를 수락하면 현재 방에서 나가고 새 방의
+                      친구들과 함께하게 돼요.
+                    </p>
+                  )}
                 </form>
               </div>
             )}

@@ -111,6 +111,10 @@ export function createApp(options: {
     LEFT JOIN presence_settings p ON p.user_id = u.id
     WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id
   `);
+  const selectRoom = db.prepare(`
+    SELECT r.id, r.name FROM room_members m JOIN rooms r ON r.id = m.room_id
+    WHERE m.user_id = ?
+  `);
   const selectPresence = db.prepare(
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
@@ -500,6 +504,9 @@ export function createApp(options: {
           ).reverse();
           const state: Output<"GET /state"> = {
             self: self!,
+            room: selectRoom.get(
+              self!.id,
+            ) as unknown as Output<"GET /state">["room"],
             attacks: (
               selectAttacks.all(
                 self!.id,
@@ -644,31 +651,45 @@ export function createApp(options: {
           break;
         }
         case "POST /invites": {
-          // Reserve atomically: a collision must never replace another invitation
-          // or reuse this owner's previous code, including across server processes.
-          const issue = db.prepare(
-            `INSERT INTO invites SELECT ?, ?
-            WHERE NOT EXISTS (SELECT 1 FROM invites WHERE code_hash = ?)
-            ON CONFLICT(owner_id)
-            DO UPDATE SET code_hash = excluded.code_hash`,
-          );
-          let invitation: Output<"POST /invites"> | undefined;
-          for (let attempt = 0; attempt < 10; attempt++) {
-            const code = Array.from(
-              { length: 5 },
-              () => INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)],
-            ).join("");
-            const digest = hash(code);
-            if (issue.run(digest, self!.id, digest).changes) {
-              invitation = { code };
-              break;
+          const invitation = transaction(db, () => {
+            let roomId = selectRoom.get(self!.id)?.id as string | undefined;
+            if (!roomId) {
+              roomId = randomUUID();
+              db.prepare("INSERT INTO rooms VALUES (?, ?)").run(
+                roomId,
+                `${self!.name}의 방`,
+              );
+              db.prepare("INSERT INTO room_members VALUES (?, ?)").run(
+                roomId,
+                self!.id,
+              );
             }
-          }
-          if (!invitation)
+            // Every member issues a code for the same room. Rotation and collision
+            // checks are atomic, including initial room creation.
+            const collision = db.prepare(
+              "SELECT 1 FROM invites WHERE code_hash = ?",
+            );
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const code = Array.from(
+                { length: 5 },
+                () => INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)],
+              ).join("");
+              const digest = hash(code);
+              if (!collision.get(digest)) {
+                db.prepare("DELETE FROM invites WHERE room_id = ?").run(roomId);
+                db.prepare("INSERT INTO invites VALUES (?, ?, ?)").run(
+                  digest,
+                  self!.id,
+                  roomId,
+                );
+                return { code };
+              }
+            }
             throw new HttpError(
               503,
               "초대 코드를 만들지 못했어요. 다시 시도해 주세요.",
             );
+          });
           reply(res, route, invitation, 201);
           break;
         }
@@ -690,14 +711,18 @@ export function createApp(options: {
         }
         case "POST /invites/accept": {
           const code = inviteCode(body);
-          // Keep validation and friendship creation atomic across server processes.
+          // Keep joining and all member connections atomic across server processes.
           const friendId = transaction(db, () => {
             const invite = db
-              .prepare("SELECT owner_id FROM invites WHERE code_hash = ?")
+              .prepare(
+                "SELECT owner_id, room_id FROM invites WHERE code_hash = ?",
+              )
               .get(hash(code));
             if (!invite)
               throw new HttpError(404, "유효하지 않은 초대 코드입니다.");
-            if (invite.owner_id === self!.id)
+            const roomId = invite.room_id as string;
+            const currentRoom = selectRoom.get(self!.id)?.id;
+            if (invite.owner_id === self!.id && currentRoom === roomId)
               throw new HttpError(
                 400,
                 "자신의 초대 코드는 사용할 수 없습니다.",
@@ -706,14 +731,37 @@ export function createApp(options: {
             if (blockedPair.get(self!.id, friendId, friendId, self!.id))
               throw new HttpError(
                 409,
-                "이 초대장으로는 친구를 연결할 수 없어요.",
+                "이 초대장으로는 방에 참여할 수 없어요.",
               );
-            const pair = [self!.id, friendId].sort();
-            const result = db
-              .prepare("INSERT OR IGNORE INTO friendships VALUES (?, ?)")
-              .run(pair[0]!, pair[1]!);
-            if (!result.changes)
-              throw new HttpError(409, "이미 연결된 친구입니다.");
+            if (currentRoom !== roomId) {
+              db.prepare(
+                "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
+              ).run(self!.id, self!.id);
+              db.prepare(
+                "DELETE FROM chat_messages WHERE recipient_id IS NOT NULL AND (sender_id = ? OR recipient_id = ?)",
+              ).run(self!.id, self!.id);
+              db.prepare("DELETE FROM room_members WHERE user_id = ?").run(
+                self!.id,
+              );
+            }
+            const membership = db
+              .prepare("INSERT OR IGNORE INTO room_members VALUES (?, ?)")
+              .run(roomId, self!.id);
+            // Materialize only this participant's links. This keeps existing chat
+            // snapshots/removals intact and never pulls in friends from other rooms.
+            // ponytail: pairs use O(n²) room storage; query memberships if large rooms become common.
+            const connections = db
+              .prepare(
+                `INSERT OR IGNORE INTO friendships
+              SELECT MIN(?, m.user_id), MAX(?, m.user_id) FROM room_members m
+              WHERE m.room_id = ? AND m.user_id <> ?
+              AND NOT EXISTS (SELECT 1 FROM profile_blocks
+                WHERE (user_id = ? AND blocked_id = m.user_id)
+                   OR (user_id = m.user_id AND blocked_id = ?))`,
+              )
+              .run(self!.id, self!.id, roomId, self!.id, self!.id, self!.id);
+            if (!membership.changes && !connections.changes)
+              throw new HttpError(409, "이미 참여 중인 방입니다.");
             return friendId;
           });
           reply(res, route, profile(friendId));

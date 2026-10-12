@@ -30,6 +30,14 @@ export function openDatabase(databasePath: string) {
     CREATE TABLE IF NOT EXISTS invites (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
+    CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS room_members (
+      room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (room_id, user_id)
+    ) STRICT;
     DROP TABLE IF EXISTS recovery_codes;
     CREATE TABLE IF NOT EXISTS kakao_accounts (
       kakao_id TEXT PRIMARY KEY,
@@ -92,6 +100,53 @@ export function openDatabase(databasePath: string) {
       .some((column) => column.name === "expires_at")
   )
     db.exec("ALTER TABLE invites DROP COLUMN expires_at");
+  // Old friendships have no invitation provenance. Keep each connected group
+  // together in one room, preserving accounts, codes and existing chat audiences.
+  transaction(db, () => {
+    if (
+      db
+        .prepare("PRAGMA table_info(invites)")
+        .all()
+        .some((column) => column.name === "room_id")
+    )
+      return;
+    const members = db.prepare(`WITH RECURSIVE connected(id) AS (
+      SELECT ? UNION
+      SELECT CASE WHEN f.user_id = c.id THEN f.friend_id ELSE f.user_id END
+      FROM connected c JOIN friendships f ON f.user_id = c.id OR f.friend_id = c.id
+    ) INSERT INTO room_members SELECT ?, id FROM connected`);
+    for (const user of db
+      .prepare("SELECT id, name FROM users ORDER BY id")
+      .all()) {
+      if (
+        db.prepare("SELECT 1 FROM room_members WHERE user_id = ?").get(user.id!)
+      )
+        continue;
+      db.prepare("INSERT INTO rooms VALUES (?, ?)").run(
+        user.id!,
+        `${user.name}의 방`,
+      );
+      members.run(user.id!, user.id!);
+    }
+    db.exec(`
+      INSERT OR IGNORE INTO friendships
+        SELECT a.user_id, b.user_id FROM room_members a
+        JOIN room_members b ON a.room_id = b.room_id AND a.user_id < b.user_id
+        WHERE NOT EXISTS (SELECT 1 FROM profile_blocks
+          WHERE (user_id = a.user_id AND blocked_id = b.user_id)
+             OR (user_id = b.user_id AND blocked_id = a.user_id));
+      ALTER TABLE invites RENAME TO legacy_invites;
+      CREATE TABLE invites (
+        code_hash TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL REFERENCES users(id),
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE
+      ) STRICT;
+      CREATE INDEX invites_room ON invites(room_id);
+      INSERT INTO invites SELECT i.code_hash, i.owner_id, m.room_id
+        FROM legacy_invites i JOIN room_members m ON m.user_id = i.owner_id;
+      DROP TABLE legacy_invites;
+    `);
+  });
   for (const table of ["users", "profile_blocks"]) {
     db.prepare(
       `UPDATE ${table} SET character = 'chiikawa'
