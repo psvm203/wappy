@@ -657,7 +657,6 @@ export function DesktopCharacters({
             <figcaption>
               {chatTarget === resident.id && self && profileKey ? (
                 <ChatComposer
-                  senderName={self.name}
                   connected={connected && messages !== undefined}
                   onSend={(text) => requestDesktopChat(profileKey, text)}
                   onClose={() => setChatTarget(null)}

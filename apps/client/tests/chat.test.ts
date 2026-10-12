@@ -64,15 +64,21 @@ test("chat validates text, audience, ordering and history bounds at the server b
   assert.equal(parseSidebarState({ self, friends: [] }).messages, undefined);
 });
 
-test("bubbles show the latest message per sender for one minute; clicking is distinct from dragging", () => {
+test("bubbles display for five seconds and accept delayed recent messages", () => {
   const now = 1_800_000_000_000;
   const first = { id: 1, senderId: "alice", text: "처음", sentAt: now };
   const second = { ...first, id: 2, text: "다음", sentAt: now + 1000 };
   const other = { ...first, id: 3, senderId: "bob", sentAt: now + 2000 };
+  assert.equal(CHAT_BUBBLE_MS, 5_000);
   assert.equal(latestChat([first, second, other], "alice", now + 2000), second);
   assert.equal(latestChat([first, second, other], "bob", now + 2000), other);
-  assert.equal(latestChat([first], "alice", now + CHAT_BUBBLE_MS), undefined);
+  assert.equal(latestChat([first], "alice", now + 5_000), first);
+  assert.equal(latestChat([first], "alice", now + 10_000), first);
+  assert.equal(latestChat([first], "alice", now + 60_000), undefined);
   assert.equal(latestChat(undefined, "alice", now), undefined);
+});
+
+test("clicking is distinct from dragging", () => {
   assert.equal(movedForDrag(100, 100, 103, 102), false);
   assert.equal(movedForDrag(100, 100, 110, 100), true);
 });

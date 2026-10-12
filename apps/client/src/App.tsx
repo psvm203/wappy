@@ -235,7 +235,6 @@ function App() {
       state && (
         <ChatComposer
           key={profileKey ?? state.self.id}
-          senderName={state.self.name}
           connected={connection === "online" && state.messages !== undefined}
           onSend={sendChat}
           onClose={() => setChatTarget(null)}
