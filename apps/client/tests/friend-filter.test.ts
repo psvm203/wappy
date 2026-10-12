@@ -3,7 +3,7 @@ import test from "node:test";
 import type { Friend } from "@wappy/api";
 import { filterFriends } from "../src/friend-filter.ts";
 
-test("friend search combines literal words and live filters without changing shared state", () => {
+test("friend views filter live presence and sort without changing shared state", () => {
   const friends: Friend[] = [
     {
       id: "one",
@@ -26,49 +26,30 @@ test("friend search combines literal words and live filters without changing sha
   ];
   const original = structuredClone(friends);
   const ids = (result: Friend[]) => result.map((friend) => friend.id);
-  assert.deepEqual(ids(filterFriends(friends, "  책\nALICE ", "all", true)), [
-    "one",
-  ]);
-  assert.deepEqual(
-    ids(filterFriends(friends, "가을".normalize("NFD"), "all", true)),
-    ["two"],
-  );
-  assert.deepEqual(ids(filterFriends(friends, "가을", "online", true)), [
+  assert.deepEqual(ids(filterFriends(friends, "online", true)), [
     "two",
+    "three",
   ]);
-  assert.deepEqual(ids(filterFriends(friends, ".* [", "all", true)), ["three"]);
   assert.deepEqual(
-    ids(filterFriends(friends, "one", "all", true)),
-    [],
-    "IDs are not searchable profile text",
-  );
-  const legacyFriend = { ...friends[0]!, status: "legacy message" };
-  assert.deepEqual(
-    filterFriends([legacyFriend], "legacy", "all", true),
-    [],
-    "legacy status messages are not searchable",
-  );
-  assert.deepEqual(ids(filterFriends(friends, "alice", "online", true)), []);
-  assert.deepEqual(
-    filterFriends(friends, "", "online", false),
+    filterFriends(friends, "online", false),
     [],
     "stale online flags are not proof of current presence",
   );
-  assert.deepEqual(ids(filterFriends(friends, " \t", "all", true)), [
+  assert.deepEqual(ids(filterFriends(friends, "all", true)), [
     "two",
     "three",
     "one",
   ]);
-  assert.deepEqual(ids(filterFriends(friends, "", "all", false)), [
+  assert.deepEqual(ids(filterFriends(friends, "all", false)), [
     "one",
     "two",
     "three",
   ]);
-  assert.deepEqual(filterFriends([], "", "all", true), []);
+  assert.deepEqual(filterFriends([], "all", true), []);
   assert.deepEqual(
     friends,
     original,
     "filtering must not reorder shared friends",
   );
-  assert.equal(filterFriends(friends, "alice", "all", true)[0], friends[0]);
+  assert.equal(filterFriends(friends, "all", true)[0], friends[1]);
 });

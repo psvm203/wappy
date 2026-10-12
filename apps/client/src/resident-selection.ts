@@ -36,6 +36,21 @@ export function saveHiddenResidents(
 
 export type DesktopResident = Friend & { isSelf: boolean };
 
+export function toggleResidentVisibility(
+  state: SidebarState,
+  hiddenIds: readonly string[],
+  visible: boolean,
+  profileId: string,
+): string[] {
+  const hidden = new Set(hiddenIds);
+  if (!visible) {
+    for (const profile of [state.self, ...state.friends]) hidden.add(profile.id);
+  }
+  if (hidden.has(profileId)) hidden.delete(profileId);
+  else hidden.add(profileId);
+  return [...hidden];
+}
+
 export function visibleResidents(
   state: SidebarState,
   connected: boolean,
