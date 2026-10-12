@@ -526,6 +526,16 @@
   color: #68745e;
   margin-bottom: 10px;
 }
+.profile-title + .profile-form legend {
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
+}
+.character-category-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #000;
+}
 .character-picker {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -624,11 +634,11 @@
   border-radius: 0;
   font-weight: 700;
 }
-.server-panel {
-  margin-top: 20px;
-}
 .startup-panel {
   margin-top: 20px;
+}
+.startup-panel .setting-toggle {
+  margin-top: 0;
 }
 .setting-toggle {
   display: flex;
