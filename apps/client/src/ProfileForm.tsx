@@ -46,6 +46,7 @@ const CHARACTER_CATEGORIES = {
 export function ProfileForm({
   initial,
   busy,
+  onChange,
   onSave,
   children,
   beforeProfile,
@@ -54,6 +55,7 @@ export function ProfileForm({
 }: {
   initial: ProfileInput;
   busy: boolean;
+  onChange?: (profile: ProfileInput) => void;
   onSave: (profile: ProfileInput) => void | Promise<void>;
   children?: ReactNode;
   beforeProfile?: ReactNode;
@@ -120,6 +122,7 @@ export function ProfileForm({
     edited.current = true;
     draft.current = next;
     setProfile(next);
+    onChange?.(next);
     window.clearTimeout(timer.current);
     if (!autoSave || composing.current) return;
     setSaveError("");

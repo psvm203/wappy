@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -75,7 +76,21 @@ function App() {
   const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join">("create");
-  const [state, setState] = useState<SidebarState | null>(null);
+  const [serverState, setState] = useState<SidebarState | null>(null);
+  const state = useMemo(
+    () =>
+      serverState && profileDraft
+        ? {
+            ...serverState,
+            self: {
+              ...serverState.self,
+              ...profileDraft,
+              name: profileDraft.name.trim() || serverState.self.name,
+            },
+          }
+        : serverState,
+    [serverState, profileDraft],
+  );
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
@@ -529,7 +544,6 @@ function App() {
           aria-label="사이드바 펼치기"
           title="사이드바 펼치기"
         >
-          <span className="wordmark">w.</span>
           <Character kind={state.self.character} />
           <span
             className={`online-dot ${connection !== "online" || presenceHidden ? "offline" : ""}`}
@@ -1030,6 +1044,7 @@ function App() {
                     key={profileKey}
                     initial={profileDraft ?? state.self}
                     busy={busy}
+                    onChange={setProfileDraft}
                     onSave={updateProfile}
                     autoSave
                   />
