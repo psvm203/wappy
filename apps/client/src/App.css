@@ -771,11 +771,6 @@
   cursor: grab;
   user-select: none;
 }
-.wordmark {
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -2px;
-}
 .compact-count {
   font-size: 10px;
   margin-left: 5px;
