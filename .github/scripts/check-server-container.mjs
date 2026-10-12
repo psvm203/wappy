@@ -106,12 +106,12 @@ try {
   await denied.body.cancel();
   const alice = await call("/session", {
     name: "Alice",
-    character: "cat",
+    character: "chiikawa",
     status: "kept",
   });
   const bob = await call("/session", {
     name: "Bob",
-    character: "bunny",
+    character: "hachiware",
     status: "",
   });
   const invite = await call("/invites", {}, alice.token);
