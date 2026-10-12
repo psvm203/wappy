@@ -257,5 +257,16 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   assert.deepEqual((await state(alice.token)).messages, [fresh]);
   await call("/friends/block", alice.token, { friendId: bob.profile.id });
   assert.equal((await state(alice.token)).blocking?.revision, 3);
+  await call("/friends/unblock", alice.token, { friendId: bob.profile.id });
+  assert.deepEqual(
+    (await state(alice.token)).blocking,
+    { revision: 4, profiles: [] },
+    "unblocking advances the private list revision",
+  );
+  assert.equal(
+    inspection.prepare("SELECT COUNT(*) AS count FROM profile_blocks").get()!
+      .count,
+    0,
+  );
   assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
 });

@@ -67,6 +67,7 @@ import {
   formatInvitation,
   isLocalServer,
   parseInvitation,
+  WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
@@ -926,8 +927,8 @@ function App() {
                 />
               </label>
               <p className="hint">
-                코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
-                붙여넣으면 초대장의 서버를 사용해요.
+                기본 서버에서는 초대 코드만 입력하면 돼요. 별도 서버를 사용하는
+                경우에만 주소를 바꿔 주세요.
               </p>
               <ServerCheck key={server} server={server} busy={busy} />
             </details>
@@ -1297,7 +1298,7 @@ function App() {
                 <p className="eyebrow">BETTER TOGETHER</p>
                 <h1>작은 초대, 큰 반가움.</h1>
                 <p className="muted">
-                  같이 있고 싶은 친구에게 초대장을 보내세요.
+                  같이 있고 싶은 친구에게 5자리 초대 코드를 보내세요.
                 </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
@@ -1305,24 +1306,20 @@ function App() {
                   </span>
                   <h2>내 초대 코드</h2>
                   <p>
-                    한 명에게, 하루 동안 유효해요.
-                    <br />새 코드를 만들면 이전 코드는 만료돼요.
+                    인원과 기간 제한 없이 사용할 수 있어요.
+                    <br />새 코드를 만들면 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
                     <>
                       <label className="field">
-                        친구에게 보낼 초대장
-                        <textarea
+                        친구에게 보낼 코드
+                        <input
+                          className="invite-code"
                           readOnly
-                          rows={5}
-                          value={formatInvitation(session.server, invite.code)}
+                          value={invite.code}
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
-                      <p className="hint">
-                        만료:{" "}
-                        {new Date(invite.expiresAt).toLocaleString("ko-KR")}
-                      </p>
                       <button
                         className="primary"
                         onClick={async () => {
@@ -1331,49 +1328,20 @@ function App() {
                             await navigator.clipboard.writeText(
                               formatInvitation(session.server, invite.code),
                             );
-                            setNotice(
-                              "서버 주소와 초대 코드를 함께 복사했어요.",
-                            );
+                            setNotice("초대 코드를 복사했어요.");
                           } catch {
                             setError(
-                              "초대장 입력란을 선택한 뒤 직접 복사해 주세요.",
+                              "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
                             );
                           }
                         }}
                       >
-                        초대장 복사 <span aria-hidden="true">↗</span>
+                        초대 코드 복사 <span aria-hidden="true">↗</span>
                       </button>
                       <p className="hint">
                         친구가 첫 화면의 ‘초대받았어요’에 붙여넣으면 바로 시작할
                         수 있어요.
                       </p>
-                      <details className="server-settings">
-                        <summary>코드만 따로 보내기</summary>
-                        <label className="field">
-                          친구에게 보낼 코드
-                          <input
-                            className="invite-code"
-                            readOnly
-                            value={invite.code}
-                            onFocus={(event) => event.target.select()}
-                          />
-                        </label>
-                        <button
-                          className="primary"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(invite.code);
-                              setNotice("초대 코드를 복사했어요.");
-                            } catch {
-                              setError(
-                                "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
-                              );
-                            }
-                          }}
-                        >
-                          초대 코드 복사 <span aria-hidden="true">↗</span>
-                        </button>
-                      </details>
                     </>
                   )}
                   <button
@@ -1397,11 +1365,13 @@ function App() {
                         ? "새 코드 만들기"
                         : "초대 코드 만들기"}
                   </button>
-                  <p className="hint server-address">
-                    친구도 같은 서버에 연결해야 해요.
-                    <br />
-                    <strong>{session.server}</strong>
-                  </p>
+                  {session.server !== WAPPY_SERVER && (
+                    <p className="hint server-address">
+                      친구도 같은 서버에 연결해야 해요.
+                      <br />
+                      <strong>{session.server}</strong>
+                    </p>
+                  )}
                   {isLocalServer(session.server) && (
                     <p className="hint">
                       현재 주소는 이 컴퓨터 안에서만 사용할 수 있어요. 다른

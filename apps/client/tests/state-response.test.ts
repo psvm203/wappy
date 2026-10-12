@@ -65,7 +65,7 @@ test("retired characters are rejected for new profiles but old snapshots and sav
     );
     assert.deepEqual(
       parseInvitePreview({ ...input, expiresAt: 1_800_000_000_000 }),
-      { name: input.name, character: "chiikawa", expiresAt: 1_800_000_000_000 },
+      { name: input.name, character: "chiikawa" },
     );
     assert.deepEqual(
       parseBlockingSettings({ revision: 2, profiles: [profile] }),
@@ -103,7 +103,6 @@ test("every selectable character survives profile, invitation and friend-state v
     const preview = {
       name: input.name,
       character,
-      expiresAt: 1_800_000_000_000,
     };
     assert.deepEqual(parseInvitePreview(preview), preview);
     const state = {

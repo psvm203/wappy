@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { IncomingMessage, ServerResponse } from "node:http";
@@ -213,5 +214,31 @@ test(
       parseSidebarState((await call("/state", b.token)).body).attacks,
       [],
     );
+    now += ATTACK_COOLDOWN_MS;
+    assert.equal(
+      (await call("/friends/attack", a.token, { friendId: b.profile.id }))
+        .status,
+      201,
+    );
+    assert.equal(
+      (await call("/friends/remove", b.token, { friendId: a.profile.id }))
+        .status,
+      200,
+    );
+    assert.deepEqual(
+      parseSidebarState((await call("/state", a.token)).body).attacks,
+      [],
+    );
+    const db = new DatabaseSync(databasePath);
+    assert.equal(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM attack_events WHERE attacker_id = ? OR target_id = ?",
+        )
+        .get(b.profile.id, b.profile.id)!.count,
+      0,
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+    db.close();
   },
 );

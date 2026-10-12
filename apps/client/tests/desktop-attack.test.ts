@@ -6,7 +6,12 @@ import {
   cancelAttack,
   createAttack,
 } from "../src/desktop-attack.ts";
-import { advanceBody, createBody, moveBody } from "../src/desktop-physics.ts";
+import {
+  advanceBody,
+  CHARACTER_SIZE,
+  createBody,
+  moveBody,
+} from "../src/desktop-physics.ts";
 
 const width = 1200,
   height = 800;
@@ -24,7 +29,7 @@ test("a dash follows a moving target, hits once, then both characters return to 
       moveBody(target, target.x, target.y + 2, width, height);
     const step = advanceAttack(attack, 1 / 60, width, height, true);
     assert.ok(attacker.x >= 60 && attacker.x <= width - 60);
-    assert.ok(attacker.y >= 60 && attacker.y <= height - 60);
+    assert.ok(attacker.y >= CHARACTER_SIZE / 2 && attacker.y <= height - 60);
     if (step === "hit") {
       hits++;
       assert.ok(Math.hypot(attacker.x - target.x, attacker.y - target.y) <= 49);
@@ -213,7 +218,7 @@ test("hero effects remain finite at any angle, on overlapping bodies and after a
 
 test("Hulk jumps inward from every screen edge and shields stay visible on both flight legs", () => {
   for (const [sx, sy, tx, ty, angle] of [
-    [200, 60, 900, 60, Math.PI],
+    [200, CHARACTER_SIZE / 2, 900, CHARACTER_SIZE / 2, Math.PI],
     [200, 740, 900, 740, 0],
     [60, 200, 60, 600, Math.PI / 2],
     [1140, 200, 1140, 600, -Math.PI / 2],

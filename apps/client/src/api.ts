@@ -5,11 +5,11 @@ import {
   type Output,
   type Route,
 } from "@wappy/api";
+import { WAPPY_SERVER } from "./invitations";
 export { serverUrl } from "./invitations";
 export { SESSION_KEY, loadSession, type SavedSession } from "./sessions";
 
-export const DEFAULT_SERVER =
-  import.meta.env.VITE_API_URL || "http://localhost:3001";
+export const DEFAULT_SERVER = import.meta.env.VITE_API_URL || WAPPY_SERVER;
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

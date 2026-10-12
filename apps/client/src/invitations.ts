@@ -1,3 +1,6 @@
+export const WAPPY_SERVER = "https://wappy-api.waps.im";
+const INVITE_CODE = /^(?:[A-HJ-NP-Z2-9]{5}|[a-z0-9_-]{43})$/i;
+
 export function serverUrl(value: string): string {
   const url = new URL(value);
   if (
@@ -25,11 +28,14 @@ export function isLocalServer(server: string): boolean {
   );
 }
 
-/** A readable invitation can be pasted without registering an OS URL handler. */
+/** The default server only needs a code; custom servers retain their address. */
 export function formatInvitation(server: string, code: string): string {
-  if (!/^[A-Za-z0-9_-]{43}$/.test(code))
-    throw new Error("올바른 초대 코드가 아닙니다.");
-  return `Wappy 초대\n서버: ${serverUrl(server)}\n초대 코드: ${code}`;
+  if (!INVITE_CODE.test(code)) throw new Error("올바른 초대 코드가 아닙니다.");
+  const address = serverUrl(server);
+  const normalized = code.length === 5 ? code.toUpperCase() : code;
+  return address === WAPPY_SERVER
+    ? normalized
+    : `Wappy 초대\n서버: ${address}\n초대 코드: ${normalized}`;
 }
 
 export function parseInvitation(value: string): {
@@ -37,20 +43,21 @@ export function parseInvitation(value: string): {
   server?: string;
 } {
   const text = value.trim();
-  if (/^[A-Za-z0-9_-]{43}$/.test(text)) return { code: text };
+  if (INVITE_CODE.test(text))
+    return { code: text.length === 5 ? text.toUpperCase() : text };
   const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const code = lines[2]?.slice("초대 코드:".length).trim() ?? "";
   if (
     text.length > 2048 ||
     lines.length !== 3 ||
     lines[0] !== "Wappy 초대" ||
     !lines[1]?.startsWith("서버:") ||
-    !/^초대 코드: *[A-Za-z0-9_-]{43}$/.test(lines[2] ?? "")
+    !lines[2]?.startsWith("초대 코드:") ||
+    !INVITE_CODE.test(code)
   )
-    throw new Error(
-      "친구가 보낸 초대장 전체 또는 초대 코드를 붙여넣어 주세요.",
-    );
+    throw new Error("친구가 보낸 5자리 초대 코드를 입력해 주세요.");
   return {
     server: serverUrl(lines[1].slice("서버:".length).trim()),
-    code: lines[2]!.slice("초대 코드:".length).trim(),
+    code: code.length === 5 ? code.toUpperCase() : code,
   };
 }

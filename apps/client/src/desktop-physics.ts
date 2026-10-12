@@ -10,6 +10,7 @@ export interface Body {
   angle: number;
   dragTilt: number;
   phase: number;
+  stepPhase: number;
   direction: number;
   speed: number;
   walkSpeed: number;
@@ -26,7 +27,8 @@ export interface DragSample {
 
 function track(width: number, height: number) {
   const left = Math.min(MARGIN, width / 2);
-  const top = Math.min(MARGIN, height / 2);
+  // The label moves inward at the ceiling, so only the character needs clearance.
+  const top = Math.min(CHARACTER_SIZE / 2, height / 2);
   const right = Math.max(left, width - MARGIN);
   const bottom = Math.max(top, height - MARGIN);
   return { left, top, right, bottom, w: right - left, h: bottom - top };
@@ -57,6 +59,7 @@ export function createBody(id: string, width: number, height: number): Body {
     angle: 0,
     dragTilt: 0,
     phase: (seed % 100) / 100,
+    stepPhase: 0,
     direction: seed % 2 === 0 ? 1 : -1,
     speed,
     walkSpeed: speed,
@@ -103,8 +106,8 @@ export function needsAnimation(body: Body, walking: boolean) {
       Math.abs(angleDifference(body.angle, 0)) > 0.001 ||
       Math.abs(body.dragTilt) > 0.001
     );
-  if (!walking) return false;
-  return true; // Online pets still need their rest/wake timer and flight physics.
+  // Gravity continues during sleep; only automatic walking and wandering stop.
+  return body.mode === "air" || walking;
 }
 
 function turn(body: Body, target: number, dt: number) {
@@ -123,7 +126,7 @@ export function advanceBody(
   const { left, top, right, bottom, w, h } = track(width, height);
   const perimeter = Math.max(1, 2 * (w + h));
   moveBody(body, body.x, body.y, width, height);
-  if (!walking && body.mode !== "drag") {
+  if (!walking && body.mode === "walk") {
     body.vx = body.vy = 0;
     return;
   }
@@ -154,6 +157,12 @@ export function advanceBody(
           if (body.restTime === 0) {
             body.walkSpeed +=
               (body.speed - body.walkSpeed) * Math.min(1, dt * 3);
+            // Accumulate the gait so speed changes never retime earlier steps.
+            const stepDuration = Math.max(
+              0.32,
+              Math.min(0.85, 28 / Math.max(1, body.walkSpeed)),
+            );
+            body.stepPhase = (body.stepPhase + dt / stepDuration) % 1;
             body.phase =
               (((body.phase +
                 (body.direction * body.walkSpeed * dt) / perimeter) %
@@ -227,6 +236,7 @@ export function advanceBody(
       body.wanderTime = 2 + Math.random() * 3;
       body.vx = body.vy = 0;
       body.mode = "walk";
+      if (!walking) body.angle = walkPose(body, width, height).angle;
     }
   }
 }

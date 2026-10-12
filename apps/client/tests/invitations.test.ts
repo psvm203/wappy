@@ -5,13 +5,13 @@ import {
   formatInvitation,
   isLocalServer,
   parseInvitation,
+  WAPPY_SERVER,
 } from "../src/invitations.ts";
 
 test("invitation previews validate display data and discard private fields", () => {
   const preview = {
     name: "Alice",
     character: "hachiware",
-    expiresAt: 1_800_000_000_000,
   };
   assert.deepEqual(
     parseInvitePreview({
@@ -19,6 +19,7 @@ test("invitation previews validate display data and discard private fields", () 
       id: "private",
       token: "private",
       online: true,
+      expiresAt: 1_800_000_000_000, // Ignore legacy expiration metadata.
     }),
     preview,
   );
@@ -30,14 +31,34 @@ test("invitation previews validate display data and discard private fields", () 
     { ...preview, name: "x".repeat(25) },
     { ...preview, name: "A\nB" },
     { ...preview, character: "unknown" },
-    ...["tomorrow", 0, -1, 0.5, NaN, Infinity, 8_640_000_000_000_001].map(
-      (expiresAt) => ({ ...preview, expiresAt }),
-    ),
   ])
     assert.throws(() => parseInvitePreview(invalid));
 });
 
-test("shared invitations preserve the server and reject ambiguous or secret input", () => {
+test("five-character invitations omit the default server and accept lowercase input", () => {
+  assert.equal(WAPPY_SERVER, "https://wappy-api.waps.im");
+  assert.equal(formatInvitation(WAPPY_SERVER, "A7K3M"), "A7K3M");
+  assert.equal(formatInvitation(`${WAPPY_SERVER}/`, "a7k3m"), "A7K3M");
+  assert.deepEqual(parseInvitation(" a7K3m\n"), { code: "A7K3M" });
+  assert.deepEqual(
+    parseInvitation(formatInvitation("http://localhost:3001", "a7k3m")),
+    { server: "http://localhost:3001", code: "A7K3M" },
+  );
+  for (const code of [
+    "ABCD",
+    "ABCDEF",
+    "A0K3M",
+    "A1K3M",
+    "AOK3M",
+    "AIK3M",
+    "A_K3M",
+    "A-K3M",
+    "A K3M",
+  ])
+    assert.throws(() => parseInvitation(code));
+});
+
+test("legacy invitations preserve the server and reject ambiguous or secret input", () => {
   const code = "a_-".repeat(14) + "A";
   const invitation = formatInvitation("https://EXAMPLE.test:443/", code);
   assert.equal(
