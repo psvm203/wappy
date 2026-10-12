@@ -89,6 +89,8 @@ export interface Friend extends Profile {
 export interface Room {
   id: string;
   name: string;
+  /** Permanent room code, shared by all members; absent on older servers. */
+  inviteCode?: string;
 }
 export interface SidebarState {
   self: Profile;
@@ -135,6 +137,7 @@ export interface ApiRoutes {
   "POST /chat": { input: { text: string }; output: ChatMessage };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
+  /** Compatibility lookup for older clients; never rotates the room's code. */
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
   "POST /invites/accept": { input: { code: string }; output: Profile };
@@ -330,7 +333,17 @@ export function parseSidebarState(value: unknown): SidebarState {
       /[\u0000-\u001f\u007f]/.test(input.name)
     )
       throw new Error("잘못된 방 응답입니다.");
-    room = { id: input.id, name: input.name };
+    if (
+      input.inviteCode !== undefined &&
+      (typeof input.inviteCode !== "string" ||
+        !/^[A-HJ-NP-Z2-9]{5}$/.test(input.inviteCode))
+    )
+      throw new Error("잘못된 방 초대 코드입니다.");
+    room = {
+      id: input.id,
+      name: input.name,
+      ...(input.inviteCode === undefined ? {} : { inviteCode: input.inviteCode }),
+    };
   }
   let messages: ChatMessage[] | undefined;
   if (value.messages !== undefined) {

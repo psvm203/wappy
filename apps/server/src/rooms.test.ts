@@ -10,7 +10,7 @@ import { parseSidebarState, type Session } from "@wappy/api";
 import { openDatabase } from "./database.ts";
 import { createApp } from "./server.ts";
 
-test("room invitations connect every participant, survive rotation/restart, and move only the accepting profile", async (t) => {
+test("automatic room codes are shared, survive restart, and move only the accepting profile", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-rooms-"));
   const databasePath = join(directory, "rooms.sqlite");
   let now = 1_800_000_000_000;
@@ -82,17 +82,25 @@ test("room invitations connect every participant, survive rotation/restart, and 
     );
   }
   async function invite(person: Session) {
-    const response = await call("/invites", person.token, {});
-    assert.equal(response.status, 201);
-    return response.body;
+    const room = (await state(person)).room;
+    assert.ok(room);
+    assert.match(room.inviteCode!, /^[A-HJ-NP-Z2-9]{5}$/);
+    return { code: room.inviteCode! };
   }
+  const initialCodes = await Promise.all([a, b, c, d, e, f].map(invite));
+  assert.equal(new Set(initialCodes.map((invite) => invite.code)).size, 6);
   const first = await invite(a);
   assert.equal((await call("/invites/accept", b.token, first)).status, 200);
   const beforeB = await call("/state", b.token);
-  // A fresh code still targets the existing room and keeps B in it.
+  // Looking up a code through an older client cannot rotate the room's code.
   const second = await invite(a);
-  assert.equal((await call("/invites/accept", c.token, first)).status, 404);
-  assert.equal((await call("/invites/accept", c.token, second)).status, 200);
+  assert.deepEqual(second, first);
+  assert.deepEqual(await call("/invites", b.token, {}), {
+    status: 200,
+    etag: null,
+    body: first,
+  });
+  assert.equal((await call("/invites/accept", c.token, first)).status, 200);
   await peers(a, [b, c]);
   await peers(b, [a, c]);
   await peers(c, [a, b]);
@@ -113,9 +121,10 @@ test("room invitations connect every participant, survive rotation/restart, and 
     201,
   );
 
-  // Any participant can rotate the room's code and invite the next participant.
+  // Every participant sees and shares the same code.
   const fromB = await invite(b);
-  assert.equal((await call("/invites/preview", undefined, second)).status, 404);
+  assert.deepEqual(fromB, first);
+  assert.equal((await call("/invites/preview", undefined, second)).status, 200);
   assert.equal((await call("/invites/accept", d.token, fromB)).status, 200);
   for (const person of [a, b, c, d]) {
     await peers(
@@ -123,6 +132,7 @@ test("room invitations connect every participant, survive rotation/restart, and 
       [a, b, c, d].filter((other) => other !== person),
     );
     assert.equal((await state(person)).room?.id, (await state(a)).room?.id);
+    assert.deepEqual(await invite(person), first);
   }
   assert.deepEqual(
     (await state(d)).messages,
@@ -157,6 +167,7 @@ test("room invitations connect every participant, survive rotation/restart, and 
   const beforeA = await call("/state", a.token);
   assert.equal((await call("/invites/accept", d.token, otherRoom)).status, 200);
   await peers(d, [e, f]);
+  assert.deepEqual(await invite(d), otherRoom);
   await peers(e, [d, f]);
   await peers(a, [b, c]);
   await peers(b, [a, c]);
@@ -192,10 +203,14 @@ test("room invitations connect every participant, survive rotation/restart, and 
   await listen();
   await peers(d, [a, b]);
   await peers(e, [f]);
+  assert.deepEqual(await invite(a), first);
+  assert.deepEqual(await invite(e), otherRoom);
   // Even the original inviter can leave and return using a code for the old room.
-  assert.equal((await call("/invites/accept", b.token, otherRoom)).status, 200);
-  assert.equal((await call("/invites/accept", b.token, fromB)).status, 200);
-  await peers(b, [a, c, d]);
+  assert.equal((await call("/invites/accept", a.token, otherRoom)).status, 200);
+  assert.deepEqual(await invite(a), otherRoom);
+  assert.deepEqual(await invite(b), first);
+  assert.equal((await call("/invites/accept", a.token, first)).status, 200);
+  await peers(a, [b, c, d]);
   const shared = await invite(d);
   assert.equal((await call("/invites/accept", f.token, shared)).status, 200);
   await peers(f, [a, b, c, d]);
@@ -259,8 +274,11 @@ test("legacy connected groups migrate once into separate rooms without exposing 
     );
     assert.equal(
       db.prepare("SELECT COUNT(*) AS count FROM invites").get()!.count,
-      3,
+      5,
     );
+    const rooms = db.prepare("SELECT * FROM rooms ORDER BY id").all();
+    for (const room of rooms)
+      assert.match(room.invite_code as string, /^[A-HJ-NP-Z2-9]{5}$/);
     for (const invite of db.prepare("SELECT * FROM invites").all())
       assert.equal(invite.room_id, room(invite.owner_id as string));
     assert.deepEqual(
@@ -274,6 +292,10 @@ test("legacy connected groups migrate once into separate rooms without exposing 
     db.exec("DELETE FROM friendships WHERE user_id = 'b' AND friend_id = 'c'");
     db.close();
     db = openDatabase(path);
+    assert.deepEqual(
+      db.prepare("SELECT * FROM rooms ORDER BY id").all(),
+      rooms,
+    );
     assert.equal(
       db.prepare("SELECT COUNT(*) AS count FROM rooms").get()!.count,
       2,
@@ -281,6 +303,81 @@ test("legacy connected groups migrate once into separate rooms without exposing 
     assert.equal(
       db.prepare("SELECT COUNT(*) AS count FROM friendships").get()!.count,
       3,
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+  } finally {
+    db.close();
+  }
+});
+
+test("existing rooms and profiles without a room receive permanent codes only once", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-room-codes-"));
+  const path = join(directory, "legacy.sqlite");
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const seed = new DatabaseSync(path);
+  seed.exec(`
+    CREATE TABLE users (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, name TEXT NOT NULL, character TEXT NOT NULL) STRICT;
+    CREATE TABLE rooms (id TEXT PRIMARY KEY, name TEXT NOT NULL) STRICT;
+    CREATE TABLE room_members (
+      room_id TEXT NOT NULL REFERENCES rooms(id), user_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+      PRIMARY KEY (room_id, user_id)
+    ) STRICT;
+    CREATE TABLE invites (
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id),
+      room_id TEXT NOT NULL REFERENCES rooms(id)
+    ) STRICT;
+    INSERT INTO users VALUES ('owner', 'a', 'A', 'chiikawa'), ('waiting', 'b', 'B', 'chiikawa');
+    INSERT INTO rooms VALUES ('occupied', 'A의 방'), ('empty', '이전 방');
+    INSERT INTO room_members VALUES ('occupied', 'owner');
+  `);
+  const legacyHash = createHash("sha256").update("A7K3M").digest("hex");
+  seed
+    .prepare("INSERT INTO invites VALUES (?, 'owner', 'empty')")
+    .run(legacyHash);
+  seed.close();
+  let db = openDatabase(path);
+  try {
+    const rooms = db.prepare("SELECT * FROM rooms ORDER BY id").all();
+    assert.equal(rooms.length, 3);
+    assert.equal(new Set(rooms.map((room) => room.invite_code)).size, 3);
+    for (const room of rooms) {
+      assert.match(room.invite_code as string, /^[A-HJ-NP-Z2-9]{5}$/);
+      const digest = createHash("sha256")
+        .update(room.invite_code as string)
+        .digest("hex");
+      assert.equal(
+        db
+          .prepare("SELECT room_id FROM invites WHERE code_hash = ?")
+          .get(digest)?.room_id,
+        room.id,
+      );
+    }
+    assert.equal(
+      db
+        .prepare("SELECT room_id FROM room_members WHERE user_id = 'owner'")
+        .get()?.room_id,
+      "occupied",
+    );
+    assert.ok(
+      db
+        .prepare("SELECT room_id FROM room_members WHERE user_id = 'waiting'")
+        .get(),
+    );
+    assert.equal(
+      db
+        .prepare("SELECT room_id FROM invites WHERE code_hash = ?")
+        .get(legacyHash)?.room_id,
+      "empty",
+    );
+    db.close();
+    db = openDatabase(path);
+    assert.deepEqual(
+      db.prepare("SELECT * FROM rooms ORDER BY id").all(),
+      rooms,
+    );
+    assert.equal(
+      db.prepare("SELECT COUNT(*) AS count FROM invites").get()!.count,
+      4,
     );
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
   } finally {

@@ -60,13 +60,17 @@ test("proxy rate limits require opt-in and use only the last valid forwarded add
 });
 
 test("short invitation collisions retry without replacing existing codes", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-code-collision-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const databasePath = join(directory, "test.sqlite");
   let digit = 0;
   let collisionDigits = 0;
   const random = t.mock.method(crypto, "randomInt", () =>
     collisionDigits-- > 0 ? 0 : digit,
   );
   syncBuiltinESMExports();
-  const server = createApp({ databasePath: ":memory:" });
+  const server = createApp({ databasePath });
+  const inspection = new DatabaseSync(databasePath);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
@@ -90,45 +94,44 @@ test("short invitation collisions retry without replacing existing codes", async
         status: "",
       })
     ).body as Session;
-    const bob = (
-      await call("/session", { name: "Bob", character: "usagi", status: "" })
-    ).body as Session;
     const first = await call("/invites", {}, alice.token);
-    assert.equal(first.status, 201);
+    assert.equal(first.status, 200);
     assert.equal(first.body.code, "AAAAA");
-    assert.equal((await call("/invites", {}, bob.token)).status, 503);
-    assert.equal((await call("/invites", {}, alice.token)).status, 503);
+    assert.equal(
+      (await call("/session", { name: "Bob", character: "usagi" })).status,
+      503,
+      "a collision rolls back profile and room creation",
+    );
+    for (const table of ["users", "rooms", "room_members", "invites"])
+      assert.equal(
+        inspection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count,
+        1,
+      );
+    assert.deepEqual(await call("/invites", {}, alice.token), first);
     assert.equal(
       (await call("/invites/preview", { code: "aaaaa" })).body.name,
       "Alice",
     );
     digit = 1;
     collisionDigits = 5;
+    const created = await call("/session", { name: "Bob", character: "usagi" });
+    assert.equal(created.status, 201);
+    const bob = created.body as Session;
     const second = await call("/invites", {}, bob.token);
-    assert.equal(second.status, 201);
+    assert.equal(second.status, 200);
     assert.equal(second.body.code, "BBBBB");
-    digit = 2;
-    collisionDigits = 5;
-    const replacement = await call("/invites", {}, alice.token);
-    assert.equal(replacement.status, 201);
-    assert.equal(replacement.body.code, "CCCCC");
-    assert.equal(
-      (await call("/invites/preview", { code: "AAAAA" })).status,
-      404,
-    );
+    assert.deepEqual(await call("/invites", {}, alice.token), first);
     assert.equal(
       (await call("/invites/preview", { code: "BBBBB" })).body.name,
       "Bob",
     );
     assert.equal(
-      (await call("/invites/accept", { code: " ccccc " }, bob.token)).status,
+      (await call("/invites/accept", { code: " aaaaa " }, bob.token)).status,
       200,
     );
-    assert.equal(
-      (await call("/invites/preview", { code: "CCCCC" })).status,
-      200,
-    );
+    assert.deepEqual(await call("/invites", {}, bob.token), first);
   } finally {
+    inspection.close();
     random.mock.restore();
     syncBuiltinESMExports();
     const closed = once(server, "close");
@@ -181,9 +184,9 @@ test("public invitation previews are read-only, bounded and reveal only invitati
     const invite = {
       code: "aZ_".repeat(14) + "A",
     };
-    await call("/invites", {}, alice.token);
     inspection
-      .prepare("UPDATE invites SET code_hash = ? WHERE owner_id = ?")
+      .prepare(`INSERT INTO invites (code_hash, owner_id, room_id)
+        SELECT ?, user_id, room_id FROM room_members WHERE user_id = ?`)
       .run(
         createHash("sha256").update(invite.code).digest("hex"),
         alice.profile.id,
@@ -260,12 +263,12 @@ test("public invitation previews are read-only, bounded and reveal only invitati
       "accepted codes remain available",
     );
     const old = (await call("/invites", {}, alice.token)).body as Invite;
-    const replacement = (await call("/invites", {}, alice.token))
-      .body as Invite;
-    assert.equal((await preview(old.code)).status, 404);
+    const repeated = (await call("/invites", {}, alice.token)).body as Invite;
+    assert.deepEqual(repeated, old);
+    assert.equal((await preview(old.code)).status, 200);
     time += 100 * 365 * 24 * 60 * 60_000;
     assert.equal(
-      (await preview(replacement.code)).status,
+      (await preview(repeated.code)).status,
       200,
       "invitations have no expiry",
     );
@@ -280,7 +283,7 @@ test("public invitation previews are read-only, bounded and reveal only invitati
     );
     assert.equal(
       (await call("/invites", {}, bob.token)).status,
-      201,
+      200,
       "previews do not consume the write allowance",
     );
     time += 60_001;
@@ -380,21 +383,14 @@ test("profiles, invitations, presence and friendship persist safely end to end",
     const invite = (await call("POST", "/invites", alice.token, {}))
       .body as Invite;
     assert.deepEqual(Object.keys(invite), ["code"]);
-    assert.equal(
-      (
-        await call("POST", "/invites/accept", bob.token, {
-          code: oldInvite.code,
-        })
-      ).status,
-      404,
-    );
+    assert.deepEqual(invite, oldInvite);
     assert.equal(
       (
         await call("POST", "/invites/accept", alice.token, {
           code: invite.code,
         })
       ).status,
-      400,
+      409,
     );
     const accepted = await call("POST", "/invites/accept", bob.token, {
       code: invite.code,
@@ -1084,7 +1080,7 @@ test("existing invitation codes migrate without expiry and remain reusable by mu
         (await call("/invites/accept", guests[0], { code })).status,
         409,
       );
-      assert.equal((await call("/invites/accept", host, { code })).status, 400);
+      assert.equal((await call("/invites/accept", host, { code })).status, 409);
       await close();
       time += 100 * 365 * 24 * 60 * 60_000;
       server = createApp({ databasePath, now: () => time });
@@ -1105,12 +1101,17 @@ test("existing invitation codes migrate without expiry and remain reusable by mu
         (await call("/invites/accept", guests[0], { code })).status,
         200,
       );
-      const replacement = await call("/invites", host, {});
-      assert.equal(replacement.status, 201);
-      assert.match(replacement.body.code, /^[A-HJ-NP-Z2-9]{5}$/);
+      const permanent = await call("/invites", host, {});
+      assert.equal(permanent.status, 200);
+      assert.match(permanent.body.code, /^[A-HJ-NP-Z2-9]{5}$/);
+      assert.equal(
+        (await call("/state", host)).body.room.inviteCode,
+        permanent.body.code,
+      );
       assert.equal(
         (await call("/invites/preview", undefined, { code })).status,
-        404,
+        200,
+        "the migrated alias stays usable alongside the permanent room code",
       );
     } finally {
       if (server.listening) await close();

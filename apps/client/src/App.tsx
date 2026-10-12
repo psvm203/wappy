@@ -13,7 +13,6 @@ import {
   parseChatMessage,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
-  type Invite,
   type ProfileInput,
   type Session,
   type SidebarState,
@@ -54,10 +53,7 @@ import { saveSession, type SavedSession } from "./sessions";
 import {
   formatInvitation,
   isLocalServer,
-  loadSavedInvite,
   parseInvitation,
-  savedInviteKey,
-  saveInvite,
   WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
@@ -94,10 +90,6 @@ function App() {
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
-  const [savedInvite, setSavedInvite] = useState<{
-    key: string;
-    value: Invite | null;
-  } | null>(null);
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -122,12 +114,7 @@ function App() {
     session && state
       ? residentSelectionKey(session.server, state.self.id)
       : null;
-  const inviteStorageKey =
-    session && state
-      ? savedInviteKey(session.server, state.self.id, state.room?.id)
-      : null;
-  const invite =
-    savedInvite?.key === inviteStorageKey ? savedInvite.value : null;
+  const inviteCode = state?.room?.inviteCode;
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
@@ -255,19 +242,6 @@ function App() {
   }, [session]);
 
   useEffect(() => {
-    if (!inviteStorageKey || savedInvite?.key === inviteStorageKey) return;
-    try {
-      setSavedInvite({
-        key: inviteStorageKey,
-        value: loadSavedInvite(inviteStorageKey),
-      });
-    } catch {
-      setSavedInvite({ key: inviteStorageKey, value: null });
-      setError("저장된 초대 코드를 불러오지 못했어요. 새 코드를 만들어 주세요.");
-    }
-  }, [inviteStorageKey, savedInvite?.key]);
-
-  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 5000);
     return () => window.clearTimeout(timer);
@@ -304,7 +278,6 @@ function App() {
     changeSession(saved);
     setServer(address);
     setState({ self: created.profile, friends: [] });
-    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setPanel("friends");
@@ -321,7 +294,6 @@ function App() {
   function showOnboarding() {
     changeSession(null);
     setState(null);
-    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setOnboarding("create");
@@ -425,7 +397,6 @@ function App() {
       code: inviteCode,
     });
     setCode("");
-    setSavedInvite(null);
     setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
     setFriendView("all");
@@ -525,6 +496,18 @@ function App() {
       preferences={preferences}
       onChange={setPreferences}
     />
+  );
+  const errorAlert = error && (
+    <p className="error" role="alert">
+      {error}
+      <button
+        type="button"
+        aria-label="오류 닫기"
+        onClick={() => setError("")}
+      >
+        ×
+      </button>
+    </p>
   );
 
   if (compact && state)
@@ -783,14 +766,7 @@ function App() {
                 {desktopError}
               </p>
             )}
-            {error && (
-              <p className="error" role="alert">
-                {error}
-                <button aria-label="오류 닫기" onClick={() => setError("")}>
-                  ×
-                </button>
-              </p>
-            )}
+            {(!state || panel !== "invite") && errorAlert}
             {!state && panel !== "profile" && connection !== "unauthorized" && (
               <div className="empty-state">
                 <span className="loading-orbit" />
@@ -917,18 +893,15 @@ function App() {
                       현재 방: <strong>{state.room.name}</strong>
                     </p>
                   )}
-                  <p>
-                    참여자 누구나 같은 방으로 초대할 수 있어요.
-                    <br />새 코드를 만들면 이 방의 이전 코드는 사용할 수 없어요.
-                  </p>
-                  {invite && (
+                  <p>참여자 누구나 같은 방으로 초대할 수 있어요.</p>
+                  {inviteCode && (
                     <>
                       <label className="field">
                         친구에게 보낼 코드
                         <input
                           className="invite-code"
                           readOnly
-                          value={invite.code}
+                          value={inviteCode}
                           onFocus={(event) => event.target.select()}
                         />
                       </label>
@@ -938,7 +911,7 @@ function App() {
                           setError("");
                           try {
                             await navigator.clipboard.writeText(
-                              formatInvitation(session.server, invite.code),
+                              formatInvitation(session.server, inviteCode),
                             );
                             setNotice("초대 코드를 복사했어요.");
                           } catch {
@@ -950,53 +923,8 @@ function App() {
                       >
                         초대 코드 복사 <span aria-hidden="true">↗</span>
                       </button>
-                      <p className="hint">
-                        친구가 첫 화면의 ‘초대받았어요’에 붙여넣으면 바로 시작할
-                        수 있어요.
-                      </p>
                     </>
                   )}
-                  <button
-                    className={invite ? "text-button regenerate" : "primary"}
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () => {
-                        const created = await request(
-                          session,
-                          "POST /invites",
-                          {},
-                        );
-                        formatInvitation(session.server, created.code);
-                        if (currentSession.current !== session) return;
-                        if (inviteStorageKey)
-                          setSavedInvite({
-                            key: inviteStorageKey,
-                            value: created,
-                          });
-                        const next = state.room ? state : await refresh();
-                        if (!next || currentSession.current !== session) return;
-                        const key = savedInviteKey(
-                          session.server,
-                          next.self.id,
-                          next.room?.id,
-                        );
-                        setSavedInvite({ key, value: created });
-                        try {
-                          saveInvite(key, created);
-                        } catch {
-                          setError(
-                            "초대 코드를 기기에 저장하지 못했어요. 앱을 닫기 전에 코드를 복사해 주세요.",
-                          );
-                        }
-                      })
-                    }
-                  >
-                    {busy
-                      ? "만드는 중…"
-                      : invite
-                        ? "새 코드 만들기"
-                        : "초대 코드 만들기"}
-                  </button>
                   {session.server !== WAPPY_SERVER && (
                     <p className="hint server-address">
                       친구도 같은 서버에 연결해야 해요.
@@ -1028,6 +956,7 @@ function App() {
                   >
                     {busy ? "참여하는 중…" : "방에 참여하기"}
                   </button>
+                  {errorAlert}
                   {state.room && (
                     <p className="hint">
                       다른 방의 초대를 수락하면 현재 방에서 나가고 새 방의

@@ -680,10 +680,6 @@
 .invite-code {
   font-family: ui-monospace, monospace;
 }
-.regenerate {
-  display: block;
-  margin: 10px auto;
-}
 .server-address {
   border-top: 1px dashed #d8dfcb;
   padding-top: 14px;
