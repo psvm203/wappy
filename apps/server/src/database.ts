@@ -39,10 +39,7 @@ export function openDatabase(databasePath: string) {
       PRIMARY KEY (room_id, user_id)
     ) STRICT;
     DROP TABLE IF EXISTS recovery_codes;
-    CREATE TABLE IF NOT EXISTS kakao_accounts (
-      kakao_id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
-    ) STRICT;
+    DROP TABLE IF EXISTS kakao_accounts;
     CREATE TABLE IF NOT EXISTS presence_settings (
       user_id TEXT PRIMARY KEY REFERENCES users(id),
       sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),

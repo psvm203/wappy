@@ -43,7 +43,6 @@ import {
   toggleResidentVisibility,
 } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
-import { KakaoLogin } from "./KakaoLogin";
 import { ChatBubble } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
 import { latestChat } from "./chat";
@@ -839,18 +838,6 @@ function App() {
               }
             }}
           />
-          {onboarding !== "join" && (
-            <KakaoLogin
-              key={server}
-              server={server}
-              busy={busy}
-              onBusyChange={(pending) => {
-                setBusy(pending);
-                if (pending) setError("");
-              }}
-              onLogin={connectSession}
-            />
-          )}
           <ProfileForm
             initial={emptyProfile}
             busy={busy}
@@ -942,15 +929,14 @@ function App() {
           {connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
               <p>
-                프로필 인증이 만료되었어요. 다른 기기에서 로그인했다면 그
-                기기에서 계속 이용할 수 있어요.
+                프로필 인증에 실패했어요. 연결할 서버 주소가 맞는지 확인해
+                주세요.
               </p>
               <details>
                 <summary>이 기기에서 다시 시작하기</summary>
                 <p>
-                  카카오로 만든 프로필은 같은 서버에서 같은 카카오 계정으로 다시
-                  로그인할 수 있어요. 보관한 다른 프로필을 선택하거나 새
-                  프로필로 시작할 수도 있어요.
+                  보관한 다른 프로필을 선택하거나 새 프로필로 시작할 수 있어요.
+                  유효한 로그인 정보가 없으면 기존 프로필로 돌아올 수 없어요.
                 </p>
                 <button
                   className="text-button danger"

@@ -44,9 +44,8 @@ export function SavedProfiles({
               <div className="remove-confirm">
                 <p>
                   로그인 정보를 이 기기에서 지웁니다. 서버의 프로필과 친구는
-                  남습니다. 카카오로 만든 프로필은 같은 계정으로 다시 로그인할
-                  수 있지만, 이름으로 만든 프로필은 다른 로그인 정보가 없으면
-                  돌아올 수 없어요.
+                  남습니다. 다른 유효한 로그인 정보가 없으면 이 프로필로 돌아올
+                  수 없어요.
                 </p>
                 <button
                   className="text-button"

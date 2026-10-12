@@ -34,10 +34,7 @@
         "HOST",
         "PORT",
         "DATABASE_PATH",
-        "ALLOWED_ORIGINS",
-        "KAKAO_REST_API_KEY",
-        "KAKAO_CLIENT_SECRET",
-        "KAKAO_REDIRECT_URI"
+        "ALLOWED_ORIGINS"
       ]
     }
   }

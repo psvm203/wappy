@@ -82,7 +82,7 @@ export function saveSession(
   const saved = readSavedSessions(storage);
   const previous = saved.find((item) => sameProfile(item, session));
   if (previous) {
-    // Kakao login rotates the token; update a previously saved copy as well.
+    // Keep the saved copy in sync with the active profile and credential.
     storage.setItem(
       SAVED_SESSIONS_KEY,
       JSON.stringify([
