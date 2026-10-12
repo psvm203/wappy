@@ -134,7 +134,7 @@ export function createApp(options: {
     PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL, character TEXT NOT NULL, status TEXT NOT NULL
+      name TEXT NOT NULL, character TEXT NOT NULL
     ) STRICT;
     CREATE TABLE IF NOT EXISTS friendships (
       user_id TEXT NOT NULL REFERENCES users(id),
@@ -156,9 +156,7 @@ export function createApp(options: {
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
       expires_at INTEGER NOT NULL
     ) STRICT;
-    CREATE TABLE IF NOT EXISTS recovery_codes (
-      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
-    ) STRICT;
+    DROP TABLE IF EXISTS recovery_codes;
     CREATE TABLE IF NOT EXISTS kakao_accounts (
       kakao_id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
@@ -206,6 +204,13 @@ export function createApp(options: {
     CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
     CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
   `);
+  if (
+    db
+      .prepare("PRAGMA table_info(users)")
+      .all()
+      .some((column) => column.name === "status")
+  )
+    db.exec("ALTER TABLE users DROP COLUMN status");
   if (
     !db
       .prepare("PRAGMA table_info(chat_messages)")
@@ -262,13 +267,13 @@ export function createApp(options: {
   ]);
   // Reuse the hot statements rather than allocating native SQL resources per poll.
   const selectProfile = db.prepare(
-    "SELECT id, name, character, status FROM users WHERE id = ?",
+    "SELECT id, name, character FROM users WHERE id = ?",
   );
   const authenticate = db.prepare(
-    "SELECT id, name, character, status FROM users WHERE token_hash = ?",
+    "SELECT id, name, character FROM users WHERE token_hash = ?",
   );
   const selectFriends = db.prepare(`
-    SELECT u.id, u.name, u.character, u.status, w.id AS wave_id, w.sent_at AS wave_sent_at,
+    SELECT u.id, u.name, u.character, w.id AS wave_id, w.sent_at AS wave_sent_at,
       COALESCE(p.sharing, 1) AS sharing
     FROM friendships f
     JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
@@ -375,9 +380,7 @@ export function createApp(options: {
         return;
       }
       const publicSession =
-        route === "POST /session" ||
-        route === "POST /session/recover" ||
-        route === "POST /auth/kakao/start";
+        route === "POST /session" || route === "POST /auth/kakao/start";
       const publicPreview = route === "POST /invites/preview";
       const kakaoPoll =
         route === "POST /auth/kakao/poll" ||
@@ -502,7 +505,7 @@ export function createApp(options: {
         return;
       }
       const body = req.method === "GET" ? undefined : await readBody(req);
-      // Authenticate after the last await so recovery also revokes in-flight writes.
+      // Authenticate after the last await so revoked sessions cannot complete in-flight writes.
       let self: Profile | undefined;
       if (!publicSession && !publicPreview && !kakaoPoll) {
         const token = req.headers.authorization?.match(
@@ -590,14 +593,12 @@ export function createApp(options: {
                 id: randomUUID(),
                 name: identity.name,
                 character: "chiikawa",
-                status: "",
               };
-              db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)").run(
+              db.prepare("INSERT INTO users VALUES (?, ?, ?, ?)").run(
                 user.id,
                 hash(token),
                 user.name,
                 user.character,
-                user.status,
               );
               db.prepare("INSERT INTO kakao_accounts VALUES (?, ?)").run(
                 identity.id,
@@ -626,44 +627,14 @@ export function createApp(options: {
           }
           const token = secret();
           const user = { id: randomUUID(), ...input };
-          db.prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)").run(
+          db.prepare("INSERT INTO users VALUES (?, ?, ?, ?)").run(
             user.id,
             hash(token),
             user.name,
             user.character,
-            user.status,
           );
           lastSeen.set(user.id, now());
           reply(res, route, { token, profile: user }, 201);
-          break;
-        }
-        case "POST /session/recover": {
-          const code = field(body, "code");
-          if (!/^wappy-recovery-[A-Za-z0-9_-]{43}$/.test(code))
-            throw new HttpError(400, "올바른 복구 코드를 입력해 주세요.");
-          const token = secret();
-          // One atomic statement preserves the profile and revokes the old session.
-          // Keep the recovery key valid: a lost response must remain retryable.
-          const user = db
-            .prepare(
-              `UPDATE users SET token_hash = ?
-               WHERE id = (SELECT owner_id FROM recovery_codes WHERE code_hash = ?)
-               RETURNING id, name, character, status`,
-            )
-            .get(hash(token), hash(code)) as unknown as Profile | undefined;
-          if (!user)
-            throw new HttpError(401, "복구 코드와 서버 주소를 확인해 주세요.");
-          lastSeen.set(user.id, now());
-          reply(res, route, { token, profile: user });
-          break;
-        }
-        case "POST /recovery-code": {
-          const code = `wappy-recovery-${secret()}`;
-          db.prepare(
-            `INSERT INTO recovery_codes VALUES (?, ?) ON CONFLICT(owner_id)
-             DO UPDATE SET code_hash = excluded.code_hash`,
-          ).run(hash(code), self!.id);
-          reply(res, route, { code }, 201);
           break;
         }
         case "GET /state": {
@@ -945,41 +916,9 @@ export function createApp(options: {
             throw new HttpError(400, (error as Error).message);
           }
           db.prepare(
-            "UPDATE users SET name = ?, character = ?, status = ? WHERE id = ?",
-          ).run(input.name, input.character, input.status, self!.id);
+            "UPDATE users SET name = ?, character = ? WHERE id = ?",
+          ).run(input.name, input.character, self!.id);
           reply(res, route, { ...input, id: self!.id });
-          break;
-        }
-        case "POST /profile/delete": {
-          if (field(body, "profileId") !== self!.id)
-            throw new HttpError(409, "삭제할 프로필을 다시 확인해 주세요.");
-          // Existing databases use restrictive user foreign keys. Keep removal atomic
-          // without rebuilding their tables; waves already cascade with friendships.
-          db.exec("BEGIN IMMEDIATE");
-          try {
-            db.prepare(
-              "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
-            ).run(self!.id, self!.id);
-            db.prepare("DELETE FROM invites WHERE owner_id = ?").run(self!.id);
-            db.prepare("DELETE FROM recovery_codes WHERE owner_id = ?").run(
-              self!.id,
-            );
-            db.prepare("DELETE FROM presence_settings WHERE user_id = ?").run(
-              self!.id,
-            );
-            db.prepare(
-              `UPDATE blocking_settings SET revision = revision + 1
-              WHERE user_id IN (SELECT user_id FROM profile_blocks WHERE blocked_id = ?)`,
-            ).run(self!.id);
-            db.prepare("DELETE FROM users WHERE id = ?").run(self!.id);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
-          lastSeen.delete(self!.id);
-          validators.delete(self!.id);
-          reply(res, route, { ok: true });
           break;
         }
         case "PATCH /presence": {

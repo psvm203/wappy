@@ -9,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { CHAT_TTL_MS, parseSidebarState } from "@wappy/api";
 import { createApp } from "./server.ts";
 
-test("direct chat migrates existing history, isolates recipients, survives recovery and revokes on removal", async (t) => {
+test("direct chat migrates existing history, isolates recipients, survives restart and revokes on removal", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-direct-chat-"));
   const databasePath = join(directory, "chat.sqlite");
   let now = 1_800_000_000_000;
@@ -93,7 +93,6 @@ test("direct chat migrates existing history, isolates recipients, survives recov
       await call("/session", undefined, {
         name,
         character: "hachiware",
-        status: "",
       })
     ).body;
   }
@@ -195,10 +194,6 @@ test("direct chat migrates existing history, isolates recipients, survives recov
   assert.deepEqual((await state(bob.token)).messages, [sent.body]);
   assert.deepEqual((await state(carol.token)).messages, []);
   assert.deepEqual((await state(legacyToken)).messages, old.messages);
-  const recovery = (await call("/recovery-code", bob.token, {})).body;
-  const recovered = (await call("/session/recover", undefined, recovery)).body;
-  bob.token = recovered.token;
-  assert.deepEqual((await state(bob.token)).messages, [sent.body]);
   const reply = await call("/chat/direct", bob.token, {
     text: "나도 반가워",
     friendId: alice.profile.id,
@@ -233,26 +228,4 @@ test("direct chat migrates existing history, isolates recipients, survives recov
   now += CHAT_TTL_MS;
   assert.deepEqual((await state(bob.token)).messages, []);
   assert.deepEqual((await state(alice.token)).messages, []);
-  const last = await call("/chat/direct", alice.token, {
-    text: "삭제 전 이야기",
-    friendId: bob.profile.id,
-  });
-  assert.equal(last.status, 201);
-  assert.equal(
-    (await call("/profile/delete", bob.token, { profileId: bob.profile.id }))
-      .status,
-    200,
-  );
-  assert.deepEqual((await state(alice.token)).messages, []);
-  const inspection = new DatabaseSync(databasePath);
-  assert.equal(
-    inspection
-      .prepare(
-        "SELECT COUNT(*) AS count FROM chat_messages WHERE recipient_id = ? OR sender_id = ?",
-      )
-      .get(bob.profile.id, bob.profile.id)!.count,
-    0,
-  );
-  assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
-  inspection.close();
 });

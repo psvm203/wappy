@@ -75,7 +75,6 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
       await call("/session", undefined, {
         name,
         character: "hachiware",
-        status: "",
       })
     ).body;
   }
@@ -209,11 +208,9 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
     ).status,
     404,
   );
-  const recovery = (await call("/recovery-code", bob.token, {})).body;
   await close();
   server = createApp({ databasePath, now: () => now });
   await listen();
-  bob.token = (await call("/session/recover", undefined, recovery)).body.token;
   assert.equal(
     parseSidebarState((await call("/state", bob.token)).body).chatReporting,
     false,
@@ -223,7 +220,7 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
     parseChatReportReceipts((await call("/chat/reports", bob.token)).body)
       .length,
     2,
-    "receipts survive restart/recovery and pausing intake",
+    "receipts survive restart and pausing intake",
   );
   await close();
   server = createApp({ databasePath, now: () => now, reportsEnabled: true });
@@ -347,30 +344,6 @@ test("reports verify recipients, persist evidence privately, enforce limits, and
     reports.inspect(privateReceipt.id)!.text,
     direct.text,
     "evidence outlives normal chat retention",
-  );
-  assert.equal(
-    (await call("/profile/delete", bob.token, { profileId: bob.profile.id }))
-      .status,
-    200,
-  );
-  assert.equal(
-    reports.inspect(privateReceipt.id),
-    undefined,
-    "reporter deletion purges their submissions",
-  );
-  assert.ok(reports.inspect(carolReceipt.id));
-  assert.equal(
-    (
-      await call("/profile/delete", alice.token, {
-        profileId: alice.profile.id,
-      })
-    ).status,
-    200,
-  );
-  assert.equal(
-    reports.inspect(carolReceipt.id),
-    undefined,
-    "sender deletion also purges associated evidence",
   );
   await connect(carol.token, stranger.token);
   const expires = await send(stranger.token, carol.profile.id);

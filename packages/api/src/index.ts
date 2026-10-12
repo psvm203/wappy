@@ -44,7 +44,6 @@ export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
 export const INVITE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const MAX_NAME_LENGTH = 24;
-export const MAX_STATUS_LENGTH = 60;
 export const WAVE_COOLDOWN_MS = 30_000;
 export const WAVE_TTL_MS = 24 * 60 * 60 * 1_000;
 export const ATTACK_COOLDOWN_MS = 2_000;
@@ -96,7 +95,6 @@ export interface ChatMessage {
 export interface ProfileInput {
   name: string;
   character: Character;
-  status: string;
 }
 export interface Profile extends ProfileInput {
   id: string;
@@ -168,11 +166,6 @@ export interface ApiRoutes {
     output: { ok: true };
   };
   "POST /session": { input: ProfileInput; output: Session };
-  "POST /session/recover": { input: { code: string }; output: Session };
-  "POST /recovery-code": {
-    input: Record<string, never>;
-    output: { code: string };
-  };
   "GET /state": { input: undefined; output: SidebarState };
   "POST /chat": { input: { text: string }; output: ChatMessage };
   "POST /chat/direct": {
@@ -186,10 +179,6 @@ export interface ApiRoutes {
   "POST /chat/report": { input: ChatReportInput; output: ChatReportReceipt };
   "GET /chat/reports": { input: undefined; output: ChatReportReceipt[] };
   "PATCH /profile": { input: ProfileInput; output: Profile };
-  "POST /profile/delete": {
-    input: { profileId: string };
-    output: { ok: true };
-  };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
@@ -378,7 +367,7 @@ export function parseBlockingSettings(value: unknown): BlockingSettings {
       ids.has(input.id)
     )
       throw new Error("잘못된 차단 프로필입니다.");
-    const { name, character } = parseProfileSnapshot({ ...input, status: "" });
+    const { name, character } = parseProfileSnapshot(input);
     ids.add(input.id);
     return { id: input.id, name, character };
   });
@@ -390,24 +379,19 @@ export function parseProfile(value: unknown): ProfileInput {
   if (
     !isRecord(value) ||
     typeof value.name !== "string" ||
-    typeof value.status !== "string" ||
     !CHARACTERS.includes(value.character as Character)
   ) {
-    throw new Error("이름, 캐릭터, 상태 메시지를 확인해 주세요.");
+    throw new Error("이름과 캐릭터를 확인해 주세요.");
   }
   const name = value.name.trim();
-  const status = value.status.trim();
   if (
     !name ||
     name.length > MAX_NAME_LENGTH ||
-    status.length > MAX_STATUS_LENGTH ||
-    /[\u0000-\u001f\u007f]/.test(name + status)
+    /[\u0000-\u001f\u007f]/.test(name)
   ) {
-    throw new Error(
-      `이름은 1–${MAX_NAME_LENGTH}자, 상태 메시지는 ${MAX_STATUS_LENGTH}자 이내로 입력해 주세요.`,
-    );
+    throw new Error(`이름은 1–${MAX_NAME_LENGTH}자로 입력해 주세요.`);
   }
-  return { name, status, character: value.character as Character };
+  return { name, character: value.character as Character };
 }
 
 /** Old server responses and saved profiles remain readable; new writes stay strict. */
@@ -430,7 +414,7 @@ export function parseInvitePreview(value: unknown): InvitePreview {
     value.expiresAt > 8_640_000_000_000_000
   )
     throw new Error("잘못된 초대 응답입니다.");
-  const { name, character } = parseProfileSnapshot({ ...value, status: "" });
+  const { name, character } = parseProfileSnapshot(value);
   return { name, character, expiresAt: value.expiresAt };
 }
 

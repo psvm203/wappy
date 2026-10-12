@@ -17,7 +17,6 @@ test("invitation previews validate display data and discard private fields", () 
     parseInvitePreview({
       ...preview,
       id: "private",
-      status: "private",
       token: "private",
       online: true,
     }),
@@ -58,7 +57,6 @@ test("shared invitations preserve the server and reject ambiguous or secret inpu
     parseInvitation(formatInvitation("http://[::1]:3001", code)),
     { server: "http://[::1]:3001", code },
   );
-  assert.throws(() => parseInvitation(`wappy-recovery-${code}`), /복구 코드/);
   for (const server of [
     "file:///private",
     "javascript:alert(1)",
@@ -75,6 +73,7 @@ test("shared invitations preserve the server and reject ambiguous or secret inpu
   for (const input of [
     "",
     "bad-code",
+    `wappy-recovery-${code}`,
     `${code}x`,
     `${invitation}\nextra`,
     invitation.replace("Wappy 초대", "Other"),

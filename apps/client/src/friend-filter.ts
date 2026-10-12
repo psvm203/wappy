@@ -17,7 +17,7 @@ export function filterFriends(
     .filter((friend) => {
       if (view === "online" && (!connected || !friend.online)) return false;
       if (view === "waves" && !friend.wave) return false;
-      const text = searchText(`${friend.name} ${friend.status}`);
+      const text = searchText(friend.name);
       return terms.every((term) => text.includes(term));
     })
     .sort((a, b) =>

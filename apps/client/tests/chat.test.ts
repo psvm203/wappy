@@ -24,7 +24,6 @@ test("unread messages belong to the viewer, group by conversation, and never rea
     id: "alice",
     name: "Alice",
     character: "hachiware" as const,
-    status: "",
   };
   const bob = { ...self, id: "bob", online: true };
   const carol = { ...bob, id: "carol" };
@@ -108,7 +107,6 @@ test("private conversations keep their audience and never expose contents in cha
     id: "alice",
     name: "Alice",
     character: "hachiware",
-    status: "",
   };
   const bob = { ...self, id: "bob", online: false };
   const carol = { ...bob, id: "carol" };
@@ -181,7 +179,6 @@ test("chat validates text, audience, ordering and history bounds at the server b
     id: "alice",
     name: "Alice",
     character: "hachiware",
-    status: "",
   };
   const friend = { ...self, id: "bob", online: false };
   const message = {

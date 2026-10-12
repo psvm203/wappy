@@ -231,7 +231,7 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
             } else if health {
                 r#"{"ok":true}"#
             } else {
-                r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware","status":""},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"shisa","status":"","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#
+                r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware"},"presence":{"sharing":false,"revision":1},"friends":[{"id":"greeting-friend","name":"Friend","character":"shisa","online":true,"wave":{"id":"native-wave","sentAt":1800000000000}}]}"#
             };
             let _ = write!(socket, "HTTP/1.1 {status} Test\r\nETag: \"lifecycle-v1\"\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         }

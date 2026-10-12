@@ -118,8 +118,7 @@ export function MessageReport({
             <p className="hint">
               이 메시지, 보낸 사람, 내 프로필 식별자와 신고 사유를 이 서버
               운영자에게 보냅니다. 상대에게 신고 내역을 공개하지 않아요. 접수 후
-              최대 30일간 보관하며, 두 사람 중 한 명이 프로필을 삭제하면 신고도
-              삭제됩니다.
+              최대 30일간 보관합니다.
             </p>
             <label className="field">
               신고 사유

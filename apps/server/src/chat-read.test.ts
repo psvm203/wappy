@@ -64,7 +64,6 @@ test("chat acknowledgements are recipient-private, atomic, durable, bounded and 
       await call("/session", undefined, {
         name,
         character: "hachiware",
-        status: "",
       })
     ).body;
   }
@@ -184,12 +183,10 @@ test("chat acknowledgements are recipient-private, atomic, durable, bounded and 
   await close();
   server = createApp({ databasePath, now: () => now });
   await listen();
-  const recovery = (await call("/recovery-code", bob.token, {})).body;
-  bob.token = (await call("/session/recover", undefined, recovery)).body.token;
   assert.deepEqual(
     (await state(bob.token)).unreadChatIds,
     [direct.id, newer.id],
-    "both read and unread states survive restart and recovery",
+    "both read and unread states survive restart",
   );
   assert.equal(
     (await call("/friends/remove", bob.token, { friendId: alice.profile.id }))
@@ -225,17 +222,6 @@ test("chat acknowledgements are recipient-private, atomic, durable, bounded and 
     ).status,
     404,
   );
-  await send(carol.token, bob.profile.id);
-  assert.equal((await state(bob.token)).unreadChatIds?.length, 1);
-  assert.equal(
-    (
-      await call("/profile/delete", carol.token, {
-        profileId: carol.profile.id,
-      })
-    ).status,
-    200,
-  );
-  assert.deepEqual((await state(bob.token)).unreadChatIds, []);
   const inspection = new DatabaseSync(databasePath);
   assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
   inspection.close();

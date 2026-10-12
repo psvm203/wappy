@@ -796,11 +796,6 @@
   outline: 2px solid #698b5b;
   outline-offset: 2px;
 }
-.optional {
-  font-size: 9px;
-  color: #68745e;
-  margin-left: 5px;
-}
 .invitation-preview {
   display: flex;
   align-items: center;
@@ -863,20 +858,8 @@
   border-radius: 0;
   font-weight: 700;
 }
-.recovery-panel {
-  margin-top: 28px;
-}
 .server-panel {
   margin-top: 20px;
-}
-.delete-profile {
-  margin-top: 28px;
-  border-color: #e5ceca;
-}
-.delete-profile-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
 }
 .startup-panel {
   margin-top: 20px;
