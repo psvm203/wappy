@@ -159,10 +159,10 @@ export function advanceAttack(
       moveBody(
         attacker,
         attack.startX +
-          (target.x + upX * 38 - attack.startX) * progress +
+          (target.x + upX * 19 - attack.startX) * progress +
           upX * jump,
         attack.startY +
-          (target.y + upY * 38 - attack.startY) * progress +
+          (target.y + upY * 19 - attack.startY) * progress +
           upY * jump,
         width,
         height,
@@ -170,8 +170,8 @@ export function advanceAttack(
     } else if (attack.kind === "dash") {
       moveBody(
         attacker,
-        attack.startX + (target.x - attack.nx * 48 - attack.startX) * eased,
-        attack.startY + (target.y - attack.ny * 48 - attack.startY) * eased,
+        attack.startX + (target.x - attack.nx * 24 - attack.startX) * eased,
+        attack.startY + (target.y - attack.ny * 24 - attack.startY) * eased,
         width,
         height,
       );
