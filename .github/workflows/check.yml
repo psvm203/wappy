@@ -1,6 +1,5 @@
 name: Check Wappy
 on:
-  push:
   pull_request:
   workflow_dispatch:
 permissions:
