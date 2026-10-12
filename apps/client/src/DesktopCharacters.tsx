@@ -13,8 +13,10 @@ import {
   ATTACK_COOLDOWN_MS,
   type AttackEvent,
   type ChatMessage,
+  type Character as CharacterKind,
 } from "@wappy/api";
 import { Character } from "./Character";
+import { AttackEffects, drawAttackEffect } from "./AttackEffects";
 import { OPEN_CHAT_EVENT, OPEN_GREETING_EVENT } from "./desktop";
 import { ChatBubble } from "./ChatPanel";
 import { latestChat, movedForDrag } from "./chat";
@@ -38,7 +40,12 @@ import {
 } from "./desktop-physics";
 import "./DesktopCharacters.css";
 
-type Resident = { body: Body; element: HTMLElement; walking: boolean };
+type Resident = {
+  body: Body;
+  element: HTMLElement;
+  walking: boolean;
+  character: CharacterKind;
+};
 type Drag = {
   id: string;
   pointerId: number;
@@ -67,6 +74,7 @@ function moveHeldBody(body: Body, held: Drag) {
 
 function draw({ body, element, walking }: Resident, attack: Attack | null) {
   element.dataset.attack = attack?.attacker === body ? attack.phase : "";
+  element.dataset.attackStyle = attack?.attacker === body ? attack.kind : "";
   element.dataset.hit = String(
     attack?.target === body && attack.phase === "impact",
   );
@@ -133,6 +141,7 @@ export function DesktopCharacters({
   const [attackNotice, setAttackNotice] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
+  const attackEffect = useRef<SVGSVGElement | null>(null);
   const lastAttackAt = useRef(-Infinity);
   const attack = useRef<
     (Attack & { attackerId: string; targetId: string }) | null
@@ -245,6 +254,7 @@ export function DesktopCharacters({
           draw(target, attack.current);
         }
       }
+      drawAttackEffect(attackEffect.current, attack.current);
       schedule();
     };
     const wake = () => {
@@ -444,6 +454,7 @@ export function DesktopCharacters({
     if (!active) return;
     cancelAttack(active);
     attack.current = null;
+    drawAttackEffect(attackEffect.current, null);
     for (const id of [active.attackerId, active.targetId]) {
       const resident = entries.current.get(id);
       if (resident) draw(resident, null);
@@ -454,10 +465,11 @@ export function DesktopCharacters({
     const attacker = entries.current.get(attackerId);
     const target = entries.current.get(targetId);
     if (!attacker?.walking || !target?.walking) return false;
-    const next = createAttack(attacker.body, target.body);
+    const next = createAttack(attacker.body, target.body, attacker.character);
     if (!next) return false;
     attack.current = { ...next, attackerId, targetId };
     draw(attacker, attack.current);
+    drawAttackEffect(attackEffect.current, attack.current);
     return true;
   }
 
@@ -530,6 +542,7 @@ export function DesktopCharacters({
       className={`desktop-characters ${paused ? "is-paused" : ""}`}
       aria-label="바탕화면 캐릭터"
     >
+      <AttackEffects effectRef={attackEffect} />
       {attackNotice && (
         <p className="attack-notice" role="status">
           {attackNotice}
@@ -552,6 +565,7 @@ export function DesktopCharacters({
                   createBody(resident.id, innerWidth, innerHeight),
                 element,
                 walking: resident.online,
+                character: resident.character,
               };
               entries.current.set(resident.id, entry);
               if (!resident.online) entry.body.vx = entry.body.vy = 0;

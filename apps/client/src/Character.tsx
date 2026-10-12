@@ -3,6 +3,14 @@ import { CHARACTER_NAMES, type Character as CharacterKind } from "@wappy/api";
 import { Chiikawa, Hachiware, Usagi } from "./ChiikawaTrio";
 import { Momonga, Kurimanju, Furuhonya } from "./ChiikawaFriends";
 import { Rakko, Shisa } from "./ChiikawaGuardians";
+import {
+  IronMan,
+  CaptainAmerica,
+  Thor,
+  Hulk,
+  BlackWidow,
+  Hawkeye,
+} from "./Avengers";
 
 const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   chiikawa: Chiikawa,
@@ -13,6 +21,12 @@ const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   rakko: Rakko,
   shisa: Shisa,
   furuhonya: Furuhonya,
+  ironman: IronMan,
+  "captain-america": CaptainAmerica,
+  thor: Thor,
+  hulk: Hulk,
+  "black-widow": BlackWidow,
+  hawkeye: Hawkeye,
 };
 
 export function Character({
