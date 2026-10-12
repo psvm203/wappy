@@ -62,7 +62,6 @@ import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
   loadSavedSessions,
-  parkSession,
   saveSession,
   type SavedProfile,
   type SavedSession,
@@ -70,7 +69,10 @@ import {
 import {
   formatInvitation,
   isLocalServer,
+  loadSavedInvite,
   parseInvitation,
+  savedInviteKey,
+  saveInvite,
   WAPPY_SERVER,
 } from "./invitations";
 import { subscribeState } from "./state-sync";
@@ -96,7 +98,10 @@ function App() {
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
-  const [invite, setInvite] = useState<Invite | null>(null);
+  const [savedInvite, setSavedInvite] = useState<{
+    key: string;
+    value: Invite | null;
+  } | null>(null);
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -124,6 +129,12 @@ function App() {
     session && state
       ? residentSelectionKey(session.server, state.self.id)
       : null;
+  const inviteStorageKey =
+    session && state
+      ? savedInviteKey(session.server, state.self.id, state.room?.id)
+      : null;
+  const invite =
+    savedInvite?.key === inviteStorageKey ? savedInvite.value : null;
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
@@ -292,6 +303,19 @@ function App() {
   }, [session]);
 
   useEffect(() => {
+    if (!inviteStorageKey || savedInvite?.key === inviteStorageKey) return;
+    try {
+      setSavedInvite({
+        key: inviteStorageKey,
+        value: loadSavedInvite(inviteStorageKey),
+      });
+    } catch {
+      setSavedInvite({ key: inviteStorageKey, value: null });
+      setError("저장된 초대 코드를 불러오지 못했어요. 새 코드를 만들어 주세요.");
+    }
+  }, [inviteStorageKey, savedInvite?.key]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(""), 5000);
     return () => window.clearTimeout(timer);
@@ -369,7 +393,7 @@ function App() {
     changeSession(saved);
     setServer(address);
     setState({ self: created.profile, friends: [] });
-    setInvite(null);
+    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setPanel("friends");
@@ -387,7 +411,7 @@ function App() {
   function showOnboarding() {
     changeSession(null);
     setState(null);
-    setInvite(null);
+    setSavedInvite(null);
     setCode("");
     setRemoving(null);
     setOnboarding("create");
@@ -395,20 +419,6 @@ function App() {
     setPanel("friends");
     setNotice("");
     setError("");
-  }
-
-  function switchServer() {
-    if (!session || busy) return;
-    try {
-      setSavedSessions(
-        parkSession({ ...session, ...(state ? { profile: state.self } : {}) }),
-      );
-      showOnboarding();
-    } catch {
-      setError(
-        "프로필을 보관하지 못해 현재 연결을 유지했어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
-      );
-    }
   }
 
   function selectSavedSession(saved: SavedProfile) {
@@ -487,14 +497,14 @@ function App() {
         setCode(code);
         setPanel("invite");
         try {
-          await connectFriend(
+          await joinRoom(
             { server: address, token: created.token },
             received.code,
           );
         } catch (cause) {
           throw new ApiError(
             400,
-            `프로필은 만들었어요. 친구 연결 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
+            `프로필은 만들었어요. 방 참여 결과를 확인하지 못했습니다. ${errorMessage(cause)}`,
           );
         }
         return;
@@ -511,15 +521,16 @@ function App() {
     }
   }
 
-  async function connectFriend(
+  async function joinRoom(
     current: { server: string; token: string },
     inviteCode: string,
   ) {
-    const friend = await request(current, "POST /invites/accept", {
+    await request(current, "POST /invites/accept", {
       code: inviteCode,
     });
     setCode("");
-    setNotice(`${friend.name} 님과 친구가 되었어요.`);
+    setSavedInvite(null);
+    setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
     setFriendView("all");
     applyState(
@@ -538,7 +549,7 @@ function App() {
           400,
           "다른 서버의 초대장이에요. 현재 프로필과 같은 서버의 초대장을 받아 주세요.",
         );
-      await connectFriend(session, received.code);
+      await joinRoom(session, received.code);
     });
   }
 
@@ -926,12 +937,6 @@ function App() {
           {connection === "offline" && (
             <div className="connection-warning" role="status">
               <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
-              <button
-                className="text-button"
-                onClick={() => setPanel("profile")}
-              >
-                서버 설정 보기
-              </button>
             </div>
           )}
           {connection === "unauthorized" && (
@@ -1122,19 +1127,21 @@ function App() {
             )}
             {state && panel === "invite" && (
               <div className="invite-panel">
-                <p className="eyebrow">BETTER TOGETHER</p>
-                <h1>작은 초대, 큰 반가움.</h1>
-                <p className="muted">
-                  같이 있고 싶은 친구에게 5자리 초대 코드를 보내세요.
-                </p>
                 <section className="invite-card">
                   <span className="invite-symbol" aria-hidden="true">
                     ↗
                   </span>
-                  <h2>내 초대 코드</h2>
+                  <h2>방 초대 코드</h2>
+                  {state.room && (
+                    <p>
+                      현재 방: <strong>{state.room.name}</strong>
+                    </p>
+                  )}
                   <p>
+                    참여자 누구나 같은 방으로 초대할 수 있어요.
+                    <br />
                     인원과 기간 제한 없이 사용할 수 있어요.
-                    <br />새 코드를 만들면 이전 코드는 사용할 수 없어요.
+                    <br />새 코드를 만들면 이 방의 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
                     <>
@@ -1182,7 +1189,27 @@ function App() {
                           {},
                         );
                         formatInvitation(session.server, created.code);
-                        setInvite(created);
+                        if (currentSession.current !== session) return;
+                        if (inviteStorageKey)
+                          setSavedInvite({
+                            key: inviteStorageKey,
+                            value: created,
+                          });
+                        const next = state.room ? state : await refresh();
+                        if (!next || currentSession.current !== session) return;
+                        const key = savedInviteKey(
+                          session.server,
+                          next.self.id,
+                          next.room?.id,
+                        );
+                        setSavedInvite({ key, value: created });
+                        try {
+                          saveInvite(key, created);
+                        } catch {
+                          setError(
+                            "초대 코드를 기기에 저장하지 못했어요. 앱을 닫기 전에 코드를 복사해 주세요.",
+                          );
+                        }
                       })
                     }
                   >
@@ -1221,8 +1248,14 @@ function App() {
                     disabled={busy || !code.trim()}
                     type="submit"
                   >
-                    {busy ? "연결하는 중…" : "친구와 연결하기"}
+                    {busy ? "참여하는 중…" : "방에 참여하기"}
                   </button>
+                  {state.room && (
+                    <p className="hint">
+                      다른 방의 초대를 수락하면 현재 방에서 나가고 새 방의
+                      친구들과 함께하게 돼요.
+                    </p>
+                  )}
                 </form>
               </div>
             )}
@@ -1232,7 +1265,6 @@ function App() {
                   <>
                     <p className="eyebrow">THIS IS ME</p>
                     <h1 className="profile-title">오늘의 나는.</h1>
-                    {presenceControls}
                     <ProfileForm
                       key={profileKey}
                       initial={profileDraft ?? state.self}
@@ -1240,6 +1272,7 @@ function App() {
                       onSave={updateProfile}
                       autoSave
                     />
+                    {presenceControls}
                     <BlockedProfiles
                       blocking={state.blocking}
                       disabled={busy || connection !== "online"}
@@ -1249,39 +1282,7 @@ function App() {
                     />
                   </>
                 )}
-                <section
-                  className="invite-card server-panel"
-                  aria-label="서버 설정"
-                >
-                  <h2>함께할 서버</h2>
-                  <p className="hint server-address">
-                    현재 서버: <strong>{session.server}</strong>
-                  </p>
-                  <ServerCheck
-                    key={session.server}
-                    server={session.server}
-                    busy={busy}
-                  />
-                  <p>
-                    현재 프로필을 이 기기에 보관하고 첫 화면으로 돌아갑니다.
-                    다른 서버에서 새로 시작하거나, 보관한 프로필로 다시 돌아올
-                    수 있어요.
-                  </p>
-                  <p className="hint">
-                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다.
-                    이름으로 만든 프로필은 로그인 정보를 잃으면 다시 불러올 수
-                    없어요.
-                  </p>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={switchServer}
-                  >
-                    프로필 보관하고 서버 바꾸기
-                  </button>
-                </section>
                 {desktop && <StartupSettings />}
-                {support}
               </>
             )}
           </div>

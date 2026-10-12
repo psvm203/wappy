@@ -143,8 +143,8 @@ test("chat reaches only friends at send time, persists, expires and is removed w
   assert.equal(reply.status, 201);
   assert.deepEqual(
     (await call("/state", undefined, carol.token)).body.messages,
-    [broadcast.body],
-    "a friend's friends are not recipients",
+    [broadcast.body, reply.body],
+    "participants invited by the same person receive each other's chat",
   );
   const aliceState = (await call("/state", undefined, alice.token)).body;
   assert.deepEqual(

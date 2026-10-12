@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  CHARACTERS,
   CHARACTER_NAMES,
   MAX_NAME_LENGTH,
   parseProfile,
@@ -14,6 +13,35 @@ import {
 } from "@wappy/api";
 import { Character } from "./Character";
 import { errorMessage } from "./api";
+
+const CHARACTER_CATEGORIES = {
+  치이카와: [
+    "chiikawa",
+    "hachiware",
+    "usagi",
+    "momonga",
+    "kurimanju",
+    "rakko",
+    "shisa",
+    "furuhonya",
+  ],
+  산리오: [
+    "pochacco",
+    "badtz-maru",
+    "hangyodon",
+    "pekkle",
+    "tuxedosam",
+    "keroppi",
+  ],
+  어벤져스: [
+    "ironman",
+    "captain-america",
+    "thor",
+    "hulk",
+    "black-widow",
+    "hawkeye",
+  ],
+} satisfies Record<string, ProfileInput["character"][]>;
 
 export function ProfileForm({
   initial,
@@ -118,27 +146,32 @@ export function ProfileForm({
       <fieldset disabled={busy}>
         <legend>나를 닮은 친구를 골라요</legend>
         {beforeProfile}
-        <div className="character-picker">
-          {CHARACTERS.map((kind) => (
-            <label
-              className={`character-option ${profile.character === kind ? "selected" : ""}`}
-              key={kind}
-            >
-              <input
-                type="radio"
-                name="character"
-                aria-label={CHARACTER_NAMES[kind]}
-                value={kind}
-                checked={profile.character === kind}
-                onChange={() =>
-                  changeProfile({ ...draft.current, character: kind })
-                }
-              />
-              <Character kind={kind} />
-              <span>{CHARACTER_NAMES[kind]}</span>
-            </label>
-          ))}
-        </div>
+        {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
+          <section key={category} aria-label={category}>
+            <h2 className="character-category-title">{category}</h2>
+            <div className="character-picker">
+              {characters.map((kind) => (
+                <label
+                  className={`character-option ${profile.character === kind ? "selected" : ""}`}
+                  key={kind}
+                >
+                  <input
+                    type="radio"
+                    name="character"
+                    aria-label={CHARACTER_NAMES[kind]}
+                    value={kind}
+                    checked={profile.character === kind}
+                    onChange={() =>
+                      changeProfile({ ...draft.current, character: kind })
+                    }
+                  />
+                  <Character kind={kind} />
+                  <span>{CHARACTER_NAMES[kind]}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+        ))}
         <label className="field">
           이름
           <input

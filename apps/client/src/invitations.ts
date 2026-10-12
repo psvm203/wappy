@@ -1,5 +1,33 @@
+import type { Invite } from "@wappy/api";
+
 export const WAPPY_SERVER = "https://wappy-api.waps.im";
 const INVITE_CODE = /^(?:[A-HJ-NP-Z2-9]{5}|[a-z0-9_-]{43})$/i;
+
+export function savedInviteKey(
+  server: string,
+  profileId: string,
+  roomId?: string,
+): string {
+  return (
+    "wappy.invite.v1:" + JSON.stringify([serverUrl(server), profileId, roomId])
+  );
+}
+
+export function loadSavedInvite(
+  key: string,
+  storage: Pick<Storage, "getItem"> = localStorage,
+): Invite | null {
+  const code = storage.getItem(key);
+  return code === null ? null : { code: formatInvitation(WAPPY_SERVER, code) };
+}
+
+export function saveInvite(
+  key: string,
+  invite: Invite,
+  storage: Pick<Storage, "setItem"> = localStorage,
+) {
+  storage.setItem(key, formatInvitation(WAPPY_SERVER, invite.code));
+}
 
 export function serverUrl(value: string): string {
   const url = new URL(value);

@@ -4,9 +4,65 @@ import { parseInvitePreview } from "@wappy/api";
 import {
   formatInvitation,
   isLocalServer,
+  loadSavedInvite,
   parseInvitation,
+  savedInviteKey,
+  saveInvite,
   WAPPY_SERVER,
 } from "../src/invitations.ts";
+
+test("saved invitation codes survive reloads and stay scoped to their server, profile and room", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+  };
+  const key = savedInviteKey("https://example.test/", "alice", "room-a");
+  assert.equal(key, savedInviteKey("https://example.test", "alice", "room-a"));
+  assert.equal(loadSavedInvite(key, storage), null);
+  saveInvite(key, { code: "a7k3m" }, storage);
+  assert.deepEqual(loadSavedInvite(key, storage), { code: "A7K3M" });
+  // A new reader only has the persisted storage, as on the next app launch.
+  assert.deepEqual(loadSavedInvite(key, { getItem: storage.getItem }), {
+    code: "A7K3M",
+  });
+  for (const other of [
+    savedInviteKey("https://other.test", "alice", "room-a"),
+    savedInviteKey("https://example.test", "bob", "room-a"),
+    savedInviteKey("https://example.test", "alice", "room-b"),
+    savedInviteKey("https://example.test", "alice"),
+  ])
+    assert.equal(loadSavedInvite(other, storage), null);
+  saveInvite(key, { code: "B8N4P" }, storage);
+  assert.deepEqual(loadSavedInvite(key, storage), { code: "B8N4P" });
+  assert.throws(() => saveInvite(key, { code: "invalid" }, storage));
+  assert.deepEqual(loadSavedInvite(key, storage), { code: "B8N4P" });
+  const legacy = "a_-".repeat(14) + "A";
+  saveInvite(key, { code: legacy }, storage);
+  assert.deepEqual(loadSavedInvite(key, storage), { code: legacy });
+  values.set(key, "damaged");
+  assert.throws(() => loadSavedInvite(key, storage));
+  assert.throws(() =>
+    loadSavedInvite(key, {
+      getItem() {
+        throw new Error("unavailable");
+      },
+    }),
+  );
+  assert.throws(() =>
+    saveInvite(
+      key,
+      { code: "A7K3M" },
+      {
+        setItem() {
+          throw new Error("full");
+        },
+      },
+    ),
+  );
+});
 
 test("invitation previews validate display data and discard private fields", () => {
   const preview = {

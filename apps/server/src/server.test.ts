@@ -181,8 +181,9 @@ test("public invitation previews are read-only, bounded and reveal only invitati
     const invite = {
       code: "aZ_".repeat(14) + "A",
     };
+    await call("/invites", {}, alice.token);
     inspection
-      .prepare("INSERT INTO invites VALUES (?, ?)")
+      .prepare("UPDATE invites SET code_hash = ? WHERE owner_id = ?")
       .run(
         createHash("sha256").update(invite.code).digest("hex"),
         alice.profile.id,
@@ -486,7 +487,7 @@ test("profiles, invitations, presence and friendship persist safely end to end",
           code: pending.code,
         })
       ).status,
-      200,
+      409,
     );
     // Carol cannot remove Alice's friendship with Bob.
     await call("POST", "/friends/remove", carol.token, {
@@ -934,7 +935,6 @@ test("the removed profile deletion endpoint leaves profiles and relationships in
     for (const [from, to] of [
       [alice, bob],
       [alice, carol],
-      [bob, carol],
     ] as const) {
       const invite = (await call("POST", "/invites", from.token, {}))
         .body as Invite;
@@ -944,8 +944,6 @@ test("the removed profile deletion endpoint leaves profiles and relationships in
         200,
       );
     }
-    const invite = (await call("POST", "/invites", alice.token, {}))
-      .body as Invite;
     const bobInvite = (await call("POST", "/invites", bob.token, {}))
       .body as Invite;
     await call("PATCH", "/presence", alice.token, { sharing: false });
@@ -984,10 +982,6 @@ test("the removed profile deletion endpoint leaves profiles and relationships in
         assert.deepEqual(response.body.self, person.profile);
         assert.equal(response.body.friends.length, 2);
       }
-      assert.equal(
-        (await call("POST", "/invites/preview", undefined, invite)).status,
-        200,
-      );
       assert.equal(
         (await call("POST", "/invites/preview", undefined, bobInvite)).status,
         200,

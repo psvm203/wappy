@@ -86,9 +86,15 @@ export interface Profile extends ProfileInput {
 export interface Friend extends Profile {
   online: boolean;
 }
+export interface Room {
+  id: string;
+  name: string;
+}
 export interface SidebarState {
   self: Profile;
   friends: Friend[];
+  /** The profile's current room; absent before joining or on older servers. */
+  room?: Room;
   /** Private to the authenticated profile; absent on servers without this feature. */
   presence?: PresenceSettings;
   /** Absent on servers that do not support chat. */
@@ -322,6 +328,22 @@ export function parseSidebarState(value: unknown): SidebarState {
     ids.add(parsed.id);
     return { ...parsed, online: friend.online };
   });
+  let room: Room | undefined;
+  if (value.room !== undefined) {
+    const input = value.room;
+    if (
+      !isRecord(input) ||
+      typeof input.id !== "string" ||
+      !input.id ||
+      input.id.length > 128 ||
+      typeof input.name !== "string" ||
+      !input.name.trim() ||
+      input.name.length > MAX_NAME_LENGTH + 3 ||
+      /[\u0000-\u001f\u007f]/.test(input.name)
+    )
+      throw new Error("잘못된 방 응답입니다.");
+    room = { id: input.id, name: input.name };
+  }
   let messages: ChatMessage[] | undefined;
   if (value.messages !== undefined) {
     if (
@@ -371,6 +393,7 @@ export function parseSidebarState(value: unknown): SidebarState {
   return {
     self,
     friends,
+    ...(room === undefined ? {} : { room }),
     ...(attacks === undefined ? {} : { attacks }),
     ...(messages === undefined ? {} : { messages }),
     ...(blocking === undefined ? {} : { blocking }),
