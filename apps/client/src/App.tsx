@@ -9,10 +9,7 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   parseSidebarState,
-  parsePresenceSettings,
-  parseProfile,
   parseChatMessage,
-  parseBlockingSettings,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
   type Invite,
@@ -47,24 +44,12 @@ import { ChatBubble } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
 import { latestChat } from "./chat";
 import { useDesktopChatRequests } from "./chat-bridge";
-import { LocalPreview } from "./LocalPreview";
 import { InviteField } from "./InviteField";
-import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
-import { ServerCheck } from "./ServerCheck";
-import { SupportPanel } from "./SupportPanel";
 import { filterFriends, type FriendView } from "./friend-filter";
-import { PresenceControl } from "./PresenceControl";
-import { BlockedProfiles } from "./BlockedProfiles";
-import { applyBlockingSettings, reconcileBlocking } from "./blocking";
+import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
-import {
-  forgetSavedSession,
-  loadSavedSessions,
-  saveSession,
-  type SavedProfile,
-  type SavedSession,
-} from "./sessions";
+import { saveSession, type SavedSession } from "./sessions";
 import {
   formatInvitation,
   isLocalServer,
@@ -88,12 +73,9 @@ function App() {
   const currentSession = useRef(session);
   const profileSave = useRef<Promise<void>>(Promise.resolve());
   const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
-  const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join">("create");
   const [state, setState] = useState<SidebarState | null>(null);
-  const [localPreview, setLocalPreview] = useState<SidebarState | null>(null);
-  const previewStart = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
     "friends",
   );
@@ -105,9 +87,6 @@ function App() {
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
   const [busy, setBusy] = useState(false);
-  const [presenceStatus, setPresenceStatus] = useState<
-    "ready" | "pending" | "unknown"
-  >("ready");
   const [error, setError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
@@ -137,7 +116,7 @@ function App() {
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
-    state: session ? (selection.ready ? state : null) : localPreview,
+    state: session && selection.ready ? state : null,
     profileKey,
     connected: !!session && connection === "online",
     paused: motionPaused,
@@ -188,8 +167,6 @@ function App() {
     currentSession.current = next;
     setSession(next);
     setProfileDraft(null);
-    setLocalPreview(null);
-    setPresenceStatus("ready");
     setVerifiedInvitation("");
     setFriendView("all");
     setChatTarget(null);
@@ -252,45 +229,6 @@ function App() {
     );
   }
 
-  async function unblockFriend(friendId: string) {
-    if (!session || connection !== "online" || state?.blocking === undefined)
-      throw new ApiError(
-        503,
-        "차단 기능을 지원하는 서버에 연결된 뒤 다시 시도해 주세요.",
-      );
-    const active = session;
-    const result = parseBlockingSettings(
-      await request(active, "POST /friends/unblock", { friendId }),
-    );
-    if (
-      result.profiles.some((profile) => profile.id === state.self.id) ||
-      result.profiles.some((profile) => profile.id === friendId)
-    )
-      throw new ApiError(
-        502,
-        "차단 변경 결과를 확인하지 못했어요. 차단 목록을 다시 확인해 주세요.",
-      );
-    if (currentSession.current !== active) return;
-    setState((current) =>
-      current ? applyBlockingSettings(current, result) : current,
-    );
-    setRemoving(null);
-    setNotice("차단을 해제했어요. 다시 함께하려면 초대로 연결해 주세요.");
-  }
-
-  function previewLocally(profile: ProfileInput) {
-    if (session) return;
-    try {
-      setLocalPreview({
-        self: { ...parseProfile(profile), id: "local-preview" },
-        friends: [],
-      });
-      setError("");
-    } catch (cause) {
-      setError((cause as Error).message);
-    }
-  }
-
   useEffect(() => {
     if (!session) return;
     return subscribeState(session, (update) => {
@@ -346,47 +284,6 @@ function App() {
     }
   }
 
-  function changePresence(sharing: boolean) {
-    if (!session) return;
-    void action(async () => {
-      setPresenceStatus("pending");
-      try {
-        const presence = parsePresenceSettings(
-          await request(session, "PATCH /presence", { sharing }),
-        );
-        setState((current) =>
-          current
-            ? reconcilePresence(current, { ...current, presence })
-            : current,
-        );
-        setPresenceStatus("ready");
-      } catch (cause) {
-        // A lost response can still mean the server applied the change.
-        setPresenceStatus("unknown");
-        try {
-          const next = await refresh();
-          if (next?.presence) setPresenceStatus("ready");
-        } catch {
-          /* Keep the status unknown until an explicit retry succeeds. */
-        }
-        throw cause;
-      }
-    });
-  }
-
-  function retryPresence() {
-    void action(async () => {
-      setPresenceStatus("pending");
-      try {
-        const next = await refresh();
-        setPresenceStatus(next?.presence ? "ready" : "unknown");
-      } catch (cause) {
-        setPresenceStatus("unknown");
-        throw cause;
-      }
-    });
-  }
-
   function connectSession(address: string, created: Session) {
     const saved = { server: address, token: created.token };
     changeSession(saved);
@@ -399,7 +296,6 @@ function App() {
     setConnection("online");
     try {
       saveSession({ ...saved, profile: created.profile });
-      setSavedSessions(loadSavedSessions());
     } catch {
       setError(
         "프로필을 기기에 저장하지 못했습니다. 앱을 닫으면 로그인 정보가 사라질 수 있어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
@@ -418,20 +314,6 @@ function App() {
     setPanel("friends");
     setNotice("");
     setError("");
-  }
-
-  function selectSavedSession(saved: SavedProfile) {
-    if (busy) return;
-    try {
-      saveSession(saved);
-      showOnboarding();
-      setServer(saved.server);
-      changeSession({ server: saved.server, token: saved.token });
-    } catch {
-      setError(
-        "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
-      );
-    }
   }
 
   function selectedServer() {
@@ -620,36 +502,13 @@ function App() {
   }
   const presenceHidden =
     connection === "online" &&
-    presenceStatus === "ready" &&
     state?.presence?.sharing === false;
-  const presenceControls = (
-    <PresenceControl
-      setting={state?.presence}
-      connected={connection === "online"}
-      busy={busy}
-      pending={presenceStatus === "pending"}
-      unknown={presenceStatus === "unknown"}
-      onChange={changePresence}
-      onRetry={retryPresence}
-    />
-  );
-
   const desktopControls = (
     <DesktopControls
       desktop={desktop}
       compact={compact}
       preferences={preferences}
       onChange={setPreferences}
-    />
-  );
-
-  const support = (
-    <SupportPanel
-      desktop={desktop}
-      connection={localPreview ? "preview" : session ? connection : "none"}
-      server={localPreview ? null : (session?.server ?? server)}
-      paused={motionPaused}
-      visible={charactersVisible}
     />
   );
 
@@ -673,7 +532,7 @@ function App() {
           <span className="wordmark">w.</span>
           <Character kind={state.self.character} />
           <span
-            className={`online-dot ${connection !== "online" || presenceHidden || presenceStatus !== "ready" ? "offline" : ""}`}
+            className={`online-dot ${connection !== "online" || presenceHidden ? "offline" : ""}`}
           />
           <span className="compact-count">{onlineCount}</span>
           {presenceHidden && (
@@ -752,20 +611,7 @@ function App() {
         )}
       </header>
 
-      {!session && localPreview ? (
-        <LocalPreview
-          profile={localPreview.self}
-          support={support}
-          controls={desktopControls}
-          error={error || desktopError}
-          onChange={previewLocally}
-          onExit={() => {
-            setLocalPreview(null);
-            setError("");
-            requestAnimationFrame(() => previewStart.current?.focus());
-          }}
-        />
-      ) : !session ? (
+      {!session ? (
         <div className="onboarding scroll-area">
           <div className="intro-art">
             <Character kind="chiikawa" />
@@ -774,33 +620,6 @@ function App() {
               ✧
             </span>
           </div>
-          <p className="eyebrow">A LITTLE CLOSER</p>
-          <h1>
-            각자의 화면에서,
-            <br />
-            조금 더 가까이.
-          </h1>
-          <p className="intro-copy">
-            친구들의 작은 존재감을
-            <br />내 화면 한쪽에 놓아두세요.
-          </p>
-          {desktop && (
-            <div className="local-preview-entry">
-              <button
-                ref={previewStart}
-                className="secondary"
-                disabled={busy}
-                onClick={() =>
-                  previewLocally({ ...emptyProfile, name: "체험 캐릭터" })
-                }
-              >
-                서버 없이 체험하기
-              </button>
-              <p className="hint">
-                프로필을 만들기 전에 바탕화면에서 함께 걸어봐요.
-              </p>
-            </div>
-          )}
           <nav className="onboarding-tabs" aria-label="시작 방법">
             {(
               [
@@ -823,21 +642,6 @@ function App() {
               </button>
             ))}
           </nav>
-          <SavedProfiles
-            sessions={savedSessions}
-            busy={busy}
-            onSelect={selectSavedSession}
-            onForget={(saved) => {
-              try {
-                setSavedSessions(forgetSavedSession(saved));
-                setError("");
-              } catch {
-                setError(
-                  "보관한 프로필을 지우지 못했습니다. 다시 시도해 주세요.",
-                );
-              }
-            }}
-          />
           <ProfileForm
             initial={emptyProfile}
             busy={busy}
@@ -866,45 +670,24 @@ function App() {
                 />
               )
             }
-          >
-            <details className="server-settings">
-              <summary>연결할 서버</summary>
-              <label className="field">
-                서버 주소
-                <input
-                  type="url"
-                  required
-                  value={server}
-                  onChange={(event) => setServer(event.target.value)}
-                />
-              </label>
-              <p className="hint">
-                기본 서버에서는 초대 코드만 입력하면 돼요. 별도 서버를 사용하는
-                경우에만 주소를 바꿔 주세요.
-              </p>
-              <ServerCheck key={server} server={server} busy={busy} />
-            </details>
-          </ProfileForm>
+          />
           {error && (
             <p className="error" role="alert">
               {error}
             </p>
           )}
           {desktop && <StartupSettings />}
-          {support}
         </div>
       ) : (
         <>
           <div className="connection-line">
             <span
-              className={`online-dot ${connection !== "online" || presenceHidden || presenceStatus !== "ready" ? "offline" : ""}`}
+              className={`online-dot ${connection !== "online" || presenceHidden ? "offline" : ""}`}
             />
             {connection === "online"
-              ? presenceStatus !== "ready"
-                ? "접속 공개 상태 확인 필요"
-                : presenceHidden
-                  ? "접속 숨김 · 친구에게 오프라인으로 표시"
-                  : "우리의 작은 아지트"
+              ? presenceHidden
+                ? "접속 숨김 · 친구에게 오프라인으로 표시"
+                : "우리의 작은 아지트"
               : connection === "connecting"
                 ? "아지트에 들어가는 중…"
                 : connection === "unauthorized"
@@ -935,7 +718,7 @@ function App() {
               <details>
                 <summary>이 기기에서 다시 시작하기</summary>
                 <p>
-                  보관한 다른 프로필을 선택하거나 새 프로필로 시작할 수 있어요.
+                  새 프로필로 시작할 수 있어요.
                   유효한 로그인 정보가 없으면 기존 프로필로 돌아올 수 없어요.
                 </p>
                 <button
@@ -1114,9 +897,6 @@ function App() {
             {state && panel === "invite" && (
               <div className="invite-panel">
                 <section className="invite-card">
-                  <span className="invite-symbol" aria-hidden="true">
-                    ↗
-                  </span>
                   <h2>방 초대 코드</h2>
                   {state.room && (
                     <p>
@@ -1125,8 +905,6 @@ function App() {
                   )}
                   <p>
                     참여자 누구나 같은 방으로 초대할 수 있어요.
-                    <br />
-                    인원과 기간 제한 없이 사용할 수 있어요.
                     <br />새 코드를 만들면 이 방의 이전 코드는 사용할 수 없어요.
                   </p>
                   {invite && (
@@ -1248,25 +1026,13 @@ function App() {
             {panel === "profile" && (
               <>
                 {state && (
-                  <>
-                    <p className="eyebrow">THIS IS ME</p>
-                    <h1 className="profile-title">오늘의 나는.</h1>
-                    <ProfileForm
-                      key={profileKey}
-                      initial={profileDraft ?? state.self}
-                      busy={busy}
-                      onSave={updateProfile}
-                      autoSave
-                    />
-                    {presenceControls}
-                    <BlockedProfiles
-                      blocking={state.blocking}
-                      disabled={busy || connection !== "online"}
-                      onUnblock={(id) =>
-                        void action(() => unblockFriend(id))
-                      }
-                    />
-                  </>
+                  <ProfileForm
+                    key={profileKey}
+                    initial={profileDraft ?? state.self}
+                    busy={busy}
+                    onSave={updateProfile}
+                    autoSave
+                  />
                 )}
                 {desktop && <StartupSettings />}
               </>
