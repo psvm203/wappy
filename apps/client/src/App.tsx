@@ -30,12 +30,14 @@ import {
   request,
   serverUrl,
 } from "./api";
+import { FriendCard } from "./FriendCard";
 import { Character } from "./Character";
 import {
   useCharacterPreferences,
   useDesktopSync,
   useResidentSelection,
 } from "./desktop";
+import { DesktopControls } from "./DesktopControls";
 import { ResidentSelection } from "./ResidentSelection";
 import { residentSelectionKey } from "./resident-selection";
 import { ProfileForm } from "./ProfileForm";
@@ -591,63 +593,13 @@ function App() {
   );
 
   const desktopControls = (
-    <section className="desktop-controls" aria-label="바탕화면 캐릭터 설정">
-      <p>
-        {desktop
-          ? motionPaused
-            ? "캐릭터가 쉬고 있어요. ‘다시 걷기’로 자동 이동을 시작하세요."
-            : "가장자리를 따라 걷는 캐릭터를 잡아서 던져보세요."
-          : "데스크톱 앱에서 바탕화면 산책을 시작하세요."}
-      </p>
-      <div>
-        <button
-          className="text-button"
-          disabled={!desktop}
-          onClick={() =>
-            setPreferences((current) => ({
-              ...current,
-              paused: !current.paused,
-            }))
-          }
-          aria-label={
-            motionPaused ? "캐릭터 움직임 다시 시작" : "캐릭터 움직임 멈추기"
-          }
-          aria-pressed={motionPaused}
-        >
-          {compact
-            ? motionPaused
-              ? "▶"
-              : "Ⅱ"
-            : motionPaused
-              ? "다시 걷기"
-              : "잠깐 쉬기"}
-        </button>
-        <button
-          className="text-button"
-          disabled={!desktop}
-          onClick={() =>
-            setPreferences((current) => ({
-              ...current,
-              visible: !current.visible,
-            }))
-          }
-          aria-label={
-            charactersVisible
-              ? "바탕화면 캐릭터 숨기기"
-              : "바탕화면 캐릭터 표시"
-          }
-          aria-pressed={charactersVisible}
-        >
-          {compact
-            ? charactersVisible
-              ? "◉"
-              : "○"
-            : charactersVisible
-              ? "캐릭터 숨기기"
-              : "캐릭터 표시"}
-        </button>
-      </div>
-      {desktop && state && !compact && (
+    <DesktopControls
+      desktop={desktop}
+      compact={compact}
+      preferences={preferences}
+      onChange={setPreferences}
+    >
+      {state && (
         <ResidentSelection
           state={state}
           hiddenIds={selection.hiddenIds}
@@ -656,13 +608,7 @@ function App() {
           onChange={selection.setHiddenIds}
         />
       )}
-      {desktop && (
-        <p className="hint">
-          닫아도 캐릭터는 남아요. 메뉴 막대·트레이에서 다시 열거나 종료할 수
-          있어요.
-        </p>
-      )}
-    </section>
+    </DesktopControls>
   );
 
   const support = (
@@ -1151,143 +1097,41 @@ function App() {
                 ) : (
                   <ul className="friend-list">
                     {listedFriends.map((friend) => (
-                      <li
-                        id={`friend-${friend.id}`}
-                        tabIndex={-1}
-                        aria-label={`${friend.name} 님의 친구 카드`}
-                        className={`friend-card ${friend.online && connection === "online" ? "is-online" : ""}`}
+                      <FriendCard
                         key={friend.id}
-                      >
-                        <div className="friend-scene">
-                          <Character
-                            kind={friend.character}
-                            asleep={!friend.online || connection !== "online"}
-                          />
-                          <div className="scene-floor" />
-                        </div>
-                        <div className="friend-info">
-                          <div className="friend-name">
-                            <strong>{friend.name}</strong>
-                            <span
-                              className={`online-dot ${!friend.online || connection !== "online" ? "offline" : ""}`}
-                            />
-                          </div>
-                          <ChatBubble
-                            message={latestChat(state.messages, friend.id)}
-                          />
-                          <small>
-                            {connection !== "online"
-                              ? "접속 상태 확인 중"
-                              : friend.online
-                                ? "지금 함께 있어요"
-                                : "잠시 쉬고 있어요"}
-                          </small>
-                          <button
-                            type="button"
-                            className="text-button danger"
-                            id={`block-friend-${friend.id}`}
-                            aria-label={`${friend.name} 님 차단하기`}
-                            disabled={
-                              busy ||
-                              connection !== "online" ||
-                              state.blocking === undefined
-                            }
-                            onClick={() => {
-                              setBlockingFriend(friend.id);
-                              setRemoving(null);
-                            }}
-                          >
-                            차단하기
-                          </button>
-                        </div>
-                        <button
-                          className="remove-button"
-                          aria-label={`${friend.name} 친구 연결 해제`}
-                          title="친구 연결 해제"
-                          onClick={() => {
-                            setBlockingFriend(null);
-                            setRemoving(
-                              removing === friend.id ? null : friend.id,
-                            );
-                          }}
-                        >
-                          ×
-                        </button>
-                        {removing === friend.id && (
-                          <div className="remove-confirm">
-                            <p>{friend.name} 님과 연결을 해제할까요?</p>
-                            <button
-                              className="text-button"
-                              onClick={() => setRemoving(null)}
-                            >
-                              취소
-                            </button>
-                            <button
-                              className="text-button danger"
-                              disabled={busy}
-                              onClick={() =>
-                                void action(async () => {
-                                  await request(
-                                    session,
-                                    "POST /friends/remove",
-                                    { friendId: friend.id },
-                                  );
-                                  setRemoving(null);
-                                  await refresh();
-                                })
-                              }
-                            >
-                              연결 해제
-                            </button>
-                          </div>
-                        )}
-                        {blockingFriend === friend.id && (
-                          <div
-                            className="block-confirm"
-                            role="group"
-                            aria-label={`${friend.name} 님 차단 확인`}
-                          >
-                            <p>
-                              <strong>{friend.name} 님을 차단할까요?</strong>
-                            </p>
-                            <p>
-                              친구 연결을 삭제하고, 초대로 다시 연결되는 것도
-                              막아요. 차단 해제는 내 모습에서 할 수 있어요.
-                            </p>
-                            <div>
-                              <button
-                                type="button"
-                                className="text-button"
-                                disabled={busy}
-                                autoFocus
-                                onClick={() => {
-                                  setBlockingFriend(null);
-                                  document
-                                    .getElementById(`block-friend-${friend.id}`)
-                                    ?.focus();
-                                }}
-                              >
-                                취소
-                              </button>
-                              <button
-                                type="button"
-                                className="text-button danger"
-                                disabled={busy || connection !== "online"}
-                                onClick={() => {
-                                  document
-                                    .getElementById("sidebar-tab-friends")
-                                    ?.focus();
-                                  void action(() =>
-                                    changeBlocking(friend.id, true),
-                                  );
-                                }}
-                              >
-                                친구 차단
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </li>
+                        friend={friend}
+                        connected={connection === "online"}
+                        message={latestChat(state.messages, friend.id)}
+                        busy={busy}
+                        blockingSupported={state.blocking !== undefined}
+                        confirmation={
+                          removing === friend.id
+                            ? "remove"
+                            : blockingFriend === friend.id
+                              ? "block"
+                              : null
+                        }
+                        onConfirmationChange={(confirmation) => {
+                          setRemoving(
+                            confirmation === "remove" ? friend.id : null,
+                          );
+                          setBlockingFriend(
+                            confirmation === "block" ? friend.id : null,
+                          );
+                        }}
+                        onRemove={() =>
+                          void action(async () => {
+                            await request(session, "POST /friends/remove", {
+                              friendId: friend.id,
+                            });
+                            setRemoving(null);
+                            await refresh();
+                          })
+                        }
+                        onBlock={() =>
+                          void action(() => changeBlocking(friend.id, true))
+                        }
+                      />
                     ))}
                   </ul>
                 )}
