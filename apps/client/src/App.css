@@ -329,30 +329,6 @@
   font-size: 15px;
   opacity: 0;
 }
-.blocked-profiles {
-  padding: 0;
-  list-style: none;
-}
-.blocked-profiles li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-.blocked-profiles .character {
-  width: 30px;
-  height: 34px;
-  flex-shrink: 0;
-}
-.blocked-profiles strong {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-}
-.blocked-profiles button {
-  flex-shrink: 0;
-}
 .friend-card:hover .remove-button,
 .remove-button:focus-visible {
   opacity: 1;
@@ -429,13 +405,6 @@
   color: #71815e;
   border-radius: 4px;
 }
-.eyebrow {
-  color: #68745e;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  margin: 0 0 12px;
-}
 .muted {
   font-size: 11px;
   color: #68745e;
@@ -503,25 +472,6 @@
   font-size: 35px;
   color: #9bab73;
 }
-.onboarding > .eyebrow,
-.onboarding > h1,
-.intro-copy {
-  text-align: center;
-}
-.onboarding h1 {
-  font-size: 27px;
-  line-height: 1.35;
-  letter-spacing: -1.3px;
-}
-.intro-copy {
-  font-size: 12px;
-  color: #68745e;
-  line-height: 1.8;
-  margin: 12px 0 25px;
-}
-.profile-title {
-  margin-bottom: 25px;
-}
 .profile-form fieldset {
   padding: 0;
   margin: 0;
@@ -533,7 +483,7 @@
   color: #68745e;
   margin-bottom: 10px;
 }
-.profile-title + .profile-form legend {
+.content > .profile-form legend {
   font-size: 20px;
   font-weight: 700;
   color: #000;
@@ -627,14 +577,6 @@
   gap: 15px;
   margin-bottom: 24px;
 }
-.local-preview-entry {
-  margin-bottom: 24px;
-  text-align: center;
-}
-.local-preview .desktop-controls {
-  margin-top: 20px;
-  margin-bottom: 24px;
-}
 .onboarding-tabs [aria-current="page"] {
   color: #374936;
   border-bottom: 2px solid #678b57;
@@ -662,49 +604,11 @@
   height: 16px;
   accent-color: #678b57;
 }
-.presence-controls {
-  padding: 12px;
-  margin-bottom: 18px;
-  border: 1px solid #dce3d2;
-  border-radius: 12px;
-}
-.presence-controls .setting-toggle {
-  margin-top: 0;
-  min-height: 32px;
-}
-.presence-controls .hint {
-  margin: 6px 0 0;
-}
-.presence-controls .text-button {
-  margin-top: 8px;
-}
 .compact-presence {
   display: block;
   font-size: 9px;
   margin-top: 5px;
   color: #68745e;
-}
-.saved-profiles {
-  margin: 0 0 26px;
-}
-.saved-profiles h2 {
-  font-size: 14px;
-}
-.saved-profiles ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.saved-profiles li {
-  margin-top: 10px;
-  padding: 12px;
-  border: 1px solid #e0e5d8;
-  border-radius: 10px;
-  overflow-wrap: anywhere;
-}
-.saved-profiles li > .text-button {
-  display: block;
-  margin: 10px auto 0;
 }
 .field input::placeholder {
   color: #68745e;
@@ -752,40 +656,6 @@
 .danger {
   color: #ab5555;
 }
-.server-settings {
-  margin: 10px 0 18px;
-  font-size: 10px;
-  color: #68745e;
-}
-.server-settings summary {
-  cursor: pointer;
-  padding: 5px 0;
-}
-.server-check {
-  margin: 12px 0;
-}
-.support-panel {
-  margin-top: 20px;
-  text-align: left;
-}
-.support-panel summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-}
-.support-panel h2 {
-  margin-top: 20px;
-}
-.support-panel textarea {
-  font-size: 11px;
-  line-height: 1.8;
-}
-.support-link {
-  display: block;
-  margin: 12px 0 18px;
-  color: #52683d;
-  font-size: 12px;
-}
 .hint {
   font-size: 10px;
   color: #68745e;
@@ -796,12 +666,6 @@
   border: 1px solid #e5e9db;
   border-radius: 15px;
   padding: 20px 16px 13px;
-}
-.invite-symbol {
-  font-size: 30px;
-  color: #91a474;
-  display: block;
-  margin-bottom: 16px;
 }
 .invite-card h2,
 .accept-form h2 {
@@ -977,11 +841,5 @@
   }
   .intro-art .character {
     width: 65px;
-  }
-  .onboarding h1 {
-    font-size: 24px;
-  }
-  .intro-copy {
-    margin-bottom: 16px;
   }
 }

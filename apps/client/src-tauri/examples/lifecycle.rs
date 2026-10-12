@@ -306,35 +306,7 @@ fn main() -> Result<(), String> {
             let desktop = handle
                 .get_webview_window("desktop")
                 .ok_or("Missing character window")?;
-            println!("CHECK: support diagnostics and restricted browser permissions");
-            sidebar.eval(r#"
-                document.querySelector('.support-panel').open = true;
-                window.__originalClipboard = navigator.clipboard;
-                Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
-                    writeText: async value => {
-                        const displayed = document.querySelector('.support-panel textarea').value;
-                        document.body.dataset.supportCopied = String(value === displayed && value.startsWith('Wappy 문제 확인 정보'));
-                    }
-                }});
-            "#).map_err(|error| error.to_string())?;
-            text_rendered(
-                &sidebar,
-                ".support-panel textarea",
-                &format!("앱 버전: {}", handle.package_info().version),
-                true,
-            )?;
-            if let Ok(build) = std::env::var("VITE_BUILD_ID") {
-                if build.len() == 40 && build.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                    text_rendered(
-                        &sidebar,
-                        ".support-panel textarea",
-                        &format!("빌드: {}", &build[..12]),
-                        true,
-                    )?;
-                }
-            }
-            click_button(&sidebar, "문제 확인 정보 복사")?;
-            text_rendered(&sidebar, "body[data-support-copied='true']", "", true)?;
+            println!("CHECK: restricted browser permissions");
             for window in [&sidebar, &desktop] {
                 let requests = if window.label() == "main" {
                     serde_json::json!([
@@ -359,9 +331,6 @@ fn main() -> Result<(), String> {
                     .map_err(|error| error.to_string())?;
                 text_rendered(window, "body[data-support-scope-denied='true']", "", true)?;
             }
-            sidebar
-                .eval("document.querySelector('.support-panel').open = false; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: window.__originalClipboard }); delete window.__originalClipboard;")
-                .map_err(|error| error.to_string())?;
             let autostart = std::env::args().any(|arg| arg == "--autostart");
             if sidebar.is_visible().unwrap_or(false) == autostart {
                 return Err("Initial sidebar visibility did not match the launch mode".into());
@@ -379,101 +348,6 @@ fn main() -> Result<(), String> {
             // Wait for readback to re-enable the checkbox before toggling off.
             click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
             until(|| startup.0.is_enabled().is_ok_and(|enabled| !enabled))?;
-            println!("CHECK: local preview without a session or server requests");
-            let (server, requests) = presence_server()?;
-            let preview_server =
-                serde_json::to_string(&server).map_err(|error| error.to_string())?;
-            sidebar.eval(format!(r#"(() => {{
-                const input = document.querySelector('.server-settings input[type="url"]');
-                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, {preview_server});
-                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            }})()"#)).map_err(|error| error.to_string())?;
-            click_button(&sidebar, "서버 없이 체험하기")?;
-            let preview = snapshot(&received, |value| {
-                value["state"]["self"]["id"] == "local-preview"
-            })
-            .map_err(|error| format!("Local preview did not start: {error}"))?;
-            if preview["connected"] != false
-                || preview["profileKey"] != serde_json::Value::Null
-                || preview["paused"] != initial["paused"]
-                || preview["visible"] != initial["visible"]
-                || preview["state"]["friends"] != serde_json::json!([])
-            {
-                return Err(
-                    "Local preview changed global preferences or claimed a server connection"
-                        .into(),
-                );
-            }
-            text_rendered(&desktop, ".resident-name", "체험 캐릭터", true)?;
-            sidebar.close().map_err(|error| error.to_string())?;
-            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
-            text_rendered(&desktop, ".resident-name", "체험 캐릭터", true)?;
-            client_lib::show_sidebar(&handle).map_err(|error| error.to_string())?;
-            click_button(&sidebar, "가르마")?;
-            click_button(&sidebar, "체험 모습 바꾸기")?;
-            snapshot(&received, |value| {
-                value["state"]["self"]["character"] == "hachiware"
-            })
-            .map_err(|error| format!("Local preview appearance did not change: {error}"))?;
-            text_rendered(
-                &desktop,
-                ".desktop-resident svg[aria-label='가르마 캐릭터']",
-                "",
-                true,
-            )?;
-            sidebar
-                .eval(
-                    r#"document.body.dataset.previewCredentialsSafe = String(
-                localStorage.getItem('wappy.session.v1') === null &&
-                localStorage.getItem('wappy.saved-sessions.v1') === null &&
-                !Object.keys(localStorage).some(key => key.startsWith('wappy.residents.v1:'))
-            );"#,
-                )
-                .map_err(|error| error.to_string())?;
-            text_rendered(
-                &sidebar,
-                "body[data-preview-credentials-safe='true']",
-                "",
-                true,
-            )?;
-            if requests.recv_timeout(Duration::from_millis(300)).is_ok() {
-                return Err("Local preview contacted the configured server".into());
-            }
-            click_button(&sidebar, "체험 끝내고 시작하기")?;
-            snapshot(&received, |value| value["state"] == serde_json::Value::Null)
-                .map_err(|error| format!("Local preview did not stop: {error}"))?;
-            text_rendered(&desktop, ".desktop-resident", "", false)?;
-            println!("CHECK: public server connection check without profile credentials");
-            sidebar
-                .eval("document.querySelector('.server-settings').open = true;")
-                .map_err(|error| error.to_string())?;
-            click_button(&sidebar, "서버 연결 확인")?;
-            let health = requests
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|error| format!("Server check was not sent: {error}"))?;
-            if !health.starts_with("GET /health ")
-                || health.to_ascii_lowercase().contains("authorization:")
-                || health.to_ascii_lowercase().contains("cookie:")
-            {
-                return Err("Server check sent an unexpected request or credentials".into());
-            }
-            text_rendered(&sidebar, ".server-check", "서버 응답을 확인했어요", true)?;
-            text_rendered(&desktop, ".desktop-resident", "", false)?;
-            click_button(&sidebar, "서버 없이 체험하기")?;
-            snapshot(&received, |value| {
-                value["state"]["self"]["id"] == "local-preview"
-            })
-            .map_err(|error| format!("Local preview did not restart: {error}"))?;
-            sidebar
-                .eval("location.reload();")
-                .map_err(|error| error.to_string())?;
-            snapshot(&received, |value| value["state"] == serde_json::Value::Null)
-                .map_err(|error| format!("Local preview survived reload: {error}"))?;
-            text_rendered(&desktop, ".desktop-resident", "", false)?;
-            text_rendered(&sidebar, ".local-preview", "", false)?;
-            if startup.0.is_enabled().map_err(|error| error.to_string())? {
-                return Err("Local preview enabled login startup".into());
-            }
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             if handle.get_webview_window("main").is_none() || !desktop.is_visible().unwrap_or(false)
@@ -500,6 +374,7 @@ fn main() -> Result<(), String> {
             // The real sidebar is hidden and all WebView timers are disabled.
             // Presence must still poll, report a failure and reconnect using native time.
             println!("CHECK: hidden background connection and reconnect");
+            let (server, requests) = presence_server()?;
             let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
                 .map_err(|error| error.to_string())?;
@@ -562,8 +437,8 @@ fn main() -> Result<(), String> {
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             text_rendered(
                 &sidebar,
-                ".presence-controls [role='status']",
-                "친구에게 오프라인으로 보여요.",
+                ".connection-line",
+                "접속 숨김 · 친구에게 오프라인으로 표시",
                 true,
             )?;
             if sidebar.is_visible().unwrap_or(true) {
@@ -596,32 +471,9 @@ fn main() -> Result<(), String> {
             )?;
             click_button(&sidebar, "내 캐릭터만")?;
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
-            // Exercise the real UI handlers without relying on WebView timers.
-            println!("CHECK: profile switching and session cleanup");
-            click_button(&sidebar, "내 모습")?;
-            click_button(&sidebar, "프로필 보관하고 서버 바꾸기")?;
-            snapshot(&received, |value| value["state"].is_null())?;
-            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
-            // Requests made before the profile switch are not evidence of continued polling.
+            println!("CHECK: session cleanup");
+            // Drain earlier requests before checking that session removal stops polling.
             while requests.try_recv().is_ok() {}
-            if !matches!(
-                requests.recv_timeout(Duration::from_secs(6)),
-                Err(mpsc::RecvTimeoutError::Timeout)
-            ) {
-                return Err("A saved profile kept polling after switching to onboarding".into());
-            }
-            click_button(&sidebar, &format!("Presence · {server} 프로필로 돌아가기"))?;
-            snapshot(&received, |value| {
-                value["state"]["self"]["id"] == "presence-check" && value["connected"] == true
-            })?;
-            let request = requests
-                .recv_timeout(Duration::from_secs(1))
-                .map_err(|error| error.to_string())?;
-            if !request.contains(&format!("Bearer {}", "a".repeat(43))) {
-                return Err("Returning to a saved profile lost its credential".into());
-            }
-            text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
-            text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             sidebar
                 .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
                 .map_err(|error| error.to_string())?;
@@ -652,7 +504,7 @@ fn main() -> Result<(), String> {
         let outcome = check();
         let exit_code = i32::from(outcome.is_err());
         match outcome {
-            Ok(()) => println!("PASS: local preview without accounts/network, appearance changes, exit/reload cleanup, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, saved profiles, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(()) => println!("PASS: restricted browser permissions, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, character selection, session cleanup, normal relaunch and minimized restore; requesting full exit"),
             Err(error) => eprintln!("FAIL: {error}"),
         }
         completed_by_worker.store(true, Ordering::SeqCst);
