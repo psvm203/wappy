@@ -7,22 +7,19 @@ test("friend search combines literal words and live filters without changing sha
   const friends: Friend[] = [
     {
       id: "one",
-      name: "Ａlice",
-      status: "책 읽는 중",
+      name: "Ａlice 책",
       character: "hachiware",
       online: false,
     },
     {
       id: "two",
       name: "가을",
-      status: "Coffee time",
       character: "usagi",
       online: true,
     },
     {
       id: "three",
-      name: "[Bob]",
-      status: "함께 .*",
+      name: "[Bob] .*",
       character: "shisa",
       online: true,
     },
@@ -36,7 +33,7 @@ test("friend search combines literal words and live filters without changing sha
     ids(filterFriends(friends, "가을".normalize("NFD"), "all", true)),
     ["two"],
   );
-  assert.deepEqual(ids(filterFriends(friends, "COFFEE", "online", true)), [
+  assert.deepEqual(ids(filterFriends(friends, "가을", "online", true)), [
     "two",
   ]);
   assert.deepEqual(ids(filterFriends(friends, ".* [", "all", true)), ["three"]);
@@ -44,6 +41,12 @@ test("friend search combines literal words and live filters without changing sha
     ids(filterFriends(friends, "one", "all", true)),
     [],
     "IDs are not searchable profile text",
+  );
+  const legacyFriend = { ...friends[0]!, status: "legacy message" };
+  assert.deepEqual(
+    filterFriends([legacyFriend], "legacy", "all", true),
+    [],
+    "legacy status messages are not searchable",
   );
   assert.deepEqual(ids(filterFriends(friends, "alice", "online", true)), []);
   assert.deepEqual(

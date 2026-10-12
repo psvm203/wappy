@@ -15,7 +15,6 @@ test("chat validates text, audience, ordering and history bounds at the server b
     id: "alice",
     name: "Alice",
     character: "hachiware",
-    status: "",
   };
   const friend = { ...self, id: "bob", online: false };
   const message = {

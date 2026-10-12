@@ -8,123 +8,10 @@ import {
   saveSession,
   parkSession,
   forgetSavedSession,
-  forgetDeletedProfile,
   type SavedProfile,
 } from "../src/sessions.ts";
-import { residentSelectionKey } from "../src/resident-selection.ts";
 
-test("confirmed profile deletion removes only that identity and reports partial storage failures", () => {
-  const values = new Map<string, string>();
-  let fail = "";
-  const storage = {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      if (key === fail) throw new Error("Storage unavailable");
-      values.set(key, value);
-    },
-    removeItem: (key: string) => {
-      if (key === fail) throw new Error("Storage unavailable");
-      values.delete(key);
-    },
-  };
-  const deleted = {
-    server: "https://one.test",
-    token: "a".repeat(43),
-    profile: {
-      id: "alice",
-      name: "Alice",
-      character: "hachiware" as const,
-      status: "",
-    },
-  };
-  const old = { ...deleted, token: "b".repeat(43) };
-  const bob = {
-    ...deleted,
-    token: "c".repeat(43),
-    profile: { ...deleted.profile, id: "bob" },
-  };
-  const elsewhere = { ...deleted, server: "https://two.test" };
-  const selectionKey = residentSelectionKey(deleted.server, deleted.profile.id);
-  function seed() {
-    fail = "";
-    values.clear();
-    storage.setItem(SESSION_KEY, JSON.stringify(deleted));
-    storage.setItem(
-      SAVED_SESSIONS_KEY,
-      JSON.stringify([old, deleted, bob, elsewhere]),
-    );
-    storage.setItem(selectionKey, '["bob"]');
-    storage.setItem(
-      residentSelectionKey(elsewhere.server, elsewhere.profile.id),
-      '["other"]',
-    );
-    storage.setItem("wappy.desktop.v1", "unchanged");
-  }
-  seed();
-  assert.equal(forgetDeletedProfile(deleted, storage), true);
-  assert.equal(loadSession(storage), null);
-  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere]);
-  assert.equal(storage.getItem(selectionKey), null);
-  assert.equal(
-    storage.getItem(
-      residentSelectionKey(elsewhere.server, elsewhere.profile.id),
-    ),
-    '["other"]',
-  );
-  assert.equal(storage.getItem("wappy.desktop.v1"), "unchanged");
-  assert.equal(forgetDeletedProfile(deleted, storage), true);
-
-  seed();
-  saveSession(bob, storage);
-  assert.equal(forgetDeletedProfile(deleted, storage), true);
-  assert.equal(
-    loadSession(storage)?.token,
-    bob.token,
-    "late cleanup cannot log out a different profile",
-  );
-
-  for (const key of [SESSION_KEY, SAVED_SESSIONS_KEY, selectionKey]) {
-    seed();
-    fail = key;
-    assert.equal(forgetDeletedProfile(deleted, storage), false);
-    if (key !== SESSION_KEY) assert.equal(loadSession(storage), null);
-    if (key !== SAVED_SESSIONS_KEY)
-      assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere]);
-    if (key !== selectionKey) assert.equal(storage.getItem(selectionKey), null);
-    fail = "";
-    assert.equal(forgetDeletedProfile(deleted, storage), true);
-  }
-  seed();
-  storage.setItem(SAVED_SESSIONS_KEY, "{damaged");
-  assert.equal(forgetDeletedProfile(deleted, storage), false);
-  assert.equal(
-    storage.getItem(SAVED_SESSIONS_KEY),
-    "{damaged",
-    "unreadable archives are not erased",
-  );
-  assert.equal(loadSession(storage), null);
-  assert.equal(storage.getItem(selectionKey), null);
-
-  const descriptor = Object.getOwnPropertyDescriptor(
-    globalThis,
-    "localStorage",
-  );
-  try {
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      get() {
-        throw new Error("Storage access denied");
-      },
-    });
-    assert.equal(forgetDeletedProfile(deleted), false);
-  } finally {
-    if (descriptor)
-      Object.defineProperty(globalThis, "localStorage", descriptor);
-    else Reflect.deleteProperty(globalThis, "localStorage");
-  }
-});
-
-test("server switching preserves distinct profiles and updates only the recovered identity", () => {
+test("server switching preserves distinct profiles and updates only the identity after reauthentication", () => {
   const values = new Map<string, string>();
   let fail = "";
   const storage = {
@@ -145,7 +32,6 @@ test("server switching preserves distinct profiles and updates only the recovere
       id: "alice",
       name: "Alice",
       character: "hachiware",
-      status: "hello",
     },
   };
   const bob: SavedProfile = {
@@ -176,58 +62,58 @@ test("server switching preserves distinct profiles and updates only the recovere
   parkSession(bob, storage);
   parkSession(elsewhere, storage);
   assert.deepEqual(loadSavedSessions(storage), [alice, bob, elsewhere]);
-  const recovered = {
+  const renewed = {
     ...alice,
     token: "d".repeat(43),
     profile: { ...alice.profile!, name: "Alicia" },
   };
-  saveSession(recovered, storage);
+  saveSession(renewed, storage);
   assert.deepEqual(loadSession(storage), {
     server: alice.server,
-    token: recovered.token,
+    token: renewed.token,
   });
-  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere, recovered]);
+  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere, renewed]);
   assert.deepEqual(
     forgetSavedSession(alice, storage),
-    [bob, elsewhere, recovered],
-    "stale removal cannot delete a newly recovered credential",
+    [bob, elsewhere, renewed],
+    "stale removal cannot delete a newly issued credential",
   );
-  assert.deepEqual(forgetSavedSession(bob, storage), [elsewhere, recovered]);
-  parkSession({ server: recovered.server, token: recovered.token }, storage);
+  assert.deepEqual(forgetSavedSession(bob, storage), [elsewhere, renewed]);
+  parkSession({ server: renewed.server, token: renewed.token }, storage);
   assert.deepEqual(
     loadSavedSessions(storage),
-    [elsewhere, recovered],
+    [elsewhere, renewed],
     "offline switching preserves cached display information",
   );
 
-  saveSession(recovered, storage);
+  saveSession(renewed, storage);
   for (const operation of [
     `write:${SAVED_SESSIONS_KEY}`,
     `remove:${SESSION_KEY}`,
   ]) {
     fail = operation;
-    assert.throws(() => parkSession(recovered, storage));
+    assert.throws(() => parkSession(renewed, storage));
     assert.deepEqual(loadSession(storage), {
-      server: recovered.server,
-      token: recovered.token,
+      server: renewed.server,
+      token: renewed.token,
     });
   }
   fail = `write:${SESSION_KEY}`;
   assert.throws(() => saveSession(elsewhere, storage));
   assert.deepEqual(loadSession(storage), {
-    server: recovered.server,
-    token: recovered.token,
+    server: renewed.server,
+    token: renewed.token,
   });
   fail = "";
   storage.setItem(SAVED_SESSIONS_KEY, "{damaged");
   assert.deepEqual(loadSavedSessions(storage), []);
-  assert.throws(() => parkSession(recovered, storage));
+  assert.throws(() => parkSession(renewed, storage));
   assert.equal(
     storage.getItem(SAVED_SESSIONS_KEY),
     "{damaged",
     "unreadable archives must not be overwritten",
   );
-  assert.equal(loadSession(storage)?.token, recovered.token);
+  assert.equal(loadSession(storage)?.token, renewed.token);
   storage.setItem(
     SAVED_SESSIONS_KEY,
     JSON.stringify([

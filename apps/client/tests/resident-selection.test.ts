@@ -46,20 +46,18 @@ test("character selections isolate profiles and servers without changing friends
     ["bob"],
   );
   const state: SidebarState = {
-    self: { id: "alice", name: "Alice", character: "hachiware", status: "" },
+    self: { id: "alice", name: "Alice", character: "hachiware" },
     friends: [
       {
         id: "bob",
         name: "Bob",
         character: "shisa",
-        status: "",
         online: true,
       },
       {
         id: "carol",
         name: "Carol",
         character: "chiikawa",
-        status: "",
         online: false,
       },
     ],

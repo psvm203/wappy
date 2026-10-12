@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { parseSidebarState } from "@wappy/api";
 import { createApp } from "./server.ts";
 
-test("profile blocks revoke delivery and invitations atomically, remain private, survive recovery, and unblock without restoring history", async (t) => {
+test("profile blocks revoke delivery and invitations atomically, remain private, survive restart, and unblock without restoring history", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-blocking-"));
   const databasePath = join(directory, "app.sqlite");
   let now = 1_800_000_000_000;
@@ -67,7 +67,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
       await call("/session", undefined, {
         name,
         character: "hachiware",
-        status: "",
       })
     ).body;
   }
@@ -200,7 +199,7 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   await call(
     "/profile",
     bob.token,
-    { name: "Changed", character: "shisa", status: "private update" },
+    { name: "Changed", character: "shisa" },
     "PATCH",
   );
   assert.deepEqual(
@@ -213,10 +212,6 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   await close();
   server = createApp({ databasePath, now: () => now });
   await listen();
-  const recovery = (await call("/recovery-code", alice.token, {})).body;
-  alice.token = (
-    await call("/session/recover", undefined, recovery)
-  ).body.token;
   assert.deepEqual((await state(alice.token)).blocking, blocked.body);
   assert.equal(
     (await call("/invites/accept", bob.token, fromAlice)).status,
@@ -262,16 +257,5 @@ test("profile blocks revoke delivery and invitations atomically, remain private,
   assert.deepEqual((await state(alice.token)).messages, [fresh]);
   await call("/friends/block", alice.token, { friendId: bob.profile.id });
   assert.equal((await state(alice.token)).blocking?.revision, 3);
-  await call("/profile/delete", bob.token, { profileId: bob.profile.id });
-  assert.deepEqual(
-    (await state(alice.token)).blocking,
-    { revision: 4, profiles: [] },
-    "deleting a blocked profile also advances the private list revision",
-  );
-  assert.equal(
-    inspection.prepare("SELECT COUNT(*) AS count FROM profile_blocks").get()!
-      .count,
-    0,
-  );
   assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
 });

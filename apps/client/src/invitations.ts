@@ -38,10 +38,6 @@ export function parseInvitation(value: string): {
 } {
   const text = value.trim();
   if (/^[A-Za-z0-9_-]{43}$/.test(text)) return { code: text };
-  if (text.startsWith("wappy-recovery-"))
-    throw new Error(
-      "복구 코드는 친구에게 보내지 마세요. 초대 코드를 사용해 주세요.",
-    );
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   if (
     text.length > 2048 ||

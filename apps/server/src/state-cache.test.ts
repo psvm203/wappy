@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { CHAT_TTL_MS, ONLINE_TIMEOUT_MS } from "@wappy/api";
 import { createApp } from "./server.ts";
 
-test("conditional state remains fresh across writes, presence/TTL transitions and token revocation", async (t) => {
+test("conditional state remains fresh across writes, presence/TTL transitions and authentication", async (t) => {
   let now = 1_800_000_000_000;
   const server = createApp({ databasePath: ":memory:", now: () => now });
   server.listen(0, "127.0.0.1");
@@ -54,12 +54,10 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   const alice = await write("/session", {
     name: "Alice",
     character: "hachiware",
-    status: "",
   });
   const bob = await write("/session", {
     name: "Bob",
     character: "hachiware",
-    status: "",
   });
   let a = await state(alice.token);
   assert.equal(a.status, 200);
@@ -96,7 +94,7 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   a = next;
   await write(
     "/profile",
-    { name: "Robert", character: "chiikawa", status: "hi" },
+    { name: "Robert", character: "chiikawa" },
     bob.token,
     "PATCH",
   );
@@ -139,17 +137,9 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   assert.equal(next.body.friends.length, 0);
   assert.equal(next.body.messages.length, 0);
   a = next;
-  const recovery = await write("/recovery-code", {}, alice.token);
-  const recovered = await write("/session/recover", recovery);
   assert.equal(
-    (await state(alice.token, a.etag)).status,
+    (await state("z".repeat(43), a.etag)).status,
     401,
     "a cache hit never skips authentication",
   );
-  await write(
-    "/profile/delete",
-    { profileId: alice.profile.id },
-    recovered.token,
-  );
-  assert.equal((await state(recovered.token, a.etag)).status, 401);
 });

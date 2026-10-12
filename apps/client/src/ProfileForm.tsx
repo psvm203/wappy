@@ -3,7 +3,6 @@ import {
   CHARACTERS,
   CHARACTER_NAMES,
   MAX_NAME_LENGTH,
-  MAX_STATUS_LENGTH,
   type ProfileInput,
 } from "@wappy/api";
 import { Character } from "./Character";
@@ -30,9 +29,8 @@ export function ProfileForm({
     event.preventDefault();
     if (busy || !canSave) return;
     onSave({
-      ...profile,
       name: profile.name.trim(),
-      status: profile.status.trim(),
+      character: profile.character,
     });
   }
   return (
@@ -69,17 +67,6 @@ export function ProfileForm({
             value={profile.name}
             onChange={(event) =>
               setProfile({ ...profile, name: event.target.value })
-            }
-          />
-        </label>
-        <label className="field">
-          상태 메시지 <span className="optional">선택</span>
-          <input
-            maxLength={MAX_STATUS_LENGTH}
-            placeholder="오늘은 어떤 하루인가요?"
-            value={profile.status}
-            onChange={(event) =>
-              setProfile({ ...profile, status: event.target.value })
             }
           />
         </label>

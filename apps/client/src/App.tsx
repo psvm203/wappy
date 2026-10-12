@@ -15,7 +15,6 @@ import {
   parseBlockingSettings,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
-  isRecord,
   type Invite,
   type ProfileInput,
   type Session,
@@ -46,8 +45,6 @@ import { ChatComposer } from "./ChatComposer";
 import { latestChat } from "./chat";
 import { useDesktopChatRequests } from "./chat-bridge";
 import { LocalPreview } from "./LocalPreview";
-import { RecoveryCode, RecoveryForm } from "./Recovery";
-import { DeleteProfile } from "./DeleteProfile";
 import { InviteField } from "./InviteField";
 import { SavedProfiles } from "./SavedProfiles";
 import { StartupSettings } from "./StartupSettings";
@@ -60,7 +57,6 @@ import { applyBlockingSettings, reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
-  forgetDeletedProfile,
   loadSavedSessions,
   parkSession,
   saveSession,
@@ -79,7 +75,6 @@ import "./App.css";
 const emptyProfile: ProfileInput = {
   name: "",
   character: "chiikawa",
-  status: "",
 };
 
 function App() {
@@ -87,9 +82,7 @@ function App() {
   const currentSession = useRef(session);
   const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
-  const [onboarding, setOnboarding] = useState<"create" | "join" | "recover">(
-    "create",
-  );
+  const [onboarding, setOnboarding] = useState<"create" | "join">("create");
   const [state, setState] = useState<SidebarState | null>(null);
   const [localPreview, setLocalPreview] = useState<SidebarState | null>(null);
   const previewStart = useRef<HTMLButtonElement>(null);
@@ -105,7 +98,6 @@ function App() {
     "ready" | "pending" | "unknown"
   >("ready");
   const [error, setError] = useState("");
-  const [deleteError, setDeleteError] = useState("");
   const [connection, setConnection] = useState<
     "connecting" | "online" | "offline" | "unauthorized"
   >("connecting");
@@ -184,7 +176,6 @@ function App() {
     setSession(next);
     setLocalPreview(null);
     setPresenceStatus("ready");
-    setDeleteError("");
     setVerifiedInvitation("");
     setFriendQuery("");
     setFriendView("all");
@@ -396,18 +387,18 @@ function App() {
       setSavedSessions(loadSavedSessions());
     } catch {
       setError(
-        "프로필을 기기에 저장하지 못했습니다. 앱을 닫기 전에 ‘내 모습’에서 복구 코드를 보관해 주세요.",
+        "프로필을 기기에 저장하지 못했습니다. 앱을 닫으면 로그인 정보가 사라질 수 있어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
   }
 
-  function showOnboarding(mode: "create" | "recover") {
+  function showOnboarding() {
     changeSession(null);
     setState(null);
     setInvite(null);
     setCode("");
     setRemoving(null);
-    setOnboarding(mode);
+    setOnboarding("create");
     setConnection("connecting");
     setPanel("friends");
     setNotice("");
@@ -420,7 +411,7 @@ function App() {
       setSavedSessions(
         parkSession({ ...session, ...(state ? { profile: state.self } : {}) }),
       );
-      showOnboarding("create");
+      showOnboarding();
     } catch {
       setError(
         "프로필을 보관하지 못해 현재 연결을 유지했어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
@@ -432,7 +423,7 @@ function App() {
     if (busy) return;
     try {
       saveSession(saved);
-      showOnboarding("create");
+      showOnboarding();
       setServer(saved.server);
       changeSession({ server: saved.server, token: saved.token });
     } catch {
@@ -440,44 +431,6 @@ function App() {
         "보관한 프로필로 전환하지 못했습니다. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
       );
     }
-  }
-
-  function deleteProfile() {
-    if (!session || !state || connection !== "online") return;
-    const deleted = { ...session, profile: state.self };
-    void action(async () => {
-      setDeleteError("");
-      try {
-        const result = await request(session, "POST /profile/delete", {
-          profileId: deleted.profile.id,
-        });
-        if (!isRecord(result) || result.ok !== true)
-          throw new Error("Unconfirmed deletion");
-      } catch (cause) {
-        let failure = cause;
-        if (cause instanceof ApiError && cause.status === 404)
-          failure = new ApiError(
-            404,
-            "이 서버는 프로필 삭제를 지원하지 않습니다. 서버를 업데이트한 뒤 다시 시도해 주세요.",
-          );
-        else if (!(cause instanceof ApiError) || cause.status >= 500)
-          failure = new ApiError(
-            503,
-            "서버의 삭제 결과를 확인하지 못했습니다. 자동으로 다시 요청하지 않습니다. 연결 상태를 확인해 주세요.",
-          );
-        setDeleteError(errorMessage(failure));
-        throw failure;
-      }
-      const cleaned = forgetDeletedProfile(deleted);
-      setSavedSessions(loadSavedSessions());
-      if (currentSession.current !== session) return;
-      showOnboarding("create");
-      setNotice("서버에서 프로필과 친구 연결을 삭제했어요.");
-      if (!cleaned)
-        setError(
-          "서버의 프로필은 삭제됐지만 기기의 로그인 정보나 캐릭터 선택을 일부 지우지 못했습니다. 저장소 접근을 확인하고 남은 프로필은 보관 해제해 주세요.",
-        );
-    });
   }
 
   function selectedServer() {
@@ -489,19 +442,6 @@ function App() {
         "올바른 서버 주소를 입력해 주세요. 예: http://localhost:3001",
       );
     }
-  }
-
-  function recoverProfile(recoveryCode: string) {
-    void action(async () => {
-      const address = selectedServer();
-      const recovered = await request(
-        { server: address },
-        "POST /session/recover",
-        { code: recoveryCode },
-      );
-      connectSession(address, recovered);
-      setNotice("프로필을 복구했어요. 기존 기기는 로그아웃됩니다.");
-    });
   }
 
   function saveProfile(profile: ProfileInput) {
@@ -550,9 +490,7 @@ function App() {
           }
           return;
         }
-        setNotice(
-          "‘내 모습’에서 복구 코드를 보관하면 기기를 바꿔도 돌아올 수 있어요.",
-        );
+        setNotice("프로필을 만들었어요. 친구를 초대해 보세요.");
       }
     });
   }
@@ -903,7 +841,6 @@ function App() {
               [
                 ["create", "처음이에요"],
                 ["join", "초대받았어요"],
-                ["recover", "다시 돌아왔어요"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -948,62 +885,53 @@ function App() {
               onLogin={connectSession}
             />
           )}
-          {onboarding === "recover" ? (
-            <RecoveryForm
-              server={server}
-              onServerChange={setServer}
-              busy={busy}
-              onRecover={recoverProfile}
-            />
-          ) : (
-            <ProfileForm
-              initial={emptyProfile}
-              busy={busy}
-              onSave={saveProfile}
-              canSave={
-                onboarding !== "join" || verifiedInvitation === invitationSource
-              }
-              beforeProfile={
-                onboarding === "join" && (
-                  <InviteField
-                    value={code}
-                    onChange={(value) => {
-                      setCode(value);
-                      try {
-                        const destination = parseInvitation(value).server;
-                        if (destination) setServer(destination);
-                      } catch {
-                        /* Validate on submit. */
-                      }
-                    }}
-                    server={server}
-                    onVerified={(source) => {
-                      setVerifiedInvitation(source);
-                      if (source) setError("");
-                    }}
-                  />
-                )
-              }
-            >
-              <details className="server-settings">
-                <summary>연결할 서버</summary>
-                <label className="field">
-                  서버 주소
-                  <input
-                    type="url"
-                    required
-                    value={server}
-                    onChange={(event) => setServer(event.target.value)}
-                  />
-                </label>
-                <p className="hint">
-                  코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
-                  붙여넣으면 초대장의 서버를 사용해요.
-                </p>
-                <ServerCheck key={server} server={server} busy={busy} />
-              </details>
-            </ProfileForm>
-          )}
+          <ProfileForm
+            initial={emptyProfile}
+            busy={busy}
+            onSave={saveProfile}
+            canSave={
+              onboarding !== "join" || verifiedInvitation === invitationSource
+            }
+            beforeProfile={
+              onboarding === "join" && (
+                <InviteField
+                  value={code}
+                  onChange={(value) => {
+                    setCode(value);
+                    try {
+                      const destination = parseInvitation(value).server;
+                      if (destination) setServer(destination);
+                    } catch {
+                      /* Validate on submit. */
+                    }
+                  }}
+                  server={server}
+                  onVerified={(source) => {
+                    setVerifiedInvitation(source);
+                    if (source) setError("");
+                  }}
+                />
+              )
+            }
+          >
+            <details className="server-settings">
+              <summary>연결할 서버</summary>
+              <label className="field">
+                서버 주소
+                <input
+                  type="url"
+                  required
+                  value={server}
+                  onChange={(event) => setServer(event.target.value)}
+                />
+              </label>
+              <p className="hint">
+                코드만 받았다면 친구와 같은 서버 주소를 입력하세요. 초대장을
+                붙여넣으면 초대장의 서버를 사용해요.
+              </p>
+              <ServerCheck key={server} server={server} busy={busy} />
+            </details>
+          </ProfileForm>
           {error && (
             <p className="error" role="alert">
               {error}
@@ -1054,14 +982,15 @@ function App() {
           {connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
               <p>
-                프로필 인증이 만료되었어요. 다른 기기에서 복구했다면 그 기기에서
-                계속 이용할 수 있어요.
+                프로필 인증이 만료되었어요. 다른 기기에서 로그인했다면 그
+                기기에서 계속 이용할 수 있어요.
               </p>
               <details>
                 <summary>이 기기에서 다시 시작하기</summary>
                 <p>
-                  복구 코드가 있으면 같은 서버의 프로필과 친구 목록을 불러올 수
-                  있어요.
+                  카카오로 만든 프로필은 같은 서버에서 같은 카카오 계정으로 다시
+                  로그인할 수 있어요. 보관한 다른 프로필을 선택하거나 새
+                  프로필로 시작할 수도 있어요.
                 </p>
                 <button
                   className="text-button danger"
@@ -1075,10 +1004,10 @@ function App() {
                       );
                       return;
                     }
-                    showOnboarding("recover");
+                    showOnboarding();
                   }}
                 >
-                  복구 화면으로 이동
+                  시작 화면으로 이동
                 </button>
               </details>
             </div>
@@ -1140,13 +1069,13 @@ function App() {
                   <>
                     <section className="friend-filters" aria-label="친구 찾기">
                       <label className="field friend-search">
-                        이름이나 상태로 찾기
+                        이름으로 찾기
                         <input
                           ref={friendSearch}
                           type="search"
                           maxLength={120}
                           value={friendQuery}
-                          placeholder="이름, 상태 검색"
+                          placeholder="이름 검색"
                           onChange={(event) =>
                             setFriendQuery(event.target.value)
                           }
@@ -1242,7 +1171,6 @@ function App() {
                               className={`online-dot ${!friend.online || connection !== "online" ? "offline" : ""}`}
                             />
                           </div>
-                          <p>{friend.status || "그냥, 함께 있는 중"}</p>
                           <ChatBubble
                             message={latestChat(state.messages, friend.id)}
                           />
@@ -1514,22 +1442,12 @@ function App() {
                       busy={busy}
                       onSave={saveProfile}
                     />
-                    <RecoveryCode key={session.token} session={session} />
                     <BlockedProfiles
                       blocking={state.blocking}
                       disabled={busy || connection !== "online"}
                       onUnblock={(id) =>
                         void action(() => changeBlocking(id, false))
                       }
-                    />
-                    <DeleteProfile
-                      key={session.server + session.token}
-                      profile={state.self}
-                      server={session.server}
-                      busy={busy}
-                      connected={connection === "online"}
-                      error={deleteError}
-                      onDelete={deleteProfile}
                     />
                   </>
                 )}
@@ -1552,8 +1470,9 @@ function App() {
                     수 있어요.
                   </p>
                   <p className="hint">
-                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다. 복구
-                    코드를 함께 보관해 주세요.
+                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다.
+                    이름으로 만든 프로필은 로그인 정보를 잃으면 다시 불러올 수
+                    없어요.
                   </p>
                   <button
                     className="secondary"
@@ -1586,7 +1505,6 @@ function App() {
                   {state.self.name}
                   <span className="me-badge">나</span>
                 </strong>
-                {state.self.status && <p>{state.self.status}</p>}
                 <ChatBubble
                   message={latestChat(state.messages, state.self.id)}
                 />
