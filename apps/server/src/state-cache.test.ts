@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { test } from "node:test";
-import { CHAT_TTL_MS, ONLINE_TIMEOUT_MS, WAVE_TTL_MS } from "@wappy/api";
+import { CHAT_TTL_MS, ONLINE_TIMEOUT_MS } from "@wappy/api";
 import { createApp } from "./server.ts";
 
-test("conditional state remains fresh across writes, presence/TTL transitions and token revocation", async (t) => {
+test("conditional state remains fresh across writes, presence/TTL transitions and authentication", async (t) => {
   let now = 1_800_000_000_000;
   const server = createApp({ databasePath: ":memory:", now: () => now });
   server.listen(0, "127.0.0.1");
@@ -54,12 +54,10 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   const alice = await write("/session", {
     name: "Alice",
     character: "hachiware",
-    status: "",
   });
   const bob = await write("/session", {
     name: "Bob",
     character: "hachiware",
-    status: "",
   });
   let a = await state(alice.token);
   assert.equal(a.status, 200);
@@ -96,7 +94,7 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   a = next;
   await write(
     "/profile",
-    { name: "Robert", character: "chiikawa", status: "hi" },
+    { name: "Robert", character: "chiikawa" },
     bob.token,
     "PATCH",
   );
@@ -126,27 +124,12 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
     "a friend's heartbeat wakes cached presence",
   );
 
-  await write("/friends/wave", { friendId: alice.profile.id }, bob.token);
-  a = await state(alice.token);
-  assert.ok(a.body.friends[0].wave);
-  await write(
-    "/waves/read",
-    { waveId: a.body.friends[0].wave.id },
-    alice.token,
-  );
-  assert.equal(
-    (await state(alice.token, a.etag)).body.friends[0].wave,
-    undefined,
-  );
-  now += 30_001;
-  await write("/friends/wave", { friendId: alice.profile.id }, bob.token);
   await write("/chat", { text: "hello" }, bob.token);
   a = await state(alice.token);
   assert.equal(a.body.messages.length, 1);
-  now += Math.max(CHAT_TTL_MS, WAVE_TTL_MS);
+  now += CHAT_TTL_MS;
   next = await state(alice.token, a.etag);
   assert.equal(next.body.messages.length, 0);
-  assert.equal(next.body.friends[0].wave, undefined);
   await write("/chat", { text: "new" }, bob.token);
   a = await state(alice.token);
   await write("/friends/remove", { friendId: bob.profile.id }, alice.token);
@@ -154,12 +137,9 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   assert.equal(next.body.friends.length, 0);
   assert.equal(next.body.messages.length, 0);
   a = next;
-  const recovery = await write("/recovery-code", {}, alice.token);
-  const recovered = await write("/session/recover", recovery);
   assert.equal(
-    (await state(alice.token, a.etag)).status,
+    (await state("z".repeat(43), a.etag)).status,
     401,
     "a cache hit never skips authentication",
   );
-  assert.equal((await state(recovered.token)).status, 200);
 });

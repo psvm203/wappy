@@ -82,7 +82,7 @@ export function saveSession(
   const saved = readSavedSessions(storage);
   const previous = saved.find((item) => sameProfile(item, session));
   if (previous) {
-    // Recovery rotates the token; update a previously saved copy as well.
+    // Kakao login rotates the token; update a previously saved copy as well.
     storage.setItem(
       SAVED_SESSIONS_KEY,
       JSON.stringify([

@@ -45,10 +45,6 @@ export function parseInvitation(value: string): {
   const text = value.trim();
   if (INVITE_CODE.test(text))
     return { code: text.length === 5 ? text.toUpperCase() : text };
-  if (text.startsWith("wappy-recovery-"))
-    throw new Error(
-      "복구 코드는 친구에게 보내지 마세요. 초대 코드를 사용해 주세요.",
-    );
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   const code = lines[2]?.slice("초대 코드:".length).trim() ?? "";
   if (

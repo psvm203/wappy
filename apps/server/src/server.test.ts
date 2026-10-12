@@ -7,16 +7,12 @@ import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
 import crypto, { createHash } from "node:crypto";
 import { syncBuiltinESMExports } from "node:module";
-import { request as httpRequest } from "node:http";
 import {
   CHARACTERS,
   ONLINE_TIMEOUT_MS,
-  WAVE_COOLDOWN_MS,
-  WAVE_TTL_MS,
   type Session,
   type SidebarState,
   type Invite,
-  type Wave,
 } from "@wappy/api";
 import { createApp } from "./server.ts";
 
@@ -171,21 +167,13 @@ test("public invitation previews are read-only, bounded and reveal only invitati
   }
   const preview = (code: string) => call("/invites/preview", { code });
   const snapshot = () =>
-    [
-      "users",
-      "friendships",
-      "invites",
-      "recovery_codes",
-      "presence_settings",
-      "waves",
-    ].map((table) =>
+    ["users", "friendships", "invites", "presence_settings"].map((table) =>
       inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
     );
   try {
     const input = {
       name: "Alice",
       character: "rakko",
-      status: "private status",
     };
     const alice = (await call("/session", input)).body as Session;
     const bob = (await call("/session", { ...input, name: "Bob" }))
@@ -207,7 +195,6 @@ test("public invitation previews are read-only, bounded and reveal only invitati
     );
     const available = (await call("/invites", {}, alice.token)).body as Invite;
     assert.match(available.code, /^[A-HJ-NP-Z2-9]{5}$/);
-    await call("/recovery-code", {}, alice.token);
     time += ONLINE_TIMEOUT_MS;
     const before = snapshot();
     for (let i = 0; i < 2; i++)
@@ -345,7 +332,6 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   const input = (name: string) => ({
     name,
     character: "usagi",
-    status: "함께 작업해요",
   });
   try {
     await listen();
@@ -367,24 +353,25 @@ test("profiles, invitations, presence and friendship persist safely end to end",
       (
         await call("POST", "/session", undefined, {
           ...input("A"),
-          status: "x".repeat(61),
+          name: "x".repeat(25),
         })
       ).status,
       400,
     );
-    const aliceResponse = await call(
-      "POST",
-      "/session",
-      undefined,
-      input(" Alice "),
-    );
+    const aliceResponse = await call("POST", "/session", undefined, {
+      ...input(" Alice "),
+      status: "legacy status",
+    });
     assert.equal(aliceResponse.status, 201);
     const alice = aliceResponse.body as Session;
     const bob = (await call("POST", "/session", undefined, input("Bob")))
       .body as Session;
     const carol = (await call("POST", "/session", undefined, input("Carol")))
       .body as Session;
-    assert.equal(alice.profile.name, "Alice");
+    assert.deepEqual(alice.profile, {
+      id: alice.profile.id,
+      ...input("Alice"),
+    });
     assert.equal((await call("GET", "/state", "x".repeat(43))).status, 401);
 
     const oldInvite = (await call("POST", "/invites", alice.token, {}))
@@ -568,400 +555,131 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   }
 });
 
-test("recovery preserves existing profiles, retries safely and revokes stale credentials", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "wappy-recovery-"));
+test("startup removes recovery codes and retired profile fields while preserving existing accounts", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-migration-"));
   const databasePath = join(directory, "test.sqlite");
-  const originalToken = "a".repeat(43);
-  // Start from the schema shipped before recovery support, with an existing user.
+  const token = "a".repeat(43);
+  const code = `wappy-recovery-${"c".repeat(43)}`;
+  const hash = (value: string) =>
+    createHash("sha256").update(value).digest("hex");
   const legacy = new DatabaseSync(databasePath);
-  legacy.exec(`CREATE TABLE users (
-    id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
-    name TEXT NOT NULL, character TEXT NOT NULL, status TEXT NOT NULL
-  ) STRICT;`);
+  legacy.exec(`
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL, character TEXT NOT NULL, status TEXT NOT NULL
+    ) STRICT;
+    CREATE TABLE recovery_codes (
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
+    ) STRICT;
+    CREATE TABLE friendships (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      friend_id TEXT NOT NULL REFERENCES users(id),
+      PRIMARY KEY (user_id, friend_id), CHECK (user_id < friend_id)
+    ) STRICT;
+    CREATE TABLE invites (
+      code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id),
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+  `);
   legacy
     .prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)")
-    .run(
-      "original-user",
-      createHash("sha256").update(originalToken).digest("hex"),
-      "Alice",
-      "hachiware",
-      "친구들과 함께",
-    );
+    .run("alice", hash(token), "Alice", "hachiware", "친구들과 함께");
+  legacy
+    .prepare("INSERT INTO users VALUES (?, ?, ?, ?, ?)")
+    .run("bob", hash("b".repeat(43)), "Bob", "shisa", "안녕");
+  legacy
+    .prepare("INSERT INTO recovery_codes VALUES (?, ?)")
+    .run(hash(code), "alice");
+  legacy.exec("INSERT INTO friendships VALUES ('alice', 'bob')");
+  legacy
+    .prepare("INSERT INTO invites VALUES (?, ?, ?)")
+    .run(hash("i".repeat(43)), "alice", Date.now() + 24 * 60 * 60_000);
   legacy.close();
-  let time = Date.now();
-  let server = createApp({ databasePath, now: () => time });
-  let base = "";
-  async function listen() {
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const address = server.address();
-    assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
-  }
-  async function close() {
-    const closed = once(server, "close");
-    server.close();
-    server.closeAllConnections();
-    await closed;
-  }
-  async function call(
-    method: string,
-    path: string,
-    token?: string,
-    body?: unknown,
-  ) {
-    const response = await fetch(base + path, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return {
-      status: response.status,
-      body: await response.json(),
-      headers: response.headers,
-    };
-  }
-  const recover = (code: string) =>
-    call("POST", "/session/recover", undefined, { code });
   try {
-    await listen();
-    const before = (await call("GET", "/state", originalToken))
-      .body as SidebarState;
-    const bob = (
-      await call("POST", "/session", undefined, {
-        name: "Bob",
-        character: "shisa",
-        status: "안녕",
-      })
-    ).body as Session;
-    const invite = (await call("POST", "/invites", originalToken, {}))
-      .body as Invite;
-    assert.equal(
-      (await call("POST", "/invites/accept", bob.token, { code: invite.code }))
-        .status,
-      200,
-    );
-    assert.equal(
-      (await call("POST", "/recovery-code", undefined, {})).status,
-      401,
-    );
-    assert.equal((await recover(invite.code)).status, 400);
-    assert.equal(
-      (await call("POST", "/session/recover", undefined, { code: [] })).status,
-      400,
-    );
-
-    const oldCode = (await call("POST", "/recovery-code", originalToken, {}))
-      .body.code as string;
-    const issued = await call("POST", "/recovery-code", originalToken, {});
-    assert.equal(issued.status, 201);
-    assert.equal(issued.headers.get("cache-control"), "no-store");
-    const code = issued.body.code as string;
-    assert.match(code, /^wappy-recovery-[A-Za-z0-9_-]{43}$/);
-    assert.notEqual(code, oldCode);
-    assert.equal((await recover(oldCode)).status, 401);
-    assert.equal(
-      (await recover(`wappy-recovery-${"z".repeat(43)}`)).status,
-      401,
-    );
-    assert.equal((await call("GET", "/state", originalToken)).status, 200);
-
-    const inspection = new DatabaseSync(databasePath, { readOnly: true });
-    try {
-      const row = inspection.prepare("SELECT * FROM recovery_codes").get();
-      assert.equal(
-        row?.code_hash,
-        createHash("sha256").update(code).digest("hex"),
-      );
-      assert.equal(row?.owner_id, before.self.id);
-      const publicState = (await call("GET", "/state", bob.token)).body;
-      assert.ok(!JSON.stringify(publicState).includes(code));
-      assert.deepEqual(Object.keys(publicState.friends[0]).sort(), [
-        "character",
-        "id",
-        "name",
-        "online",
-        "status",
-      ]);
-    } finally {
-      inspection.close();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const server = createApp({ databasePath });
+      try {
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+        const address = server.address();
+        assert.ok(address && typeof address !== "string");
+        const base = `http://127.0.0.1:${address.port}`;
+        for (const path of ["/recovery-code", "/session/recover"]) {
+          for (const authenticated of [false, true]) {
+            const response = await fetch(base + path, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(authenticated ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ code }),
+            });
+            assert.equal(response.status, authenticated ? 404 : 401);
+            assert.deepEqual(Object.keys(await response.json()), ["error"]);
+          }
+        }
+        const response = await fetch(base + "/state", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.status, 200);
+        const state = (await response.json()) as SidebarState;
+        assert.deepEqual(state.self, {
+          id: "alice",
+          name: "Alice",
+          character: "hachiware",
+        });
+        assert.deepEqual(state.friends, [
+          { id: "bob", name: "Bob", character: "shisa", online: false },
+        ]);
+        const inspection = new DatabaseSync(databasePath, { readOnly: true });
+        try {
+          assert.equal(
+            inspection
+              .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recovery_codes'",
+              )
+              .get(),
+            undefined,
+          );
+          assert.equal(
+            inspection
+              .prepare("PRAGMA table_info(users)")
+              .all()
+              .some((column) => column.name === "status"),
+            false,
+          );
+          assert.equal(
+            inspection
+              .prepare("SELECT token_hash FROM users WHERE id = 'alice'")
+              .get()?.token_hash,
+            hash(token),
+          );
+          assert.equal(
+            inspection
+              .prepare("SELECT owner_id FROM invites WHERE code_hash = ?")
+              .get(hash("i".repeat(43)))?.owner_id,
+            "alice",
+          );
+          assert.deepEqual(
+            inspection.prepare("PRAGMA foreign_key_check").all(),
+            [],
+          );
+        } finally {
+          inspection.close();
+        }
+      } finally {
+        const closed = once(server, "close");
+        server.close();
+        server.closeAllConnections();
+        await closed;
+      }
     }
-    await close();
-    server = createApp({ databasePath, now: () => time });
-    await listen();
-
-    // Hold a write after its headers arrive, then recover before completing its body.
-    // The revoked token must not be allowed to issue a new recovery key.
-    const pending = httpRequest(base + "/recovery-code", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${originalToken}`,
-      },
-    });
-    const responsePromise = once(pending, "response");
-    const arrived = once(server, "request");
-    pending.write("{");
-    await arrived;
-    const restored = await recover(` ${code} `);
-    assert.equal(restored.status, 200);
-    const recovered = restored.body as Session;
-    assert.deepEqual(recovered.profile, before.self);
-    assert.notEqual(recovered.token, originalToken);
-    pending.end("}");
-    const [rejectedWrite] = await responsePromise;
-    assert.equal(rejectedWrite.statusCode, 401);
-    rejectedWrite.resume();
-    assert.equal((await call("GET", "/state", originalToken)).status, 401);
-    assert.equal(
-      (
-        await call("PATCH", "/profile", originalToken, {
-          ...before.self,
-          name: "stale change",
-        })
-      ).status,
-      401,
-    );
-    assert.equal(
-      (await call("POST", "/recovery-code", originalToken, {})).status,
-      401,
-    );
-    const state = (await call("GET", "/state", recovered.token))
-      .body as SidebarState;
-    assert.equal(state.friends[0]?.id, bob.profile.id);
-    assert.deepEqual(state.self, before.self);
-    const friendsState = (await call("GET", "/state", bob.token))
-      .body as SidebarState;
-    assert.equal(friendsState.friends[0]?.id, before.self.id);
-
-    // A dropped recovery response can be retried with the saved code.
-    const retried = await recover(code);
-    assert.equal(retried.status, 200);
-    assert.equal((await call("GET", "/state", recovered.token)).status, 401);
-    const replacement = (
-      await call("POST", "/recovery-code", retried.body.token, {})
-    ).body.code as string;
-    assert.equal((await recover(code)).status, 401);
-    assert.equal((await recover(replacement)).status, 200);
-
-    // Unauthenticated attempts have the tighter session rate limit; reads still work.
-    time += 60_000;
-    for (let i = 0; i < 10; i++)
-      assert.equal((await recover(oldCode)).status, 401);
-    const limited = await recover(oldCode);
-    assert.equal(limited.status, 429);
-    assert.equal(limited.headers.get("retry-after"), "60");
-    assert.equal((await call("GET", "/state", bob.token)).status, 200);
-    time += 60_000;
-    assert.equal((await recover(replacement)).status, 200);
   } finally {
-    if (server.listening) await close();
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("greetings are private, bounded, durable and acknowledged without losing newer ones", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "wappy-waves-"));
-  const databasePath = join(directory, "test.sqlite");
-  let time = Date.now();
-  let server = createApp({ databasePath, now: () => time });
-  let base = "";
-  async function listen() {
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-    const address = server.address();
-    assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
-  }
-  async function close() {
-    const closed = once(server, "close");
-    server.close();
-    server.closeAllConnections();
-    await closed;
-  }
-  async function call(path: string, token?: string, body?: unknown) {
-    const response = await fetch(base + path, {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return {
-      status: response.status,
-      headers: response.headers,
-      body: await response.json(),
-    };
-  }
-  const state = async (user: Session) =>
-    (await call("/state", user.token)).body as SidebarState;
-  const send = (from: Session, to: Session) =>
-    call("/friends/wave", from.token, { friendId: to.profile.id });
-  const read = (user: Session, wave: Wave) =>
-    call("/waves/read", user.token, { waveId: wave.id });
-  async function connect(from: Session, to: Session) {
-    const invite = (await call("/invites", from.token, {})).body as Invite;
-    assert.equal(
-      (await call("/invites/accept", to.token, { code: invite.code })).status,
-      200,
-    );
-  }
-  try {
-    await listen();
-    const people: Session[] = [];
-    for (const name of ["Alice", "Bob", "Carol"]) {
-      const created = await call("/session", undefined, {
-        name,
-        character: "hachiware",
-        status: "",
-      });
-      assert.equal(created.status, 201);
-      people.push(created.body as Session);
-    }
-    const [alice, bob, carol] = people as [Session, Session, Session];
-    assert.equal(
-      (await call("/friends/wave", undefined, { friendId: bob.profile.id }))
-        .status,
-      401,
-    );
-    assert.equal(
-      (await call("/waves/read", undefined, { waveId: "unknown" })).status,
-      401,
-    );
-    assert.equal(
-      (await call("/friends/wave", alice.token, { friendId: [] })).status,
-      400,
-    );
-    assert.equal((await call("/waves/read", bob.token, {})).status, 400);
-    assert.equal((await send(alice, alice)).status, 404);
-    assert.equal((await send(alice, bob)).status, 404);
-    await connect(alice, bob);
-
-    // Simulate the schema before greetings, preserving established profiles and friends.
-    await close();
-    const oldDatabase = new DatabaseSync(databasePath);
-    oldDatabase.exec("DROP TABLE waves");
-    oldDatabase.close();
-    server = createApp({ databasePath, now: () => time });
-    await listen();
-    assert.equal((await state(alice)).friends[0]?.id, bob.profile.id);
-    assert.equal((await state(alice)).friends[0]?.online, false);
-
-    const results = await Promise.all([send(alice, bob), send(alice, bob)]);
-    assert.deepEqual(results.map((result) => result.status).sort(), [201, 429]);
-    assert.equal(
-      results
-        .find((result) => result.status === 429)
-        ?.headers.get("Retry-After"),
-      "30",
-    );
-    const first = results.find((result) => result.status === 201)!.body as Wave;
-    assert.equal(first.sentAt, time);
-    assert.equal(
-      (await state(alice)).friends[0]?.wave,
-      undefined,
-      "outgoing greetings are not incoming greetings",
-    );
-    assert.deepEqual((await state(bob)).friends[0]?.wave, first);
-    assert.deepEqual(
-      (await state(bob)).friends[0]?.wave,
-      first,
-      "reading state does not consume a greeting",
-    );
-    assert.deepEqual((await state(carol)).friends, []);
-    assert.equal((await send(carol, bob)).status, 404);
-    await read(alice, first);
-    await read(carol, first);
-    assert.deepEqual(
-      (await state(bob)).friends[0]?.wave,
-      first,
-      "only the recipient can acknowledge",
-    );
-    assert.equal((await read(bob, first)).status, 200);
-    assert.equal((await read(bob, first)).status, 200);
-    assert.equal((await state(bob)).friends[0]?.wave, undefined);
-    time += WAVE_COOLDOWN_MS - 1;
-    assert.equal(
-      (await send(alice, bob)).status,
-      429,
-      "acknowledging does not reset the cooldown",
-    );
-    time += 1;
-    const secondResponse = await send(alice, bob);
-    assert.equal(secondResponse.status, 201);
-    const second = secondResponse.body as Wave;
-    time += WAVE_COOLDOWN_MS;
-    const third = (await send(alice, bob)).body as Wave;
-    assert.notEqual(third.id, second.id);
-    await read(bob, second);
-    assert.deepEqual(
-      (await state(bob)).friends[0]?.wave,
-      third,
-      "a stale acknowledgement cannot erase the latest greeting",
-    );
-    const reverse = (await send(bob, alice)).body as Wave;
-    assert.deepEqual((await state(alice)).friends[0]?.wave, reverse);
-    const recovery = (await call("/recovery-code", bob.token, {})).body as {
-      code: string;
-    };
-
-    await close();
-    const database = new DatabaseSync(databasePath);
-    assert.equal(
-      database.prepare("SELECT count(*) AS count FROM waves").get()!.count,
-      2,
-      "at most one greeting per direction",
-    );
-    database.close();
-    server = createApp({ databasePath, now: () => time });
-    await listen();
-    assert.deepEqual((await state(bob)).friends[0]?.wave, third);
-    assert.equal(
-      (await send(alice, bob)).status,
-      429,
-      "server restarts do not reset cooldowns",
-    );
-    const recovered = (await call("/session/recover", undefined, recovery))
-      .body as Session;
-    assert.equal((await call("/state", bob.token)).status, 401);
-    assert.equal((await read(bob, third)).status, 401);
-    assert.deepEqual((await state(recovered)).friends[0]?.wave, third);
-
-    time += WAVE_TTL_MS - 1;
-    assert.deepEqual((await state(recovered)).friends[0]?.wave, third);
-    time += 1;
-    assert.equal((await state(recovered)).friends[0]?.wave, undefined);
-    assert.equal((await state(alice)).friends[0]?.wave, undefined);
-    assert.equal((await send(alice, recovered)).status, 201);
-    assert.equal((await send(recovered, alice)).status, 201);
-    assert.equal(
-      (
-        await call("/friends/remove", recovered.token, {
-          friendId: alice.profile.id,
-        })
-      ).status,
-      200,
-    );
-    assert.equal((await send(alice, recovered)).status, 404);
-    assert.deepEqual((await state(alice)).friends, []);
-    await connect(alice, recovered);
-    assert.equal((await state(alice)).friends[0]?.wave, undefined);
-    assert.equal(
-      (await state(recovered)).friends[0]?.wave,
-      undefined,
-      "reconnecting must not restore removed greetings",
-    );
-  } finally {
-    if (server.listening) await close();
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
-test("presence sharing stays private and hidden through polling, profile edits, restart and recovery", async () => {
+test("presence sharing stays private and hidden through polling, profile edits, restart", async () => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-presence-"));
   const databasePath = join(directory, "test.sqlite");
   let time = Date.now();
@@ -1006,14 +724,12 @@ test("presence sharing stays private and hidden through polling, profile edits, 
       await call("POST", "/session", undefined, {
         name: "Alice",
         character: "hachiware",
-        status: "",
       })
     ).body as Session;
     const bob = (
       await call("POST", "/session", undefined, {
         name: "Bob",
         character: "shisa",
-        status: "",
       })
     ).body as Session;
     const invite = (await call("POST", "/invites", alice.token, {}))
@@ -1080,17 +796,22 @@ test("presence sharing stays private and hidden through polling, profile edits, 
       assert.equal(observer.friends[0]?.online, false);
       assert.deepEqual(
         Object.keys(observer.friends[0]!).sort(),
-        ["character", "id", "name", "online", "status"],
+        ["character", "id", "name", "online"],
         "friends cannot distinguish hidden presence from being offline",
       );
     }
     const updated = await call("PATCH", "/profile", alice.token, {
       name: "Alicia",
       character: "chiikawa",
-      status: "쉬는 중",
+      status: "legacy status",
       sharing: true,
     });
     assert.equal(updated.status, 200);
+    assert.deepEqual(updated.body, {
+      id: alice.profile.id,
+      name: "Alicia",
+      character: "chiikawa",
+    });
     assert.deepEqual(
       (await state(alice)).presence,
       hidden.body,
@@ -1100,26 +821,32 @@ test("presence sharing stays private and hidden through polling, profile edits, 
     assert.equal((await state(bob)).friends[0]?.online, false);
     assert.equal(
       (
-        await call("POST", "/friends/wave", bob.token, {
-          friendId: alice.profile.id,
+        await call("POST", "/chat", bob.token, {
+          text: "보여도 숨겨도 받을 수 있어요",
         })
       ).status,
       201,
     );
-    assert.ok((await state(alice)).friends[0]?.wave);
+    assert.equal(
+      (await state(alice)).messages?.at(-1)?.senderId,
+      bob.profile.id,
+    );
     assert.equal(
       (
-        await call("POST", "/friends/wave", alice.token, {
-          friendId: bob.profile.id,
+        await call("POST", "/chat", alice.token, {
+          text: "숨긴 채로 답해요",
         })
       ).status,
       201,
     );
-    assert.ok((await state(bob)).friends[0]?.wave);
+    assert.equal(
+      (await state(bob)).messages?.at(-1)?.senderId,
+      alice.profile.id,
+    );
     assert.equal(
       (await state(bob)).friends[0]?.online,
       false,
-      "explicit greetings do not reset privacy",
+      "explicit messages do not reset privacy",
     );
 
     assert.deepEqual((await share(alice, true)).body, {
@@ -1136,39 +863,141 @@ test("presence sharing stays private and hidden through polling, profile edits, 
     await state(alice);
     assert.equal((await state(bob)).friends[0]?.online, true);
     const hiddenAgain = (await share(alice, false)).body;
-    const recovery = (await call("POST", "/recovery-code", alice.token, {}))
-      .body as { code: string };
     await close();
     server = createApp({ databasePath, now: () => time });
     await listen();
     assert.deepEqual((await state(alice)).presence, hiddenAgain);
     assert.equal((await state(bob)).friends[0]?.online, false);
-    const recovered = (
-      await call("POST", "/session/recover", undefined, recovery)
-    ).body as Session;
-    assert.equal(
-      (await share(alice, true)).status,
-      401,
-      "revoked sessions cannot publish presence",
-    );
-    assert.deepEqual((await state(recovered)).presence, hiddenAgain);
-    assert.equal(
-      (await state(bob)).friends[0]?.online,
-      false,
-      "recovery does not briefly expose a hidden profile",
-    );
-
     const simultaneous = await Promise.all([
-      share(recovered, true),
-      share(recovered, false),
+      share(alice, true),
+      share(alice, false),
     ]);
     assert.ok(simultaneous.every((result) => result.status === 200));
     const settings = simultaneous
       .map((result) => result.body as { sharing: boolean; revision: number })
       .sort((a, b) => a.revision - b.revision);
     assert.equal(settings[1]!.revision, settings[0]!.revision + 1);
-    assert.deepEqual((await state(recovered)).presence, settings[1]);
+    assert.deepEqual((await state(alice)).presence, settings[1]);
     assert.equal((await state(bob)).friends[0]?.online, settings[1]!.sharing);
+  } finally {
+    if (server.listening) await close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("the removed profile deletion endpoint leaves profiles and relationships intact", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-delete-"));
+  const databasePath = join(directory, "test.sqlite");
+  let server = createApp({ databasePath });
+  let base = "";
+  async function listen() {
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    base = `http://127.0.0.1:${address.port}`;
+  }
+  async function close() {
+    const closed = once(server, "close");
+    server.close();
+    server.closeAllConnections();
+    await closed;
+  }
+  async function call(
+    method: string,
+    path: string,
+    token?: string,
+    body?: unknown,
+  ) {
+    const response = await fetch(base + path, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  try {
+    await listen();
+    const create = async (name: string) =>
+      (
+        await call("POST", "/session", undefined, {
+          name,
+          character: "hachiware",
+        })
+      ).body as Session;
+    const alice = await create("Alice");
+    const bob = await create("Bob");
+    const carol = await create("Carol");
+    for (const [from, to] of [
+      [alice, bob],
+      [alice, carol],
+      [bob, carol],
+    ] as const) {
+      const invite = (await call("POST", "/invites", from.token, {}))
+        .body as Invite;
+      assert.equal(
+        (await call("POST", "/invites/accept", to.token, { code: invite.code }))
+          .status,
+        200,
+      );
+    }
+    const invite = (await call("POST", "/invites", alice.token, {}))
+      .body as Invite;
+    const bobInvite = (await call("POST", "/invites", bob.token, {}))
+      .body as Invite;
+    await call("PATCH", "/presence", alice.token, { sharing: false });
+    await call("PATCH", "/presence", bob.token, { sharing: false });
+    const inspection = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const snapshot = () =>
+        ["users", "friendships", "invites", "presence_settings"].map((table) =>
+          inspection.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+        );
+      const before = snapshot();
+      for (const [token, profileId, expected] of [
+        [undefined, alice.profile.id, 401],
+        [alice.token, alice.profile.id, 404],
+        [bob.token, alice.profile.id, 404],
+        [alice.token, "", 404],
+      ] as const) {
+        const response = await call("POST", "/profile/delete", token, {
+          profileId,
+        });
+        assert.equal(response.status, expected);
+        assert.deepEqual(Object.keys(response.body), ["error"]);
+        assert.deepEqual(snapshot(), before);
+      }
+      assert.deepEqual(
+        inspection.prepare("PRAGMA foreign_key_check").all(),
+        [],
+      );
+    } finally {
+      inspection.close();
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const person of [alice, bob, carol]) {
+        const response = await call("GET", "/state", person.token);
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.self, person.profile);
+        assert.equal(response.body.friends.length, 2);
+      }
+      assert.equal(
+        (await call("POST", "/invites/preview", undefined, invite)).status,
+        200,
+      );
+      assert.equal(
+        (await call("POST", "/invites/preview", undefined, bobInvite)).status,
+        200,
+      );
+      if (!attempt) {
+        await close();
+        server = createApp({ databasePath });
+        await listen();
+      }
+    }
   } finally {
     if (server.listening) await close();
     rmSync(directory, { recursive: true, force: true });

@@ -22,7 +22,7 @@ const event = (id: number): AttackEvent => ({
 const online = new Set(["self", "friend"]);
 
 test("attack snapshots reject spoofed participants, duplicates, invalid times and keep old servers compatible", () => {
-  const profile = { id: "self", name: "나", status: "", character: "chiikawa" };
+  const profile = { id: "self", name: "나", character: "chiikawa" };
   const state = {
     self: profile,
     friends: [

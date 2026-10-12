@@ -11,7 +11,7 @@ import {
   type SavedProfile,
 } from "../src/sessions.ts";
 
-test("server switching preserves distinct profiles and updates only the recovered identity", () => {
+test("server switching preserves distinct profiles and updates only the identity after reauthentication", () => {
   const values = new Map<string, string>();
   let fail = "";
   const storage = {
@@ -32,7 +32,6 @@ test("server switching preserves distinct profiles and updates only the recovere
       id: "alice",
       name: "Alice",
       character: "hachiware",
-      status: "hello",
     },
   };
   const bob: SavedProfile = {
@@ -63,58 +62,58 @@ test("server switching preserves distinct profiles and updates only the recovere
   parkSession(bob, storage);
   parkSession(elsewhere, storage);
   assert.deepEqual(loadSavedSessions(storage), [alice, bob, elsewhere]);
-  const recovered = {
+  const renewed = {
     ...alice,
     token: "d".repeat(43),
     profile: { ...alice.profile!, name: "Alicia" },
   };
-  saveSession(recovered, storage);
+  saveSession(renewed, storage);
   assert.deepEqual(loadSession(storage), {
     server: alice.server,
-    token: recovered.token,
+    token: renewed.token,
   });
-  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere, recovered]);
+  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere, renewed]);
   assert.deepEqual(
     forgetSavedSession(alice, storage),
-    [bob, elsewhere, recovered],
-    "stale removal cannot delete a newly recovered credential",
+    [bob, elsewhere, renewed],
+    "stale removal cannot delete a newly issued credential",
   );
-  assert.deepEqual(forgetSavedSession(bob, storage), [elsewhere, recovered]);
-  parkSession({ server: recovered.server, token: recovered.token }, storage);
+  assert.deepEqual(forgetSavedSession(bob, storage), [elsewhere, renewed]);
+  parkSession({ server: renewed.server, token: renewed.token }, storage);
   assert.deepEqual(
     loadSavedSessions(storage),
-    [elsewhere, recovered],
+    [elsewhere, renewed],
     "offline switching preserves cached display information",
   );
 
-  saveSession(recovered, storage);
+  saveSession(renewed, storage);
   for (const operation of [
     `write:${SAVED_SESSIONS_KEY}`,
     `remove:${SESSION_KEY}`,
   ]) {
     fail = operation;
-    assert.throws(() => parkSession(recovered, storage));
+    assert.throws(() => parkSession(renewed, storage));
     assert.deepEqual(loadSession(storage), {
-      server: recovered.server,
-      token: recovered.token,
+      server: renewed.server,
+      token: renewed.token,
     });
   }
   fail = `write:${SESSION_KEY}`;
   assert.throws(() => saveSession(elsewhere, storage));
   assert.deepEqual(loadSession(storage), {
-    server: recovered.server,
-    token: recovered.token,
+    server: renewed.server,
+    token: renewed.token,
   });
   fail = "";
   storage.setItem(SAVED_SESSIONS_KEY, "{damaged");
   assert.deepEqual(loadSavedSessions(storage), []);
-  assert.throws(() => parkSession(recovered, storage));
+  assert.throws(() => parkSession(renewed, storage));
   assert.equal(
     storage.getItem(SAVED_SESSIONS_KEY),
     "{damaged",
     "unreadable archives must not be overwritten",
   );
-  assert.equal(loadSession(storage)?.token, recovered.token);
+  assert.equal(loadSession(storage)?.token, renewed.token);
   storage.setItem(
     SAVED_SESSIONS_KEY,
     JSON.stringify([

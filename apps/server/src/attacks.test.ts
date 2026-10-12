@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { IncomingMessage, ServerResponse } from "node:http";
@@ -6,7 +7,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { DatabaseSync } from "node:sqlite";
 import {
   ATTACK_COOLDOWN_MS,
   ATTACK_TTL_MS,
@@ -72,7 +72,6 @@ test(
         await call("/session", undefined, {
           name,
           character: "chiikawa",
-          status: "",
         })
       ).body;
     }

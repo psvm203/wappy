@@ -17,10 +17,8 @@ test("support reports expose only coarse app states, never profile data or addre
     profile: {
       id: "private-id",
       name: "private-name",
-      status: "private-status",
     },
     friends: [{ name: "private-friend" }],
-    recoveryCode: "wappy-recovery-private-code",
     invite: "private-invitation",
     error: "private-server-message",
   };
@@ -53,7 +51,7 @@ test("support reports expose only coarse app states, never profile data or addre
   for (const server of [
     "http://user:private-password@example.test",
     "https://example.test/?token=private-token",
-    "wappy-recovery-private-code",
+    "private-invalid-address",
   ])
     assert.match(
       supportReport({ ...privateState, server }, "0.1.0", "Win32"),

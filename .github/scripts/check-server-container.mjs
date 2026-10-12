@@ -107,18 +107,15 @@ try {
   const alice = await call("/session", {
     name: "Alice",
     character: "chiikawa",
-    status: "kept",
   });
   const bob = await call("/session", {
     name: "Bob",
     character: "hachiware",
-    status: "",
   });
   const invite = await call("/invites", {}, alice.token);
   assert.equal((await call("/invites/preview", invite)).name, "Alice");
   await call("/invites/accept", invite, bob.token);
   const pendingInvite = await call("/invites", {}, alice.token);
-  const recovery = await call("/recovery-code", {}, alice.token);
   const wave = await call(
     "/friends/wave",
     { friendId: bob.profile.id },
@@ -167,11 +164,8 @@ try {
     false,
   );
   assert.equal((await call("/invites/preview", pendingInvite)).name, "Alice");
-  const recovered = await call("/session/recover", recovery);
-  assert.equal(recovered.profile.id, alice.profile.id);
-  assert.notEqual(recovered.token, alice.token);
   console.log(
-    "PASS non-root startup, CORS, graceful stop, recreation and persisted profiles/friends/waves/privacy/invites/recovery",
+    "PASS non-root startup, CORS, graceful stop, recreation and persisted profiles/friends/waves/privacy/invites",
   );
 
   // Restore the backup into a new, empty test volume, as documented.
@@ -270,7 +264,7 @@ try {
     body: { ok: true },
   });
   const restored = await httpsCall("/state", undefined, alice.token);
-  assert.equal(restored.status, 200, "backup restores the pre-recovery token");
+  assert.equal(restored.status, 200, "backup preserves the saved login token");
   assert.equal(restored.body.self.id, alice.profile.id);
   assert.equal(restored.body.presence.sharing, false);
   assert.equal(restored.body.friends[0].id, bob.profile.id);
@@ -282,17 +276,13 @@ try {
     (await httpsCall("/invites/preview", pendingInvite)).body.name,
     "Alice",
   );
-  assert.equal(
-    (await httpsCall("/session/recover", recovery)).body.profile.id,
-    alice.profile.id,
-  );
   for (let i = 0; i < 12; i++) {
     const reply = await httpsCall("/session", {}, undefined, {
       "X-Forwarded-For": `192.0.2.${i}`,
     });
     assert.equal(
       reply.status,
-      i < 9 ? 400 : 429,
+      i < 10 ? 400 : 429,
       "Caddy must overwrite forged forwarded addresses",
     );
   }
