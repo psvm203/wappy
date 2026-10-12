@@ -1,5 +1,5 @@
-export const CHARACTER_SIZE = 84;
-const MARGIN = 60;
+export const CHARACTER_SIZE = 42;
+const MARGIN = CHARACTER_SIZE / 2;
 const GRAVITY = 1400;
 
 export interface Body {
@@ -28,7 +28,7 @@ export interface DragSample {
 function track(width: number, height: number) {
   const left = Math.min(MARGIN, width / 2);
   // The label moves inward at the ceiling, so only the character needs clearance.
-  const top = Math.min(CHARACTER_SIZE / 2, height / 2);
+  const top = Math.min(MARGIN, height / 2);
   const right = Math.max(left, width - MARGIN);
   const bottom = Math.max(top, height - MARGIN);
   return { left, top, right, bottom, w: right - left, h: bottom - top };

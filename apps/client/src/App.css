@@ -65,10 +65,6 @@
   font-size: 11px;
   color: #68745e;
 }
-.connection-line .text-button {
-  margin-left: auto;
-  font-size: 11px;
-}
 .online-dot {
   display: inline-block;
   width: 6px;
@@ -144,6 +140,10 @@
   color: #374936;
   border-bottom-color: #678b57;
   font-weight: 700;
+}
+.tabs .collapse-button {
+  margin-left: auto;
+  white-space: nowrap;
 }
 .scroll-area {
   overflow-y: auto;

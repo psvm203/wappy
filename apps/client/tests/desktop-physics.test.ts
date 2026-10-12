@@ -36,7 +36,7 @@ test("offline characters keep falling, rest after landing, and walk when online"
   assert.notDeepEqual({ x: body.x, y: body.y }, { x: landed.x, y: landed.y });
   advanceBody(body, 1 / 60, 640, 480, false);
   assert.ok(
-    body.x <= 580 && body.y <= 420,
+    body.x <= 640 - CHARACTER_SIZE / 2 && body.y <= 480 - CHARACTER_SIZE / 2,
     "resizing still keeps a sleeping character on screen",
   );
   body.mode = "drag";
@@ -108,12 +108,16 @@ test("automatic walking covers all four edges without leaving the screen", (t) =
   const edges = new Set<string>();
   for (let i = 0; i < 9000; i++) {
     advanceBody(body, 1 / 60, width, height, true);
-    assert.ok(body.x >= 60 && body.x <= width - 60);
-    assert.ok(body.y >= CHARACTER_SIZE / 2 && body.y <= height - 60);
-    if (body.x === 60) edges.add("left");
-    if (body.x === width - 60) edges.add("right");
+    assert.ok(
+      body.x >= CHARACTER_SIZE / 2 && body.x <= width - CHARACTER_SIZE / 2,
+    );
+    assert.ok(
+      body.y >= CHARACTER_SIZE / 2 && body.y <= height - CHARACTER_SIZE / 2,
+    );
+    if (body.x === CHARACTER_SIZE / 2) edges.add("left");
+    if (body.x === width - CHARACTER_SIZE / 2) edges.add("right");
     if (body.y === CHARACTER_SIZE / 2) edges.add("top");
-    if (body.y === height - 60) edges.add("bottom");
+    if (body.y === height - CHARACTER_SIZE / 2) edges.add("bottom");
   }
   assert.equal(edges.size, 4);
 });
@@ -208,8 +212,10 @@ test("awake and sleeping characters fall toward each nearest edge and land", () 
       assert.equal(body.mode, "walk");
       assert.ok(
         nx === 0
-          ? body.y === (ny < 0 ? CHARACTER_SIZE / 2 : height - 60)
-          : body.x === (nx < 0 ? 60 : width - 60),
+          ? body.y ===
+            (ny < 0 ? CHARACTER_SIZE / 2 : height - CHARACTER_SIZE / 2)
+          : body.x ===
+            (nx < 0 ? CHARACTER_SIZE / 2 : width - CHARACTER_SIZE / 2),
       );
       if (!walking) {
         assert.equal(needsAnimation(body, walking), false);
@@ -222,7 +228,7 @@ test("awake and sleeping characters fall toward each nearest edge and land", () 
 test("a fast throw bounces, loses energy, lands, and resumes walking", () => {
   const body = createBody("throw", width, height);
   Object.assign(body, {
-    x: width - 62,
+    x: width - CHARACTER_SIZE / 2 - 2,
     y: 400,
     vx: 1800,
     vy: 250,
@@ -233,10 +239,10 @@ test("a fast throw bounces, loses energy, lands, and resumes walking", () => {
   for (let i = 0; i < 1200 && body.mode !== "walk"; i++) {
     advanceBody(body, 1 / 60, width, height, true);
     assert.ok(
-      body.x >= 60 &&
-        body.x <= width - 60 &&
+      body.x >= CHARACTER_SIZE / 2 &&
+        body.x <= width - CHARACTER_SIZE / 2 &&
         body.y >= CHARACTER_SIZE / 2 &&
-        body.y <= height - 60,
+        body.y <= height - CHARACTER_SIZE / 2,
     );
   }
   assert.equal(body.mode, "walk");
@@ -255,8 +261,8 @@ test("dragging and offline rest do not auto-walk; resized bounds still apply", (
   advanceBody(body, 0.05, width, height, true);
   assert.equal(body.x, 600);
   assert.equal(body.y, 400);
-  advanceBody(body, 10, 640, 480, true);
-  assert.equal(body.x, 580);
+  advanceBody(body, 10, 600, 480, true);
+  assert.equal(body.x, 600 - CHARACTER_SIZE / 2);
   assert.equal(body.y, 400);
 });
 
@@ -340,16 +346,16 @@ test("random walks stay on the perimeter through turns, pauses, and screen chang
     directions.add(body.direction);
     rested ||= body.restTime > 0;
     assert.ok(
-      body.x >= 60 &&
-        body.x <= w - 60 &&
+      body.x >= CHARACTER_SIZE / 2 &&
+        body.x <= w - CHARACTER_SIZE / 2 &&
         body.y >= CHARACTER_SIZE / 2 &&
-        body.y <= h - 60,
+        body.y <= h - CHARACTER_SIZE / 2,
     );
     assert.ok(
-      body.x === 60 ||
-        body.x === w - 60 ||
+      body.x === CHARACTER_SIZE / 2 ||
+        body.x === w - CHARACTER_SIZE / 2 ||
         body.y === CHARACTER_SIZE / 2 ||
-        body.y === h - 60,
+        body.y === h - CHARACTER_SIZE / 2,
     );
   }
   assert.equal(directions.size, 2);

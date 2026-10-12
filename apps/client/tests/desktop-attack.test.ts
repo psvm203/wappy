@@ -28,11 +28,17 @@ test("a dash follows a moving target, hits once, then both characters return to 
     if (attack.phase === "dash")
       moveBody(target, target.x, target.y + 2, width, height);
     const step = advanceAttack(attack, 1 / 60, width, height, true);
-    assert.ok(attacker.x >= 60 && attacker.x <= width - 60);
-    assert.ok(attacker.y >= CHARACTER_SIZE / 2 && attacker.y <= height - 60);
+    assert.ok(
+      attacker.x >= CHARACTER_SIZE / 2 &&
+        attacker.x <= width - CHARACTER_SIZE / 2,
+    );
+    assert.ok(
+      attacker.y >= CHARACTER_SIZE / 2 &&
+        attacker.y <= height - CHARACTER_SIZE / 2,
+    );
     if (step === "hit") {
       hits++;
-      assert.ok(Math.hypot(attacker.x - target.x, attacker.y - target.y) <= 49);
+      assert.ok(Math.hypot(attacker.x - target.x, attacker.y - target.y) <= 25);
     }
     if (step === "done") {
       done = true;
@@ -161,7 +167,7 @@ test("Hulk jumps above the target, descends onto them, then delivers downward kn
       hit = true;
       assert.ok(attacker.y > previousY, "Hulk must be descending at impact");
       assert.equal(attacker.x, target.x);
-      assert.equal(attacker.y, target.y - 38);
+      assert.equal(attacker.y, target.y - 19);
     }
     if (step === "done") break;
     previousY = attacker.y;
@@ -194,8 +200,8 @@ test("hero effects remain finite at any angle, on overlapping bodies and after a
       }
       let done = false;
       for (let frame = 0; frame < 100; frame++) {
-        moveBody(target, target.x, target.y, 80, 80);
-        const step = advanceAttack(attack, 0.05, 80, 80, true);
+        moveBody(target, target.x, target.y, 40, 40);
+        const step = advanceAttack(attack, 0.05, 40, 40, true);
         assert.ok(
           Object.values(attackVisual(attack, width, height)).every(
             Number.isFinite,
@@ -204,8 +210,8 @@ test("hero effects remain finite at any angle, on overlapping bodies and after a
         assert.ok(
           [attacker.x, attacker.y, attacker.angle].every(Number.isFinite),
         );
-        assert.equal(attacker.x, 40);
-        assert.equal(attacker.y, 40);
+        assert.equal(attacker.x, 20);
+        assert.equal(attacker.y, 20);
         if (step === "done") {
           done = true;
           break;
@@ -219,9 +225,15 @@ test("hero effects remain finite at any angle, on overlapping bodies and after a
 test("Hulk jumps inward from every screen edge and shields stay visible on both flight legs", () => {
   for (const [sx, sy, tx, ty, angle] of [
     [200, CHARACTER_SIZE / 2, 900, CHARACTER_SIZE / 2, Math.PI],
-    [200, 740, 900, 740, 0],
-    [60, 200, 60, 600, Math.PI / 2],
-    [1140, 200, 1140, 600, -Math.PI / 2],
+    [200, height - CHARACTER_SIZE / 2, 900, height - CHARACTER_SIZE / 2, 0],
+    [CHARACTER_SIZE / 2, 200, CHARACTER_SIZE / 2, 600, Math.PI / 2],
+    [
+      width - CHARACTER_SIZE / 2,
+      200,
+      width - CHARACTER_SIZE / 2,
+      600,
+      -Math.PI / 2,
+    ],
   ]) {
     for (const character of ["hulk", "captain-america"] as const) {
       const attacker = createBody("self", width, height);
@@ -240,7 +252,7 @@ test("Hulk jumps inward from every screen edge and shields stay visible on both 
           if (inward > 100) jumped = true;
           if (step === "hit")
             assert.ok(
-              Math.abs(Math.hypot(attacker.x - tx, attacker.y - ty) - 38) <
+              Math.abs(Math.hypot(attacker.x - tx, attacker.y - ty) - 19) <
                 0.001,
             );
         } else {

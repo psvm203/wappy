@@ -45,13 +45,13 @@ import { ChatComposer } from "./ChatComposer";
 import { latestChat } from "./chat";
 import { useDesktopChatRequests } from "./chat-bridge";
 import { InviteField } from "./InviteField";
+import { InviteCode } from "./InviteCode";
 import { StartupSettings } from "./StartupSettings";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import { saveSession, type SavedSession } from "./sessions";
 import {
-  formatInvitation,
   isLocalServer,
   parseInvitation,
   WAPPY_SERVER,
@@ -114,7 +114,6 @@ function App() {
     session && state
       ? residentSelectionKey(session.server, state.self.id)
       : null;
-  const inviteCode = state?.room?.inviteCode;
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
@@ -677,30 +676,18 @@ function App() {
         </div>
       ) : (
         <>
-          <div className="connection-line">
-            <span
-              className={`online-dot ${connection !== "online" || presenceHidden ? "offline" : ""}`}
-            />
-            {connection === "online"
-              ? presenceHidden
+          {(connection !== "online" || presenceHidden) && (
+            <div className="connection-line">
+              <span className="online-dot offline" />
+              {connection === "online"
                 ? "접속 숨김 · 친구에게 오프라인으로 표시"
-                : "우리의 작은 아지트"
-              : connection === "connecting"
-                ? "아지트에 들어가는 중…"
-                : connection === "unauthorized"
-                  ? "프로필 인증이 만료되었어요"
-                  : "연결을 다시 확인하는 중…"}
-            {state && (
-              <button
-                className="text-button"
-                onClick={toggleCompact}
-                disabled={busy}
-                title="캐릭터만 보기"
-              >
-                접기 ⇥
-              </button>
-            )}
-          </div>
+                : connection === "connecting"
+                  ? "아지트에 들어가는 중…"
+                  : connection === "unauthorized"
+                    ? "프로필 인증이 만료되었어요"
+                    : "연결을 다시 확인하는 중…"}
+            </div>
+          )}
           {connection === "offline" && (
             <div className="connection-warning" role="status">
               <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
@@ -759,6 +746,16 @@ function App() {
                 {label}
               </button>
             ))}
+            {state && (
+              <button
+                className="text-button collapse-button"
+                onClick={toggleCompact}
+                disabled={busy}
+                title="캐릭터만 보기"
+              >
+                접기 ⇥
+              </button>
+            )}
           </nav>
           <div className="scroll-area content">
             {desktopError && (
@@ -894,37 +891,12 @@ function App() {
                     </p>
                   )}
                   <p>참여자 누구나 같은 방으로 초대할 수 있어요.</p>
-                  {inviteCode && (
-                    <>
-                      <label className="field">
-                        친구에게 보낼 코드
-                        <input
-                          className="invite-code"
-                          readOnly
-                          value={inviteCode}
-                          onFocus={(event) => event.target.select()}
-                        />
-                      </label>
-                      <button
-                        className="primary"
-                        onClick={async () => {
-                          setError("");
-                          try {
-                            await navigator.clipboard.writeText(
-                              formatInvitation(session.server, inviteCode),
-                            );
-                            setNotice("초대 코드를 복사했어요.");
-                          } catch {
-                            setError(
-                              "코드 입력란을 선택한 뒤 직접 복사해 주세요.",
-                            );
-                          }
-                        }}
-                      >
-                        초대 코드 복사 <span aria-hidden="true">↗</span>
-                      </button>
-                    </>
-                  )}
+                  <InviteCode
+                    key={`${profileKey}:${state.room?.id ?? ""}`}
+                    session={session}
+                    code={state.room?.inviteCode}
+                    onCopied={() => setNotice("초대 코드를 복사했어요.")}
+                  />
                   {session.server !== WAPPY_SERVER && (
                     <p className="hint server-address">
                       친구도 같은 서버에 연결해야 해요.
