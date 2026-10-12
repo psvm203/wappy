@@ -43,7 +43,7 @@ test("legacy status messages are discarded from profiles, server snapshots and s
 });
 
 test("retired characters are rejected for new profiles but old snapshots and saved sessions remain usable", () => {
-  assert.equal(CHARACTERS.length, 14);
+  assert.equal(CHARACTERS.length, 20);
   for (const character of REMOVED_CHARACTERS) {
     const input = { name: "기존 친구", character };
     const profile = { id: "self", ...input };

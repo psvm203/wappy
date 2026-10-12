@@ -2,7 +2,9 @@
 
 친구들의 캐릭터가 바탕화면과 다른 앱 위를 돌아다니는 macOS·Windows용 Tauri 앱입니다. 사이드바에서 친구와 캐릭터를 관리합니다.
 초대 코드로 친구를 연결하고, 이름·캐릭터와 접속 상태를 공유합니다.
-캐릭터는 치이카와·가르마·토끼·하늘다람쥐·밤만쥬·해달·시사·헌책방 8종 중에서 고를 수 있습니다. 모든 캐릭터는 걷기·드래그·오프라인 수면 표시를 지원합니다. 치이카와 캐릭터의 외형은 저장소의 [sample](sample/)에 있는 전신 참고 이미지(`*2.webp`)를 기준으로 몸의 비율·색상·표정·자세를 맞춘 SVG입니다. 하늘다람쥐의 하늘색 꼬리, 밤만쥬의 음료캔, 해달의 목도리, 헌책방이 펼쳐 든 책 등 각 캐릭터의 특징을 반영했습니다. 오프라인에서는 눈을 감은 표정으로 바뀝니다.
+캐릭터는 치이카와 8종, 어벤져스 6종, 산리오 6종으로 총 20종 중에서 고를 수 있습니다. 모든 캐릭터는 걷기·드래그·오프라인 수면 표시를 지원합니다. 치이카와 캐릭터의 외형은 저장소의 [sample](sample/)에 있는 전신 참고 이미지(`*2.webp`)를 기준으로 몸의 비율·색상·표정·자세를 맞춘 SVG입니다. 하늘다람쥐의 하늘색 꼬리, 밤만쥬의 음료캔, 해달의 목도리, 헌책방이 펼쳐 든 책 등 각 캐릭터의 특징을 반영했습니다. 오프라인에서는 눈을 감은 표정으로 바뀝니다.
+
+산리오는 [포차코](https://corporate.sanrio.co.jp/en/business-info/brands/pochacco/), [배드바츠마루](https://corporate.sanrio.co.jp/en/business-info/brands/bad_badtz-maru/), [한교동](https://corporate.sanrio.co.jp/en/business-info/brands/hangyodon/), [아히루노페클](https://corporate.sanrio.co.jp/en/business-info/brands/ahirunopekkle/), [턱시도샘](https://corporate.sanrio.co.jp/en/business-info/brands/tuxedosam/), [케로케로케로피](https://corporate.sanrio.co.jp/en/business-info/brands/kerokerokeroppi/)를 제공합니다. 공식 소개의 외형을 참고한 SVG로 검은 귀·뾰족한 머리·분홍 입술·파란 티셔츠·모자와 나비넥타이·커다란 눈과 줄무늬 옷 등 각 캐릭터의 특징을 표현했습니다. 새 프로필, 내 모습 변경, 서버 없는 체험에서 선택할 수 있습니다.
 
 설치한 데스크톱 앱의 첫 화면에서 **서버 없이 체험하기**를 누르면 서버나 프로필 없이 캐릭터를 바로 꺼내 볼 수 있습니다. 화면 가장자리를 걷는 캐릭터를 드래그하거나 던지고, **체험 모습 바꾸기**로 이름·캐릭터를 바꿀 수 있습니다. 체험 중에는 서버 요청이나 로그인 정보 발급 없이 한 캐릭터만 표시합니다.
 
@@ -114,7 +116,7 @@ CI 설치 파일의 빌드 식별자는 해당 커밋 SHA의 앞 12자리입니�
 | `POST /friends/attack` | `{ friendId }`                | `{ id, attackerId, targetId, sentAt }` (201)                     |
 | `GET /health`          | 없음                          | `{ ok: true }`                                                 |
 
-`POST /session`, `POST /invites/preview`, `GET /health`, CORS preflight를 제외한 요청은 `Authorization: Bearer <token>`이 필요합니다. 오류는 `{ error: string }`과 400/401/403/404/409/413/415/429/500 상태 코드로 반환합니다. 이름은 1–24자, 캐릭터는 `chiikawa`, `hachiware`, `usagi`, `momonga`, `kurimanju`, `rakko`, `shisa`, `furuhonya` 중 하나입니다. 서버와 참여하는 앱을 함께 업데이트하세요. 서버 시작 시 기존 프로필의 상태 메시지 열을 삭제하며, 이름·캐릭터·로그인 정보·친구 연결은 유지합니다. 삭제된 기본 캐릭터 6종의 기존 프로필·차단 목록은 서버 시작 시 `chiikawa`로 전환되며, 기기에 저장된 프로필이나 이전 서버 응답도 치이카와로 표시합니다. 새 프로필 생성·수정 요청에는 위 8종만 허용합니다.
+`POST /session`, `POST /invites/preview`, `GET /health`, CORS preflight를 제외한 요청은 `Authorization: Bearer <token>`이 필요합니다. 오류는 `{ error: string }`과 400/401/403/404/409/413/415/429/500 상태 코드로 반환합니다. 이름은 1–24자, 캐릭터는 공통 API의 `CHARACTERS`에 등록된 20종 중 하나입니다. 산리오 캐릭터 ID는 `pochacco`, `badtz-maru`, `hangyodon`, `pekkle`, `tuxedosam`, `keroppi`입니다. 서버와 참여하는 앱을 함께 업데이트하세요. 서버 시작 시 기존 프로필의 상태 메시지 열을 삭제하며, 이름·캐릭터·로그인 정보·친구 연결은 유지합니다. 삭제된 기본 캐릭터 6종의 기존 프로필·차단 목록은 서버 시작 시 `chiikawa`로 전환되며, 기기에 저장된 프로필이나 이전 서버 응답도 치이카와로 표시합니다. 새 프로필 생성·수정 요청에는 현재 등록된 캐릭터만 허용합니다.
 
 새 초대 코드는 영문 대문자·숫자 5자리이며 혼동하기 쉬운 `I`, `O`, `0`, `1`을 제외합니다. 소문자로 입력해도 사용할 수 있고, 인원과 기간 제한 없이 여러 사람이 같은 코드로 연결할 수 있습니다. 수락해도 코드를 지우지 않으며, 새 코드를 직접 만들면 이전 코드가 무효화됩니다. 코드가 겹치면 다른 코드를 발급합니다. 본인 초대와 중복 연결은 거부하며 초대·차단 확인과 친구 연결은 하나의 SQLite 트랜잭션으로 처리됩니다. 서버 업데이트 시 DB에 남아 있는 기존 43자리 코드도 만료 제한 없이 사용할 수 있습니다. 이미 삭제된 코드는 복원하지 않습니다. 5자리·무제한 초대를 사용하려면 서버와 앱을 함께 업데이트해야 합니다. 연결 해제는 양쪽 목록에 반영됩니다.
 
@@ -212,7 +214,7 @@ cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle -
 
 macOS의 투명 창은 `macOSPrivateApi` 설정과 `macos-private-api` Cargo 기능을 사용하므로 현재 빌드는 직접 배포를 전제로 합니다. Tauri 문서는 이 방식의 Mac App Store 수용 불가를 명시하고, Apple 심사 지침 2.5.1은 공개 API만 허용합니다. Mac App Store용으로 출시하려면 바탕화면 캐릭터 경험을 유지할 수 있는 공개 API 렌더링 방식을 별도로 구현·검증해야 합니다. 설정 하나를 끄거나 사이드바만 남긴 빌드로 같은 기능을 제공한다고 볼 수 없습니다. [Tauri 투명 창 설정](https://v2.tauri.app/reference/config/#transparent), [Apple 소프트웨어 요구사항](https://developer.apple.com/app-store/review/guidelines/#software-requirements)
 
-macOS에서 아래 명령은 공개 AppKit API로 대체 렌더링이 가능한지 검사합니다. 기존 `Character.tsx`에서 공통 캐릭터 목록에 등록된 8종의 접속·오프라인 SVG 16개를 생성하고, 별도 Swift 검사 프로그램이 이를 실제 투명 `NSWindow`/`NSView`에 그립니다. 새 그림 파일을 따로 유지하지 않으며 기존 캐릭터를 그대로 사용합니다. 잠시 나타나는 검사 창은 키보드 초점을 가져가지 않습니다. 프로필이나 WebView 저장소를 읽지 않고 화면 녹화·손쉬운 사용 권한도 요청하지 않습니다.
+macOS에서 아래 명령은 공개 AppKit API로 대체 렌더링이 가능한지 검사합니다. 기존 `Character.tsx`에서 공통 캐릭터 목록에 등록된 20종의 접속·오프라인 SVG 40개를 생성하고, 별도 Swift 검사 프로그램이 이를 실제 투명 `NSWindow`/`NSView`에 그립니다. 새 그림 파일을 따로 유지하지 않으며 기존 캐릭터를 그대로 사용합니다. 잠시 나타나는 검사 창은 키보드 초점을 가져가지 않습니다. 프로필이나 WebView 저장소를 읽지 않고 화면 녹화·손쉬운 사용 권한도 요청하지 않습니다.
 
 ```sh
 pnpm --filter @wappy/api build

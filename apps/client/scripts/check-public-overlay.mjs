@@ -23,6 +23,7 @@ if (process.platform !== "darwin") {
       "ChiikawaFriends",
       "ChiikawaGuardians",
       "Avengers",
+      "Sanrio",
       "Character",
     ]) {
       const source = readFileSync(
@@ -45,7 +46,7 @@ if (process.platform !== "darwin") {
           '"@wappy/api"',
           JSON.stringify(import.meta.resolve("@wappy/api")),
         )
-        .replace(/"(\.\/(?:Chiikawa\w+|Avengers))"/g, '"$1.mjs"');
+        .replace(/"(\.\/(?:Chiikawa\w+|Avengers|Sanrio))"/g, '"$1.mjs"');
       writeFileSync(join(directory, `${name}.mjs`), compiled);
     }
     const { Character } = await import(
