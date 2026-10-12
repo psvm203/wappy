@@ -152,7 +152,13 @@ export function Thor({ asleep }: { asleep: boolean }) {
       <path d="M29 31q21-13 42 0v12Q66 59 50 59T29 43Z" fill="#efc39b" />
       <path d="M29 30q1-15 21-16 19 1 21 16l-12-6-9-6-9 6Z" fill="#f5d784" />
       <Eyes asleep={asleep} />
-      <path d="m39 48 6 3h10l6-3-3 9H42Z" fill="#bd9345" strokeWidth="1.4" />
+      <path
+        d="m31 42 3 4 2-3 3 4 3-2q8-3 16 0l3 2 3-4 2 3 3-4Q66 58 50 58T31 42Z"
+        fill="#bd9345"
+        stroke="none"
+      />
+      <path d="M42 48q8-3 16 0l-1 5q-7 5-14 0Z" fill="#efc39b" stroke="none" />
+      <path d="M44 49q6 5 12 0" fill="none" strokeWidth="1.8" />
       <g className="hero-rest-pose">
         <path d="m70 60 7 12-7 6-7-13" fill="#efc39b" />
         <path d="m78 67 3 23" stroke="#795344" strokeWidth="6" />
@@ -213,6 +219,7 @@ export function Hulk({ asleep }: { asleep: boolean }) {
 export function BlackWidow({ asleep }: { asleep: boolean }) {
   return (
     <Ink>
+      <path d="M24 30Q23 8 50 9q29 0 27 26l3 27-17 3H27l-7-6Z" fill="#9e483e" />
       <path d="m35 77-3 20h12l6-18 6 18h12l-3-20" fill="#333c4c" />
       <path d="M29 58q21-9 42 0l-8 18 4 9H33l4-9Z" fill="#333c4c" />
       <path
@@ -225,7 +232,6 @@ export function BlackWidow({ asleep }: { asleep: boolean }) {
       <path d="m46 75 4 4-4 5h8l-4-5 4-4Z" fill="#ea6664" stroke="none" />
       <path d="m29 60-8 16 9 6 9-19" fill="#333c4c" />
       <path d="m24 73 7 4" stroke="#d8ae5e" strokeWidth="5" />
-      <path d="M24 30Q23 8 50 9q29 0 27 26l3 27-17 3H27l-7-6Z" fill="#9e483e" />
       <path d="M29 30q21-12 42 0v13Q67 59 50 59T29 43Z" fill="#f2c4a9" />
       <path
         d="M26 39q-4-26 24-26 23 0 25 23-14-4-20-15-9 13-29 18Z"
