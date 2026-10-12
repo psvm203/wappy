@@ -1,0 +1,65 @@
+.chat-composer {
+  width: 240px;
+  max-width: calc(100vw - 8px);
+  padding: 10px;
+  border: 1px solid #d5dfcc;
+  border-radius: 12px;
+  background: #fbfbf7;
+  box-shadow: 0 4px 16px #23311a26;
+  color: #536447;
+  font-size: 11px;
+  text-align: left;
+  white-space: normal;
+  cursor: default;
+  pointer-events: auto;
+}
+.chat-composer-heading,
+.chat-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.chat-composer-heading span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chat-composer button {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #e6efda;
+  color: #35462d;
+  white-space: nowrap;
+}
+.chat-composer button:disabled {
+  opacity: 0.5;
+}
+.chat-composer textarea {
+  display: block;
+  width: 100%;
+  margin: 7px 0;
+  padding: 7px;
+  border: 1px solid #cbd7c0;
+  border-radius: 7px;
+  background: white;
+  color: #35462d;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.chat-composer p {
+  margin: 6px 0;
+  font-size: 11px;
+}
+.character-chat-anchor {
+  position: relative;
+  flex-shrink: 0;
+}
+.character-chat-anchor > .chat-composer {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+}

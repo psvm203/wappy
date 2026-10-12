@@ -7,13 +7,10 @@ import {
 import { DatabaseSync } from "node:sqlite";
 import { isIP } from "node:net";
 import { kakaoIdentity, type KakaoConfig } from "./kakao.ts";
-import { createReports, ReportError } from "./reports.ts";
 import {
   INVITE_TTL_MS,
   REMOVED_CHARACTERS,
   ONLINE_TIMEOUT_MS,
-  WAVE_COOLDOWN_MS,
-  WAVE_TTL_MS,
   ATTACK_COOLDOWN_MS,
   ATTACK_TTL_MS,
   ATTACK_HISTORY_LIMIT,
@@ -23,14 +20,11 @@ import {
   CHAT_TTL_MS,
   isRecord,
   parseChatText,
-  parseChatMessageIds,
-  parseChatReportInput,
   parseProfile,
   type ApiErrorBody,
   type Output,
   type Profile,
   type Route,
-  type Wave,
   type ChatMessage,
   type BlockedProfile,
 } from "@wappy/api";
@@ -125,7 +119,6 @@ export function createApp(options: {
   now?: () => number;
   kakao?: KakaoConfig;
   kakaoFetch?: typeof fetch;
-  reportsEnabled?: boolean;
 }) {
   const db = new DatabaseSync(options.databasePath);
   db.exec(`
@@ -166,14 +159,6 @@ export function createApp(options: {
       sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
       revision INTEGER NOT NULL CHECK (revision >= 1)
     ) STRICT;
-    CREATE TABLE IF NOT EXISTS waves (
-      id TEXT NOT NULL UNIQUE,
-      user_id TEXT NOT NULL, friend_id TEXT NOT NULL, sender_id TEXT NOT NULL,
-      sent_at INTEGER NOT NULL, acknowledged INTEGER NOT NULL CHECK (acknowledged IN (0, 1)),
-      PRIMARY KEY (user_id, friend_id, sender_id),
-      CHECK (sender_id = user_id OR sender_id = friend_id),
-      FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
-    ) STRICT;
     CREATE TABLE IF NOT EXISTS chat_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -196,7 +181,6 @@ export function createApp(options: {
     CREATE TABLE IF NOT EXISTS chat_recipients (
       message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL, friend_id TEXT NOT NULL,
-      acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1)),
       PRIMARY KEY (message_id, user_id, friend_id),
       FOREIGN KEY (user_id, friend_id) REFERENCES friendships(user_id, friend_id) ON DELETE CASCADE
     ) STRICT;
@@ -220,15 +204,6 @@ export function createApp(options: {
     db.exec(
       "ALTER TABLE chat_messages ADD COLUMN recipient_id TEXT REFERENCES users(id) ON DELETE CASCADE",
     );
-  if (
-    !db
-      .prepare("PRAGMA table_info(chat_recipients)")
-      .all()
-      .some((column) => column.name === "acknowledged")
-  )
-    db.exec(
-      "ALTER TABLE chat_recipients ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged IN (0, 1))",
-    );
   for (const table of ["users", "profile_blocks"]) {
     db.prepare(
       `UPDATE ${table} SET character = 'chiikawa'
@@ -236,7 +211,6 @@ export function createApp(options: {
     ).run(...REMOVED_CHARACTERS);
   }
   const now = options.now ?? Date.now;
-  const reports = createReports(db, now);
   // ponytail: single-process presence; use shared TTL storage before running replicas.
   const lastSeen = new Map<string, number>();
   let presenceRevision = 0;
@@ -273,13 +247,11 @@ export function createApp(options: {
     "SELECT id, name, character FROM users WHERE token_hash = ?",
   );
   const selectFriends = db.prepare(`
-    SELECT u.id, u.name, u.character, w.id AS wave_id, w.sent_at AS wave_sent_at,
+    SELECT u.id, u.name, u.character,
       COALESCE(p.sharing, 1) AS sharing
     FROM friendships f
     JOIN users u ON u.id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
     LEFT JOIN presence_settings p ON p.user_id = u.id
-    LEFT JOIN waves w ON w.user_id = f.user_id AND w.friend_id = f.friend_id
-      AND w.sender_id = u.id AND w.acknowledged = 0 AND w.sent_at > ?
     WHERE f.user_id = ? OR f.friend_id = ? ORDER BY u.name, u.id
   `);
   const selectPresence = db.prepare(
@@ -300,35 +272,25 @@ export function createApp(options: {
     revision: Number(selectBlockingRevision.get(id)?.revision ?? 0),
     profiles: selectBlocks.all(id) as unknown as BlockedProfile[],
   });
+  // Keep legacy private rows out of the broadcast feed.
   const selectMessages = db.prepare(`
-    SELECT id, sender_id AS senderId, recipient_id AS recipientId, text, sent_at AS sentAt,
-      sender_id <> ? AND EXISTS (
-        SELECT 1 FROM chat_recipients r WHERE r.message_id = chat_messages.id
-          AND (r.user_id = ? OR r.friend_id = ?) AND r.acknowledged = 0
-      ) AS unread
+    SELECT id, sender_id AS senderId, text, sent_at AS sentAt
     FROM chat_messages
     WHERE id IN (
       SELECT id FROM chat_messages WHERE sender_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE user_id = ?
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
-    ) AND sent_at > ? ORDER BY id DESC LIMIT ?
+    ) AND recipient_id IS NULL AND sent_at > ? ORDER BY id DESC LIMIT ?
   `);
   const selectAttacks =
     db.prepare(`SELECT id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt
     FROM attack_events WHERE (attacker_id = ? OR target_id = ?) AND sent_at > ?
     ORDER BY id DESC LIMIT ?`);
-  const acknowledgeChat = db.prepare(`
-    UPDATE chat_recipients SET acknowledged = 1
-    WHERE message_id = ? AND (user_id = ? OR friend_id = ?)
-      AND EXISTS (SELECT 1 FROM chat_messages WHERE id = chat_recipients.message_id
-        AND sender_id <> ? AND sent_at > ?)
-  `);
   const selectChanges = db.prepare("SELECT total_changes() AS changes");
   const selectDataVersion = db.prepare("PRAGMA data_version");
   const profile = (id: string) => selectProfile.get(id) as unknown as Profile;
   const housekeeping = setInterval(() => {
     const time = now();
-    reports.prune();
     for (const [id, validator] of validators)
       if (validator.validUntil <= time) validators.delete(id);
     for (const [id, seen] of lastSeen)
@@ -338,7 +300,6 @@ export function createApp(options: {
     for (const [state, attempt] of kakaoAttempts)
       if (attempt.expiresAt <= time) kakaoAttempts.delete(state);
     db.prepare("DELETE FROM invites WHERE expires_at <= ?").run(time);
-    db.prepare("DELETE FROM waves WHERE sent_at <= ?").run(time - WAVE_TTL_MS);
     db.prepare("DELETE FROM attack_events WHERE sent_at <= ?").run(
       time - ATTACK_TTL_MS,
     );
@@ -670,12 +631,9 @@ export function createApp(options: {
           }
           const rows = selectFriends.all(
             self!.id,
-            time - WAVE_TTL_MS,
             self!.id,
             self!.id,
           ) as unknown as (Profile & {
-            wave_id: string | null;
-            wave_sent_at: number | null;
             sharing: number;
           })[];
           const presence = selectPresence.get(self!.id);
@@ -684,15 +642,9 @@ export function createApp(options: {
               self!.id,
               self!.id,
               self!.id,
-              self!.id,
-              self!.id,
-              self!.id,
               time - CHAT_TTL_MS,
               CHAT_HISTORY_LIMIT,
-            ) as unknown as (Omit<ChatMessage, "recipientId"> & {
-              recipientId: string | null;
-              unread: number;
-            })[]
+            ) as unknown as ChatMessage[]
           ).reverse();
           const state: Output<"GET /state"> = {
             self: self!,
@@ -705,31 +657,18 @@ export function createApp(options: {
               ) as unknown as AttackEvent[]
             ).reverse(),
             blocking: blocking(self!.id),
-            directChat: true,
-            chatReporting: options.reportsEnabled === true,
-            messages: messages.map(({ recipientId, unread, ...message }) => ({
-              ...message,
-              ...(recipientId === null ? {} : { recipientId }),
-            })),
-            unreadChatIds: messages
-              .filter((message) => message.unread === 1)
-              .map((message) => message.id),
+            messages,
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
               revision: presence ? Number(presence.revision) : 0,
             },
-            friends: rows.map(
-              ({ wave_id, wave_sent_at, sharing, ...friend }) => ({
-                ...friend,
-                online:
-                  sharing === 1 &&
-                  lastSeen.has(friend.id) &&
-                  time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
-                ...(wave_id && wave_sent_at !== null
-                  ? { wave: { id: wave_id, sentAt: wave_sent_at } }
-                  : {}),
-              }),
-            ),
+            friends: rows.map(({ sharing, ...friend }) => ({
+              ...friend,
+              online:
+                sharing === 1 &&
+                lastSeen.has(friend.id) &&
+                time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+            })),
           };
           const body = JSON.stringify(state);
           const etag = `"${hash(body)}"`;
@@ -739,11 +678,6 @@ export function createApp(options: {
               validUntil = Math.min(
                 validUntil,
                 lastSeen.get(friend.id)! + ONLINE_TIMEOUT_MS,
-              );
-            if (friend.wave)
-              validUntil = Math.min(
-                validUntil,
-                friend.wave.sentAt + WAVE_TTL_MS,
               );
           }
           for (const message of state.messages!)
@@ -771,35 +705,15 @@ export function createApp(options: {
           res.end(unchanged ? undefined : body);
           break;
         }
-        case "POST /chat":
-        case "POST /chat/direct": {
+        case "POST /chat": {
           let text;
           try {
             text = parseChatText(isRecord(body) ? body.text : undefined);
           } catch (error) {
             throw new HttpError(400, (error as Error).message);
           }
-          const recipientId =
-            route === "POST /chat/direct" ? field(body, "friendId") : undefined;
-          if (
-            route === "POST /chat" &&
-            isRecord(body) &&
-            ("friendId" in body || "recipientId" in body)
-          )
-            throw new HttpError(400, "1:1 채팅 전송 경로를 사용해 주세요.");
-          const pair = recipientId ? [self!.id, recipientId].sort() : undefined;
-          if (
-            pair &&
-            !db
-              .prepare(
-                "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
-              )
-              .get(pair[0]!, pair[1]!)
-          )
-            throw new HttpError(
-              404,
-              "연결된 친구에게만 1:1 메시지를 보낼 수 있어요.",
-            );
+          if (isRecord(body) && ("friendId" in body || "recipientId" in body))
+            throw new HttpError(400, "개인 채팅은 지원하지 않아요.");
           const time = now();
           const last = db
             .prepare(
@@ -816,21 +730,16 @@ export function createApp(options: {
             id = Number(
               db
                 .prepare(
-                  "INSERT INTO chat_messages (sender_id, recipient_id, text, sent_at) VALUES (?, ?, ?, ?)",
+                  "INSERT INTO chat_messages (sender_id, text, sent_at) VALUES (?, ?, ?)",
                 )
-                .run(self!.id, recipientId ?? null, text, time).lastInsertRowid,
+                .run(self!.id, text, time).lastInsertRowid,
             );
             // Snapshot the audience. New/reconnected friends cannot read earlier messages.
-            if (pair) {
-              db.prepare(
-                "INSERT INTO chat_recipients (message_id, user_id, friend_id) VALUES (?, ?, ?)",
-              ).run(id, pair[0]!, pair[1]!);
-            } else
-              db.prepare(
-                `INSERT INTO chat_recipients (message_id, user_id, friend_id)
+            db.prepare(
+              `INSERT INTO chat_recipients (message_id, user_id, friend_id)
               SELECT ?, user_id, friend_id FROM friendships WHERE user_id = ? OR friend_id = ?
             `,
-              ).run(id, self!.id, self!.id);
+            ).run(id, self!.id, self!.id);
             db.prepare(
               `DELETE FROM chat_messages WHERE sender_id = ? AND id NOT IN (
               SELECT id FROM chat_messages WHERE sender_id = ? ORDER BY id DESC LIMIT ?
@@ -847,65 +756,11 @@ export function createApp(options: {
             {
               id,
               senderId: self!.id,
-              ...(recipientId ? { recipientId } : {}),
               text,
               sentAt: time,
             },
             201,
           );
-          break;
-        }
-        case "GET /chat/reports": {
-          reply(res, route, reports.receipts(self!.id));
-          break;
-        }
-        case "POST /chat/report": {
-          if (!options.reportsEnabled)
-            throw new HttpError(
-              503,
-              "이 서버는 현재 새 메시지 신고를 받지 않아요. 불편한 친구는 차단할 수 있어요.",
-            );
-          let input;
-          try {
-            input = parseChatReportInput(body);
-          } catch (error) {
-            throw new HttpError(400, (error as Error).message);
-          }
-          reply(res, route, reports.submit(self!.id, input));
-          break;
-        }
-        case "POST /chat/read": {
-          let messageIds: number[];
-          try {
-            messageIds = parseChatMessageIds(
-              isRecord(body) ? body.messageIds : undefined,
-            );
-          } catch (error) {
-            throw new HttpError(400, (error as Error).message);
-          }
-          db.exec("BEGIN IMMEDIATE");
-          try {
-            const cutoff = now() - CHAT_TTL_MS;
-            for (const id of messageIds) {
-              const result = acknowledgeChat.run(
-                id,
-                self!.id,
-                self!.id,
-                self!.id,
-                cutoff,
-              );
-              if (!result.changes)
-                throw new HttpError(
-                  404,
-                  "메시지를 확인할 수 없어요. 최신 대화 목록을 확인해 주세요.",
-                );
-            }
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
-          reply(res, route, { messageIds });
           break;
         }
         case "PATCH /profile": {
@@ -1110,67 +965,11 @@ export function createApp(options: {
           reply(res, route, attack, 201);
           break;
         }
-        case "POST /friends/wave": {
-          const pair = [self!.id, field(body, "friendId")].sort();
-          const time = now();
-          // One row per direction keeps only the latest greeting. The guarded upsert
-          // also enforces cooldown across restarts and simultaneous requests.
-          const wave = db
-            .prepare(
-              `
-            INSERT INTO waves (id, user_id, friend_id, sender_id, sent_at, acknowledged)
-            SELECT ?, user_id, friend_id, ?, ?, 0 FROM friendships
-            WHERE user_id = ? AND friend_id = ?
-            ON CONFLICT(user_id, friend_id, sender_id) DO UPDATE SET
-              id = excluded.id, sent_at = excluded.sent_at, acknowledged = 0
-            WHERE waves.sent_at <= ?
-            RETURNING id, sent_at AS sentAt
-          `,
-            )
-            .get(
-              randomUUID(),
-              self!.id,
-              time,
-              pair[0]!,
-              pair[1]!,
-              time - WAVE_COOLDOWN_MS,
-            ) as unknown as Wave | undefined;
-          if (!wave) {
-            if (
-              !db
-                .prepare(
-                  "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",
-                )
-                .get(pair[0]!, pair[1]!)
-            )
-              throw new HttpError(
-                404,
-                "연결된 친구에게만 인사를 보낼 수 있어요.",
-              );
-            res.setHeader("Retry-After", String(WAVE_COOLDOWN_MS / 1000));
-            throw new HttpError(
-              429,
-              "방금 인사를 보냈어요. 같은 친구에게는 30초에 한 번 보낼 수 있어요.",
-            );
-          }
-          reply(res, route, wave, 201);
-          break;
-        }
-        case "POST /waves/read": {
-          // Match the exact greeting: a late acknowledgement must not hide a newer one.
-          // Only the recipient may acknowledge it; retries and stale ids are safe no-ops.
-          db.prepare(
-            `UPDATE waves SET acknowledged = 1 WHERE id = ?
-            AND sender_id != ? AND (user_id = ? OR friend_id = ?)`,
-          ).run(field(body, "waveId"), self!.id, self!.id, self!.id);
-          reply(res, route, { ok: true });
-          break;
-        }
         default:
           throw new HttpError(404, "API 경로를 찾을 수 없습니다.");
       }
     } catch (error) {
-      const known = error instanceof HttpError || error instanceof ReportError;
+      const known = error instanceof HttpError;
       const status = known ? error.status : 500;
       if (status === 500) console.error("Request failed:", error);
       const body: ApiErrorBody = {

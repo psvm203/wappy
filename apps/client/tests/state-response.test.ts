@@ -132,7 +132,8 @@ test("invalid server states cannot become online or corrupt character rendering"
       self,
       friends: [{ ...friend, wave: { ...wave, private: "discard" } }],
     }),
-    { self, friends: [{ ...friend, wave }] },
+    state,
+    "old server greetings are discarded",
   );
   assert.deepEqual(
     parseSidebarState({ self: { ...self, token: "private" }, friends: [] }),
@@ -149,26 +150,6 @@ test("invalid server states cannot become online or corrupt character rendering"
     { self, friends: [{ ...friend, name: null }] },
     { self, friends: [friend, friend] },
     { self, friends: [{ ...friend, id: self.id }] },
-    ...[
-      null,
-      {},
-      { ...wave, id: "" },
-      { ...wave, id: 123 },
-      { ...wave, id: "x".repeat(129) },
-      { ...wave, sentAt: "today" },
-      { ...wave, sentAt: NaN },
-      { ...wave, sentAt: -1 },
-      { ...wave, sentAt: 0.5 },
-      { ...wave, sentAt: Infinity },
-      { ...wave, sentAt: 8_640_000_000_000_001 },
-    ].map((wave) => ({ self, friends: [{ ...friend, wave }] })),
-    {
-      self,
-      friends: [
-        { ...friend, wave },
-        { ...friend, id: "other", wave },
-      ],
-    },
   ])
     assert.throws(() => parseSidebarState(invalid));
 });
