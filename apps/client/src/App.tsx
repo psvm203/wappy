@@ -60,7 +60,6 @@ import { reconcilePresence } from "./presence";
 import {
   forgetSavedSession,
   loadSavedSessions,
-  parkSession,
   saveSession,
   type SavedProfile,
   type SavedSession,
@@ -405,20 +404,6 @@ function App() {
     setPanel("friends");
     setNotice("");
     setError("");
-  }
-
-  function switchServer() {
-    if (!session || busy) return;
-    try {
-      setSavedSessions(
-        parkSession({ ...session, ...(state ? { profile: state.self } : {}) }),
-      );
-      showOnboarding();
-    } catch {
-      setError(
-        "프로필을 보관하지 못해 현재 연결을 유지했어요. 기기 저장 공간과 저장소 접근을 확인해 주세요.",
-      );
-    }
   }
 
   function selectSavedSession(saved: SavedProfile) {
@@ -918,12 +903,6 @@ function App() {
           {connection === "offline" && (
             <div className="connection-warning" role="status">
               <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
-              <button
-                className="text-button"
-                onClick={() => setPanel("profile")}
-              >
-                서버 설정 보기
-              </button>
             </div>
           )}
           {connection === "unauthorized" && (
@@ -1264,7 +1243,6 @@ function App() {
                   <>
                     <p className="eyebrow">THIS IS ME</p>
                     <h1 className="profile-title">오늘의 나는.</h1>
-                    {presenceControls}
                     <ProfileForm
                       key={state.self.id}
                       initial={state.self}
@@ -1280,39 +1258,7 @@ function App() {
                     />
                   </>
                 )}
-                <section
-                  className="invite-card server-panel"
-                  aria-label="서버 설정"
-                >
-                  <h2>함께할 서버</h2>
-                  <p className="hint server-address">
-                    현재 서버: <strong>{session.server}</strong>
-                  </p>
-                  <ServerCheck
-                    key={session.server}
-                    server={session.server}
-                    busy={busy}
-                  />
-                  <p>
-                    현재 프로필을 이 기기에 보관하고 첫 화면으로 돌아갑니다.
-                    다른 서버에서 새로 시작하거나, 보관한 프로필로 다시 돌아올
-                    수 있어요.
-                  </p>
-                  <p className="hint">
-                    기기 저장소가 지워지면 보관한 로그인 정보도 사라집니다.
-                    이름으로 만든 프로필은 로그인 정보를 잃으면 다시 불러올 수
-                    없어요.
-                  </p>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={switchServer}
-                  >
-                    프로필 보관하고 서버 바꾸기
-                  </button>
-                </section>
                 {desktop && <StartupSettings />}
-                {support}
               </>
             )}
           </div>
