@@ -35,7 +35,7 @@ export function DesktopOverlay() {
       collectAttacks(
         attackInbox,
         snapshot?.state?.attacks ?? [],
-        new Set(),
+        new Map(),
         false,
         performance.now(),
       );

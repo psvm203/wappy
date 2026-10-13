@@ -147,16 +147,10 @@ function App() {
       state.attacks === undefined
     )
       throw new ApiError(503, "온라인 공격을 지원하는 서버에 연결해 주세요.");
-    if (
-      !state.friends.some(
-        (friend) => friend.id === friendId && friend.online,
-      ) ||
-      state.presence?.sharing === false
-    )
-      throw new ApiError(
-        409,
-        "두 캐릭터가 접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
-      );
+    if (!state.friends.some((friend) => friend.id === friendId))
+      throw new ApiError(404, "연결된 친구에게만 공격할 수 있어요.");
+    if (state.presence?.sharing === false)
+      throw new ApiError(409, "접속 상태를 공개해야 공격할 수 있어요.");
     const active = session;
     const event = parseAttackEvent(
       await request(active, "POST /friends/attack", { friendId }),

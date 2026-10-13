@@ -13,7 +13,7 @@ export type AttackInbox = ReturnType<typeof createAttackInbox>;
 export function collectAttacks(
   inbox: AttackInbox,
   events: readonly AttackEvent[],
-  visibleOnlineIds: ReadonlySet<string>,
+  visiblePresence: ReadonlyMap<string, boolean>,
   enabled: boolean,
   now: number,
 ) {
@@ -21,8 +21,8 @@ export function collectAttacks(
     ? inbox.queue.filter(
         ({ receivedAt, event }) =>
           now - receivedAt < ATTACK_TTL_MS &&
-          visibleOnlineIds.has(event.attackerId) &&
-          visibleOnlineIds.has(event.targetId),
+          visiblePresence.get(event.attackerId) === true &&
+          visiblePresence.has(event.targetId),
       )
     : [];
   for (const event of events) {
@@ -32,8 +32,8 @@ export function collectAttacks(
       enabled &&
       // Outgoing attacks already animate on click, even if the acknowledgement is delayed or lost.
       event.attackerId !== inbox.selfId &&
-      visibleOnlineIds.has(event.attackerId) &&
-      visibleOnlineIds.has(event.targetId)
+      visiblePresence.get(event.attackerId) === true &&
+      visiblePresence.has(event.targetId)
     )
       inbox.queue.push({ event, receivedAt: now });
   }

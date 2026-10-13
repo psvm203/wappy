@@ -228,15 +228,13 @@ export function DesktopCharacters({
   }, [residents]);
 
   useLayoutEffect(() => {
-    const online = new Set(
-      residents
-        .filter((resident) => resident.online)
-        .map((resident) => resident.id),
+    const visiblePresence = new Map(
+      residents.map((resident) => [resident.id, resident.online]),
     );
     collectAttacks(
       attackInbox,
       attacks ?? [],
-      online,
+      visiblePresence,
       connected && !paused,
       performance.now(),
     );
@@ -245,8 +243,8 @@ export function DesktopCharacters({
       active &&
       (!connected ||
         paused ||
-        !online.has(active.attackerId) ||
-        !online.has(active.targetId))
+        !visiblePresence.get(active.attackerId) ||
+        !visiblePresence.has(active.targetId))
     )
       stopAttack();
     startNextAttack();
@@ -523,7 +521,7 @@ export function DesktopCharacters({
   function startAttack(attackerId: string, targetId: string): boolean {
     const attacker = entries.current.get(attackerId);
     const target = entries.current.get(targetId);
-    if (!attacker?.walking || !target?.walking) return false;
+    if (!attacker?.walking || !target) return false;
     const next = createAttack(attacker.body, target.body, attacker.character);
     if (!next) return false;
     attack.current = { ...next, attackerId, targetId };
@@ -567,10 +565,6 @@ export function DesktopCharacters({
     }
     if (!profileKey || !connected || attacks === undefined) {
       setAttackNotice("온라인 공격을 지원하는 서버에 연결해 주세요.");
-      return;
-    }
-    if (!targetProfile.online) {
-      setAttackNotice("접속 중인 친구에게 공격할 수 있어요.");
       return;
     }
     const self = residents.find((resident) => resident.isSelf);

@@ -177,11 +177,18 @@ test(
       assert.deepEqual(parseSidebarState(expired.body).attacks, []);
     }
     await call("/presence", b.token, { sharing: false }, undefined, "PATCH");
-    assert.equal(
-      (await call("/friends/attack", a.token, { friendId: b.profile.id }))
-        .status,
-      409,
-    );
+    const hiddenAttack = await call("/friends/attack", a.token, {
+      friendId: b.profile.id,
+    });
+    assert.equal(hiddenAttack.status, 201);
+    for (const token of [a.token, c.token]) {
+      const state = parseSidebarState((await call("/state", token)).body);
+      assert.deepEqual(state.attacks, [hiddenAttack.body]);
+      assert.equal(
+        state.friends.find((friend) => friend.id === b.profile.id)?.online,
+        false,
+      );
+    }
     await call("/presence", b.token, { sharing: true }, undefined, "PATCH");
     await call("/presence", a.token, { sharing: false }, undefined, "PATCH");
     assert.equal(
@@ -191,18 +198,31 @@ test(
     );
     await call("/presence", a.token, { sharing: true }, undefined, "PATCH");
     now += ONLINE_TIMEOUT_MS;
-    await call("/state", a.token);
     assert.equal(
       (await call("/friends/attack", a.token, { friendId: b.profile.id }))
         .status,
       409,
-      "offline targets cannot be attacked",
+      "offline attackers still cannot attack",
     );
+    await call("/state", a.token);
+    const sleepingAttack = await call("/friends/attack", a.token, {
+      friendId: b.profile.id,
+    });
+    assert.equal(sleepingAttack.status, 201, "offline targets can be attacked");
+    for (const token of [a.token, c.token]) {
+      const state = parseSidebarState((await call("/state", token)).body);
+      assert.deepEqual(state.attacks, [sleepingAttack.body]);
+      assert.equal(
+        state.friends.find((friend) => friend.id === b.profile.id)?.online,
+        false,
+      );
+    }
     await call("/state", b.token);
     assert.equal(
       (await call("/friends/attack", a.token, { friendId: b.profile.id }))
         .status,
-      201,
+      429,
+      "sleeping targets still use the attack cooldown",
     );
     await call("/friends/remove", a.token, { friendId: b.profile.id });
     assert.equal(

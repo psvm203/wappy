@@ -533,17 +533,15 @@ export function createApp(options: {
           )
             throw new HttpError(404, "연결된 친구에게만 공격할 수 있어요.");
           const time = now();
-          for (const id of [self!.id, friendId]) {
-            if (
-              selectPresence.get(id)?.sharing === 0 ||
-              !lastSeen.has(id) ||
-              time - lastSeen.get(id)! >= ONLINE_TIMEOUT_MS
-            )
-              throw new HttpError(
-                409,
-                "두 캐릭터가 접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
-              );
-          }
+          if (
+            selectPresence.get(self!.id)?.sharing === 0 ||
+            !lastSeen.has(self!.id) ||
+            time - lastSeen.get(self!.id)! >= ONLINE_TIMEOUT_MS
+          )
+            throw new HttpError(
+              409,
+              "접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
+            );
           // A single guarded insert enforces the sender cooldown across all targets and restarts.
           const attack = db
             .prepare(

@@ -89,9 +89,6 @@
   transform-origin: 50px 55px;
   animation: attack-strike 0.38s ease-out both;
 }
-.desktop-resident[data-hit="true"] .character .character-body {
-  animation: attack-shake 0.1s ease-in-out 3;
-}
 .desktop-resident:is(
     [data-attack-style="repulsor"],
     [data-attack-style="shield"],
@@ -269,6 +266,9 @@
 .desktop-resident[data-motion="sleep"] .character .character-body {
   transform-origin: 50px 96px;
   animation: sleeping-breathe 3s ease-in-out infinite;
+}
+.desktop-resident[data-hit="true"] .character .character-body {
+  animation: attack-shake 0.1s ease-in-out 3;
 }
 .desktop-resident .sleep-marks {
   animation: sleeping-marks 3s ease-in-out infinite;

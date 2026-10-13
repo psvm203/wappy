@@ -18,7 +18,10 @@ const event = (id: number): AttackEvent => ({
   targetId: "friend",
   sentAt: 1_800_000_000_000,
 });
-const online = new Set(["self", "friend"]);
+const online = new Map([
+  ["self", true],
+  ["friend", true],
+]);
 
 test("attack snapshots reject spoofed participants, duplicates, invalid times and keep old servers compatible", () => {
   const profile = { id: "self", name: "나", character: "chiikawa" };
@@ -63,6 +66,39 @@ test("out-of-order polls play each incoming attack once", () => {
   }
 });
 
+test("observers see sleeping targets once, while hidden targets and sleeping attackers stay excluded", () => {
+  const sleeping = new Map([
+    ["self", true],
+    ["friend", false],
+  ]);
+  const inbox = createAttackInbox("observer");
+  collectAttacks(inbox, [event(1)], sleeping, true, 0);
+  collectAttacks(inbox, [event(1)], sleeping, true, 100);
+  assert.deepEqual(nextAttack(inbox, 100), event(1));
+  assert.equal(nextAttack(inbox, 100), undefined);
+
+  // Falling asleep while queued does not cancel the hit.
+  collectAttacks(inbox, [event(2)], online, true, 200);
+  collectAttacks(inbox, [event(2)], sleeping, true, 300);
+  assert.deepEqual(nextAttack(inbox, 300), event(2));
+
+  for (const presence of [
+    new Map([["self", true]]),
+    new Map([
+      ["self", false],
+      ["friend", false],
+    ]),
+  ]) {
+    const unavailable = createAttackInbox("observer");
+    collectAttacks(unavailable, [event(1)], presence, true, 0);
+    collectAttacks(unavailable, [event(1)], sleeping, true, 100);
+    assert.equal(nextAttack(unavailable, 100), undefined);
+    collectAttacks(unavailable, [event(2)], sleeping, true, 200);
+    collectAttacks(unavailable, [event(2)], presence, true, 300);
+    assert.equal(nextAttack(unavailable, 300), undefined);
+  }
+});
+
 test("server echoes never replay a locally animated attack, including delayed or lost acknowledgements", () => {
   const inbox = createAttackInbox("self");
   const incoming = { ...event(2), attackerId: "friend", targetId: "self" };
@@ -85,7 +121,7 @@ test("hidden, paused, disconnected and unavailable participants never replay an 
     collectAttacks(
       inbox,
       [event(1)],
-      enabled ? new Set(["self"]) : online,
+      enabled ? new Map([["self", true]]) : online,
       enabled,
       0,
     );
