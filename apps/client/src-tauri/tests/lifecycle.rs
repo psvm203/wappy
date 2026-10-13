@@ -405,7 +405,9 @@ fn main() -> Result<(), String> {
                 true,
             )?;
             if shown["paused"] != true {
-                click_button(&sidebar, "캐릭터 움직임 멈추기")?;
+                handle
+                    .emit_to("main", "wappy:tray-control", "toggle-paused")
+                    .map_err(|error| error.to_string())?;
             }
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             // Count real WebView animation callbacks, rather than only checking the pause flag.
@@ -416,13 +418,17 @@ fn main() -> Result<(), String> {
             if animation_frames(&desktop)? != idle_frames {
                 return Err("Paused characters continued to request animation frames".into());
             }
-            click_button(&sidebar, "캐릭터 움직임 다시 시작")?;
+            handle
+                .emit_to("main", "wappy:tray-control", "toggle-paused")
+                .map_err(|error| error.to_string())?;
             text_rendered(&desktop, ".desktop-characters.is-paused", "", false)?;
             thread::sleep(Duration::from_millis(500));
             if animation_frames(&desktop)? <= idle_frames {
                 return Err("Characters did not resume animation after unpausing".into());
             }
-            click_button(&sidebar, "캐릭터 움직임 멈추기")?;
+            handle
+                .emit_to("main", "wappy:tray-control", "toggle-paused")
+                .map_err(|error| error.to_string())?;
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             text_rendered(
                 &sidebar,
@@ -433,10 +439,8 @@ fn main() -> Result<(), String> {
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("A presence update unexpectedly opened the sidebar".into());
             }
-            sidebar
-                .eval("document.querySelector('.resident-selection').open = true;")
-                .map_err(|error| error.to_string())?;
-            click_button(&sidebar, "내 캐릭터만")?;
+            println!("CHECK: character visibility switches");
+            click_button(&sidebar, "Friend 캐릭터 표시")?;
             let selected = snapshot(&received, |value| {
                 value["hiddenIds"] == serde_json::json!(["presence-friend"])
             })?;
@@ -446,16 +450,18 @@ fn main() -> Result<(), String> {
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
             text_rendered(&sidebar, ".friend-card", "Friend", true)?;
-            click_button(&sidebar, "Presence (나)")?;
+            click_button(&sidebar, "Presence 캐릭터 표시")?;
             text_rendered(&desktop, ".desktop-characters", "", false)?;
-            click_button(&sidebar, "모두 선택")?;
+            click_button(&sidebar, "Presence 캐릭터 표시")?;
+            text_rendered(&desktop, ".resident-name", "Presence (나)", true)?;
+            click_button(&sidebar, "Friend 캐릭터 표시")?;
             text_rendered(
                 &desktop,
                 ".desktop-resident:nth-of-type(2) .resident-name",
                 "Friend",
                 true,
             )?;
-            click_button(&sidebar, "내 캐릭터만")?;
+            click_button(&sidebar, "Friend 캐릭터 표시")?;
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
             println!("CHECK: session cleanup");
             // Drain earlier requests before checking that session removal stops polling.
