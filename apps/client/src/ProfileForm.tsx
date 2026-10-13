@@ -192,9 +192,6 @@ export function ProfileForm({
           saveError && (
             <p className="error" role="alert">
               {saveError}
-              <button type="button" onClick={() => void saveChanges()}>
-                다시 저장
-              </button>
             </p>
           )
         ) : (
