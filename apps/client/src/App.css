@@ -714,6 +714,9 @@
 .accept-form .field {
   margin-top: 19px;
 }
+.accept-form > .error {
+  margin-top: 12px;
+}
 .error,
 .connection-warning {
   font-size: 11px;
@@ -802,37 +805,6 @@
 .compact-sidebar .character {
   width: 54px;
   margin: auto;
-}
-.desktop-controls {
-  padding: 13px;
-  margin-bottom: 18px;
-  background: #edf2e6;
-  border-radius: 12px;
-}
-.desktop-controls p {
-  margin: 0 0 10px;
-  font-size: 11px;
-  line-height: 1.7;
-  color: #68745e;
-}
-.desktop-controls > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-.desktop-controls button:disabled {
-  cursor: default;
-}
-.compact-sidebar .desktop-controls {
-  margin: 0;
-  padding: 6px;
-  width: 100%;
-}
-.compact-sidebar .desktop-controls p {
-  display: none;
-}
-.compact-sidebar .desktop-controls button {
-  font-size: 15px;
 }
 @media (prefers-reduced-motion: reduce) {
   *,

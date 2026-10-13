@@ -34,7 +34,6 @@ import {
   useDesktopSync,
   useResidentSelection,
 } from "./desktop";
-import { DesktopControls } from "./DesktopControls";
 import {
   residentSelectionKey,
   toggleResidentVisibility,
@@ -244,7 +243,10 @@ function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 5000);
+    const timer = window.setTimeout(
+      () => setNotice(""),
+      notice === "초대 코드를 복사했어요." ? 2000 : 5000,
+    );
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -490,14 +492,6 @@ function App() {
   const presenceHidden =
     connection === "online" &&
     state?.presence?.sharing === false;
-  const desktopControls = (
-    <DesktopControls
-      desktop={desktop}
-      compact={compact}
-      preferences={preferences}
-      onChange={setPreferences}
-    />
-  );
   const errorAlert = error && (
     <p className="error" role="alert">
       {error}
@@ -523,6 +517,14 @@ function App() {
           ⠿
         </div>
         <button
+          className="icon-button"
+          onClick={toggleCompact}
+          aria-label="사이드바 펼치기"
+          title="사이드바 펼치기"
+        >
+          ‹
+        </button>
+        <button
           className="compact-open"
           onClick={toggleCompact}
           aria-label="사이드바 펼치기"
@@ -547,17 +549,6 @@ function App() {
             </div>
           ))}
         </div>
-        {desktopControls}
-        {updates.version && (
-          <button
-            className="icon-button"
-            onClick={toggleCompact}
-            aria-label="업데이트 확인"
-            title="새 버전이 있어요"
-          >
-            ↑
-          </button>
-        )}
         {desktopError && (
           <p className="error" role="alert">
             {desktopError}
@@ -568,13 +559,6 @@ function App() {
             {error}
           </p>
         )}
-        <button
-          className="icon-button"
-          onClick={toggleCompact}
-          aria-label="사이드바 펼치기"
-        >
-          ‹
-        </button>
       </main>
     );
 
