@@ -64,7 +64,7 @@ export function useResidentSelection(key: string | null) {
   };
 }
 
-export function useCharacterPreferences() {
+export function useCharacterPreferences(onOpenSettings: () => void) {
   const [preferences, setPreferences] = useState(() =>
     loadCharacterPreferences(
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -99,8 +99,7 @@ export function useCharacterPreferences() {
     let unlisten: UnlistenFn | undefined;
     void listen<string>("wappy:tray-control", ({ payload }) => {
       if (disposed) return;
-      if (payload === "toggle-paused")
-        setPreferences((current) => ({ ...current, paused: !current.paused }));
+      if (payload === "open-settings") onOpenSettings();
       if (payload === "toggle-visible")
         setPreferences((current) => ({
           ...current,
@@ -122,12 +121,12 @@ export function useCharacterPreferences() {
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [onOpenSettings]);
 
   useEffect(() => {
     if (!trayReady) return;
     let disposed = false;
-    void invoke("sync_tray_controls", { ...preferences })
+    void invoke("sync_tray_controls", { visible: preferences.visible })
       .then(() => {
         if (!disposed) setTrayError("");
       })
@@ -140,7 +139,7 @@ export function useCharacterPreferences() {
     return () => {
       disposed = true;
     };
-  }, [preferences, trayReady]);
+  }, [preferences.visible, trayReady]);
 
   return { preferences, setPreferences, error: storageError || trayError };
 }

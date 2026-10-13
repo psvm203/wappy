@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -107,11 +108,22 @@ function App() {
   const [compact, setCompact] = useState(false);
   const [friendView, setFriendView] = useState<FriendView>("all");
   const [chatTarget, setChatTarget] = useState<string | null>(null);
+  const openSettings = useCallback(() => {
+    void invoke("set_sidebar_compact", { compact: false })
+      .then(() => {
+        setCompact(false);
+        setPanel("settings");
+        setError("");
+      })
+      .catch(() =>
+        setError("환경설정을 열지 못했어요. 다시 시도해 주세요."),
+      );
+  }, []);
   const {
     preferences,
     setPreferences,
     error: preferencesError,
-  } = useCharacterPreferences();
+  } = useCharacterPreferences(openSettings);
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   const desktop = isTauri();
   const updates = useAppUpdates(desktop);
@@ -608,7 +620,7 @@ function App() {
         )}
       </header>
 
-      {desktop && updates.version && (!session || panel !== "settings") && (
+      {desktop && updates.version && panel !== "settings" && (
         <div className="update-banner">
           <UpdateSettings
             state={updates}
@@ -617,7 +629,7 @@ function App() {
         </div>
       )}
 
-      {!session ? (
+      {!session && panel !== "settings" ? (
         <div className="onboarding scroll-area">
           <div className="intro-art">
             <Character kind="chiikawa" />
@@ -687,7 +699,7 @@ function App() {
         </div>
       ) : (
         <>
-          {(connection !== "online" || presenceHidden) && (
+          {session && (connection !== "online" || presenceHidden) && (
             <div className="connection-line">
               <span className="online-dot offline" />
               {connection === "online"
@@ -699,12 +711,12 @@ function App() {
                     : "연결을 다시 확인하는 중…"}
             </div>
           )}
-          {connection === "offline" && (
+          {session && connection === "offline" && (
             <div className="connection-warning" role="status">
               <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
             </div>
           )}
-          {connection === "unauthorized" && (
+          {session && connection === "unauthorized" && (
             <div className="connection-warning" role="alert">
               <p>
                 프로필 인증에 실패했어요. 연결할 서버 주소가 맞는지 확인해
@@ -739,25 +751,27 @@ function App() {
           <nav className="tabs" aria-label="사이드바 메뉴">
             {(
               [
-                ["friends", "친구들"],
+                ["friends", session ? "친구들" : "시작 화면"],
                 ["invite", "초대하기"],
                 ["profile", "내 모습"],
                 ["settings", "설정"],
               ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                aria-current={panel === id ? "page" : undefined}
-                id={`sidebar-tab-${id}`}
-                className={panel === id ? "selected" : ""}
-                onClick={() => {
-                  setPanel(id);
-                  setError("");
-                }}
-              >
-                {label}
-              </button>
-            ))}
+            )
+              .filter(([id]) => session || id === "friends" || id === "settings")
+              .map(([id, label]) => (
+                <button
+                  key={id}
+                  aria-current={panel === id ? "page" : undefined}
+                  id={`sidebar-tab-${id}`}
+                  className={panel === id ? "selected" : ""}
+                  onClick={() => {
+                    setPanel(id);
+                    setError("");
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             {state && (
               <button
                 className="text-button collapse-button"
@@ -784,7 +798,7 @@ function App() {
                   <h2>친구들을 만나러 가는 중</h2>
                 </div>
               )}
-            {state && panel === "friends" && (
+            {session && state && panel === "friends" && (
               <>
                 {state.friends.length > 0 && (
                   <>
@@ -890,7 +904,7 @@ function App() {
                 )}
               </>
             )}
-            {state && panel === "invite" && (
+            {session && state && panel === "invite" && (
               <div className="invite-panel">
                 <section className="invite-card">
                   <h2>방 초대 코드</h2>

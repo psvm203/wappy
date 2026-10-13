@@ -168,6 +168,23 @@ fn text_rendered(
     result
 }
 
+fn set_activity(sidebar: &tauri::WebviewWindow, activity: &str) -> Result<(), String> {
+    click_button(sidebar, "설정")?;
+    text_rendered(sidebar, ".settings-panel", "캐릭터 활동", true)?;
+    let activity = serde_json::to_string(activity).map_err(|error| error.to_string())?;
+    sidebar
+        .eval(format!(
+            r#"(() => {{
+            const label = [...document.querySelectorAll('.settings-panel label')]
+                .find(label => label.textContent.includes('캐릭터 활동'));
+            const select = label.querySelector('select');
+            select.value = {activity};
+            select.dispatchEvent(new Event('change', {{ bubbles: true }}));
+        }})()"#
+        ))
+        .map_err(|error| error.to_string())
+}
+
 fn animation_frames(window: &tauri::WebviewWindow) -> Result<u64, String> {
     let (sent, received) = mpsc::channel();
     window
@@ -342,12 +359,21 @@ fn main() -> Result<(), String> {
                 return Err("Closing the sidebar destroyed a window or hid the characters".into());
             }
 
-            // These are the same events emitted by the native tray menu, while hidden.
-            handle
-                .emit_to("main", "wappy:tray-control", "toggle-paused")
-                .map_err(|error| error.to_string())?;
+            println!("CHECK: tray settings opens before creating a profile");
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            until(|| sidebar.is_visible().unwrap_or(false))?;
+            text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+            click_button(&sidebar, "시작 화면")?;
+            text_rendered(&sidebar, ".onboarding", "처음이에요", true)?;
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+            sidebar.close().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
+
             let paused = !initial["paused"].as_bool().ok_or("Missing paused state")?;
+            set_activity(&sidebar, if paused { "stopped" } else { "normal" })?;
             snapshot(&received, |value| value["paused"] == paused)?;
+            // The native tray still controls character visibility while hidden.
             handle
                 .emit_to("main", "wappy:tray-control", "toggle-visible")
                 .map_err(|error| error.to_string())?;
@@ -403,9 +429,7 @@ fn main() -> Result<(), String> {
                 true,
             )?;
             if shown["paused"] != true {
-                handle
-                    .emit_to("main", "wappy:tray-control", "toggle-paused")
-                    .map_err(|error| error.to_string())?;
+                set_activity(&sidebar, "stopped")?;
             }
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             // Count real WebView animation callbacks, rather than only checking the pause flag.
@@ -416,17 +440,13 @@ fn main() -> Result<(), String> {
             if animation_frames(&desktop)? != idle_frames {
                 return Err("Paused characters continued to request animation frames".into());
             }
-            handle
-                .emit_to("main", "wappy:tray-control", "toggle-paused")
-                .map_err(|error| error.to_string())?;
+            set_activity(&sidebar, "normal")?;
             text_rendered(&desktop, ".desktop-characters.is-paused", "", false)?;
             thread::sleep(Duration::from_millis(500));
             if animation_frames(&desktop)? <= idle_frames {
                 return Err("Characters did not resume animation after unpausing".into());
             }
-            handle
-                .emit_to("main", "wappy:tray-control", "toggle-paused")
-                .map_err(|error| error.to_string())?;
+            set_activity(&sidebar, "stopped")?;
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
             text_rendered(
                 &sidebar,
@@ -438,6 +458,8 @@ fn main() -> Result<(), String> {
                 return Err("A presence update unexpectedly opened the sidebar".into());
             }
             println!("CHECK: character visibility switches");
+            click_button(&sidebar, "친구들")?;
+            text_rendered(&sidebar, ".friend-card", "Friend", true)?;
             click_button(&sidebar, "Friend 캐릭터 표시")?;
             let selected = snapshot(&received, |value| {
                 value["hiddenIds"] == serde_json::json!(["presence-friend"])
@@ -461,6 +483,20 @@ fn main() -> Result<(), String> {
             )?;
             click_button(&sidebar, "Friend 캐릭터 표시")?;
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
+            println!("CHECK: tray settings expands the collapsed window");
+            client_lib::show_sidebar(&handle).map_err(|error| error.to_string())?;
+            click_button(&sidebar, "접기 ⇥")?;
+            text_rendered(&sidebar, ".compact-sidebar", "", true)?;
+            sidebar.minimize().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_minimized().unwrap_or(false))?;
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            until(|| {
+                sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
+            })?;
+            text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+            text_rendered(&sidebar, ".compact-sidebar", "", false)?;
+            sidebar.close().map_err(|error| error.to_string())?;
+            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             println!("CHECK: session cleanup");
             // Drain earlier requests before checking that session removal stops polling.
             while requests.try_recv().is_ok() {}

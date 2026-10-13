@@ -3,7 +3,7 @@ use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent}
 pub mod startup;
 mod state_sync;
 mod tray;
-pub use tray::show_sidebar;
+pub use tray::{show_settings, show_sidebar};
 
 const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
 
