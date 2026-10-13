@@ -133,8 +133,7 @@ export function ProfileForm({
   }
   return (
     <form onSubmit={submit} className="profile-form">
-      <fieldset disabled={busy}>
-        <legend>나를 닮은 친구를 골라요</legend>
+      <fieldset disabled={busy} aria-label="프로필 설정">
         {beforeProfile}
         {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
           <section key={category} aria-label={category}>

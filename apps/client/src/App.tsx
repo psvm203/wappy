@@ -843,7 +843,7 @@ function App() {
                       className="primary"
                       onClick={() => setPanel("invite")}
                     >
-                      첫 친구 초대하기 <span aria-hidden="true">+</span>
+                      친구 초대하기 <span aria-hidden="true">+</span>
                     </button>
                   </div>
                 ) : listedFriends.length === 0 ? (

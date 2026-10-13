@@ -478,16 +478,6 @@
   border: 0;
   min-width: 0;
 }
-.profile-form legend {
-  font-size: 11px;
-  color: #68745e;
-  margin-bottom: 10px;
-}
-.content > .profile-form legend {
-  font-size: 20px;
-  font-weight: 700;
-  color: #000;
-}
 .character-category-title {
   margin: 0 0 10px;
   font-size: 14px;
