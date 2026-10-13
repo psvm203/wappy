@@ -32,9 +32,9 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: universal-apple-darwin
-            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
-            artifact: macos-universal
+            target: ${{ github.event_name == 'pull_request' && 'aarch64-apple-darwin' || 'universal-apple-darwin' }}
+            rust-targets: ${{ github.event_name == 'pull_request' && 'aarch64-apple-darwin' || 'aarch64-apple-darwin,x86_64-apple-darwin' }}
+            artifact: ${{ github.event_name == 'pull_request' && 'macos-arm64' || 'macos-universal' }}
             installer: dmg/*.dmg
           - os: windows-latest
             target: x86_64-pc-windows-msvc
