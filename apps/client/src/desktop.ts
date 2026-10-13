@@ -5,6 +5,7 @@ import type { SidebarState } from "@wappy/api";
 import {
   loadCharacterPreferences,
   PREFERENCES_KEY,
+  type CharacterActivity,
   type CharacterPosition,
   type CharacterSize,
 } from "./preferences";
@@ -152,6 +153,7 @@ export interface DesktopSnapshot {
   visible: boolean;
   position: CharacterPosition;
   size: CharacterSize;
+  activity: CharacterActivity;
   hiddenIds: string[];
 }
 
@@ -165,6 +167,7 @@ export function useDesktopSync({
   visible,
   position,
   size,
+  activity,
   hiddenIds,
 }: DesktopSnapshot) {
   const [error, setError] = useState("");
@@ -190,6 +193,7 @@ export function useDesktopSync({
           visible,
           position,
           size,
+          activity,
           hiddenIds,
         } satisfies DesktopSnapshot);
         if (!disposed) setError("");
@@ -220,6 +224,7 @@ export function useDesktopSync({
     visible,
     position,
     size,
+    activity,
     hiddenIds,
   ]);
   return error;

@@ -55,8 +55,10 @@ import { isLocalServer, parseInvitation, WAPPY_SERVER } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
 import {
+  CHARACTER_ACTIVITIES,
   CHARACTER_POSITIONS,
   CHARACTER_SIZES,
+  isCharacterActivity,
   isCharacterPosition,
   isCharacterSize,
 } from "./preferences";
@@ -127,6 +129,7 @@ function App() {
     visible: charactersVisible,
     position: preferences.position,
     size: preferences.size,
+    activity: preferences.activity,
     hiddenIds: selection.hiddenIds,
   });
   const attackError = useDesktopAttackRequests(profileKey, async (friendId) => {
@@ -1001,6 +1004,38 @@ function App() {
                       >
                         {Object.entries(CHARACTER_SIZES).map(
                           ([value, { label }]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <label className="field">
+                      캐릭터 활동
+                      <select
+                        value={
+                          preferences.paused ? "stopped" : preferences.activity
+                        }
+                        onChange={(event) => {
+                          const activity = event.target.value;
+                          if (
+                            activity === "stopped" ||
+                            isCharacterActivity(activity)
+                          )
+                            setPreferences((current) => ({
+                              ...current,
+                              paused: activity === "stopped",
+                              activity:
+                                activity === "stopped"
+                                  ? current.activity
+                                  : activity,
+                            }));
+                        }}
+                      >
+                        <option value="stopped">정지</option>
+                        {Object.entries(CHARACTER_ACTIVITIES).map(
+                          ([value, label]) => (
                             <option key={value} value={value}>
                               {label}
                             </option>

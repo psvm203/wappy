@@ -10,6 +10,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
 import {
   CHARACTER_SIZES,
+  type CharacterActivity,
   type CharacterPosition,
   type CharacterSize,
 } from "./preferences";
@@ -128,6 +129,7 @@ export function DesktopCharacters({
   paused,
   position,
   size,
+  activity,
   profileKey,
   messages,
   attacks,
@@ -138,6 +140,7 @@ export function DesktopCharacters({
   paused: boolean;
   position: CharacterPosition;
   size: CharacterSize;
+  activity: CharacterActivity;
   profileKey: string | null;
   messages?: ChatMessage[];
   attacks?: AttackEvent[];
@@ -289,6 +292,7 @@ export function DesktopCharacters({
           innerWidth,
           innerHeight,
           resident.walking,
+          activity,
         );
         const held = drag.current;
         if (held?.moved && entries.current.get(held.id) === resident)
@@ -338,7 +342,7 @@ export function DesktopCharacters({
       window.removeEventListener("resize", resize);
       wakeAnimation.current = () => {};
     };
-  }, [paused, connected, attackInbox]);
+  }, [paused, activity, connected, attackInbox]);
 
   useEffect(() => {
     // Presence changes can wake an idle scene without resetting a running frame clock.

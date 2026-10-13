@@ -18,6 +18,85 @@ import {
 const width = 1470,
   height = 923;
 
+test("walking in place advances the gait without moving, turning, or random rests", (t) => {
+  const random = t.mock.method(Math, "random", () => 0);
+  for (const position of Object.keys(
+    CHARACTER_POSITIONS,
+  ) as CharacterPosition[]) {
+    const body = createBody("in-place", width, height, position);
+    body.wanderTime = 0;
+    body.restTime = 1;
+    const before = { ...body };
+    const calls = random.mock.callCount();
+    advanceBody(body, 0.05, width, height, true, "in-place");
+    assert.ok(body.stepPhase > before.stepPhase);
+    for (let frame = 0; frame < 600; frame++)
+      advanceBody(body, 1 / 60, width, height, true, "in-place");
+    assert.equal(body.x, before.x);
+    assert.equal(body.y, before.y);
+    assert.equal(body.phase, before.phase);
+    assert.equal(body.direction, before.direction);
+    assert.equal(body.restTime, 0);
+    assert.equal(random.mock.callCount(), calls);
+
+    body.wanderTime = Infinity;
+    advanceBody(body, 0.05, width, height, true, "normal");
+    assert.notEqual(
+      body.phase,
+      before.phase,
+      "normal walking resumes from the same spot",
+    );
+  }
+});
+
+test("active walking doubles travel and speeds up the gait without changing the default", () => {
+  const normal = createBody("activity", width, height, "bottom");
+  normal.wanderTime = Infinity;
+  normal.speed = normal.walkSpeed = 40;
+  const active = { ...normal };
+  const defaultActivity = { ...normal };
+  const before = { ...normal };
+  advanceBody(normal, 0.05, width, height, true, "normal");
+  advanceBody(active, 0.05, width, height, true, "active");
+  advanceBody(defaultActivity, 0.05, width, height, true);
+  assert.deepEqual(defaultActivity, normal);
+  assert.ok(Math.abs(Math.abs(normal.x - before.x) - 1) < 1e-9);
+  assert.ok(Math.abs(Math.abs(active.x - before.x) - 2) < 1e-9);
+  assert.ok(active.stepPhase > normal.stepPhase);
+});
+
+test("activity modes respect offline rest and leave throwing physics unchanged", () => {
+  for (const activity of ["in-place", "normal", "active"] as const) {
+    const body = createBody("resting", width, height);
+    const before = { ...body };
+    advanceBody(body, 0.05, width, height, false, activity);
+    assert.deepEqual(body, before);
+    assert.equal(needsAnimation(body, false), false);
+    Object.assign(body, { mode: "air", x: 500, y: 400, vx: 100, vy: 200 });
+    const normal = { ...body };
+    advanceBody(body, 0.05, width, height, true, activity);
+    advanceBody(normal, 0.05, width, height, true, "normal");
+    assert.deepEqual(body, normal);
+    assert.notEqual(body.y, 400);
+
+    Object.assign(body, {
+      mode: "air",
+      x: width / 2,
+      y: height - body.size / 2 - 0.1,
+      vx: 0,
+      vy: 30,
+    });
+    const stepPhase = body.stepPhase;
+    advanceBody(body, 0.05, width, height, false, activity);
+    assert.equal(body.mode, "walk");
+    assert.equal(
+      body.stepPhase,
+      stepPhase,
+      "offline landing must not start a gait",
+    );
+  }
+});
+
 test("all character sizes stay within the viewport when walking, dragged, thrown, and resized", () => {
   for (const { pixels } of Object.values(CHARACTER_SIZES)) {
     for (const position of Object.keys(
@@ -245,10 +324,10 @@ test("automatic walking covers all four edges without leaving the screen", (t) =
   t.mock.method(Math, "random", () => 0.5);
   const body = createBody("walker", width, height);
   const start = { x: body.x, y: body.y };
-  for (let i = 0; i < 60; i++) advanceBody(body, 1 / 60, width, height, true);
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, true);
   assert.ok(Math.hypot(body.x - start.x, body.y - start.y) > 30);
   const edges = new Set<string>();
-  for (let i = 0; i < 9000; i++) {
+  for (let i = 0; i < 18000; i++) {
     advanceBody(body, 1 / 60, width, height, true);
     assert.ok(
       body.x >= CHARACTER_SIZE / 2 && body.x <= width - CHARACTER_SIZE / 2,
@@ -389,7 +468,7 @@ test("a fast throw bounces, loses energy, lands, and resumes walking", () => {
   }
   assert.equal(body.mode, "walk");
   const start = { x: body.x, y: body.y };
-  for (let i = 0; i < 60; i++) advanceBody(body, 1 / 60, width, height, true);
+  for (let i = 0; i < 120; i++) advanceBody(body, 1 / 60, width, height, true);
   assert.ok(Math.hypot(body.x - start.x, body.y - start.y) > 30);
 });
 

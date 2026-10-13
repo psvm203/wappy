@@ -1,4 +1,8 @@
-import { CHARACTER_SIZES, type CharacterPosition } from "./preferences.ts";
+import {
+  CHARACTER_SIZES,
+  type CharacterActivity,
+  type CharacterPosition,
+} from "./preferences.ts";
 
 export const CHARACTER_SIZE = CHARACTER_SIZES.normal.pixels;
 const GRAVITY = 1400;
@@ -175,6 +179,7 @@ export function advanceBody(
   width: number,
   height: number,
   walking: boolean,
+  activity: CharacterActivity = "normal",
 ) {
   const { left, top, right, bottom, w, h } = track(width, height, body.size);
   const perimeter = Math.max(1, 2 * (w + h));
@@ -197,7 +202,10 @@ export function advanceBody(
       continue;
     }
     if (body.mode === "walk") {
-      if (walking) {
+      if (walking && activity === "in-place") {
+        body.restTime = 0;
+        body.stepPhase = (body.stepPhase + dt / 0.65) % 1;
+      } else if (walking) {
         if (body.restTime > 0) {
           body.restTime = Math.max(0, body.restTime - dt);
         } else {
@@ -215,14 +223,15 @@ export function advanceBody(
           if (body.restTime === 0) {
             body.walkSpeed +=
               (body.speed - body.walkSpeed) * Math.min(1, dt * 3);
+            const walkSpeed = body.walkSpeed * (activity === "active" ? 1 : 0.5);
             // Accumulate the gait so speed changes never retime earlier steps.
             const stepDuration = Math.max(
               0.32,
-              Math.min(0.85, 28 / Math.max(1, body.walkSpeed)),
+              Math.min(0.85, 28 / Math.max(1, walkSpeed)),
             );
             body.stepPhase = (body.stepPhase + dt / stepDuration) % 1;
             const phase =
-              body.phase + (body.direction * body.walkSpeed * dt) / walkLength;
+              body.phase + (body.direction * walkSpeed * dt) / walkLength;
             if (fixedEdge < 0) body.phase = ((phase % 1) + 1) % 1;
             else {
               if (phase < 0 || phase > 1) body.direction *= -1;

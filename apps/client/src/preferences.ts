@@ -18,6 +18,22 @@ export const CHARACTER_SIZES = {
 } as const;
 export type CharacterSize = keyof typeof CHARACTER_SIZES;
 
+export const CHARACTER_ACTIVITIES = {
+  "in-place": "제자리 걷기",
+  normal: "보통 걷기",
+  active: "활발하게 걷기",
+} as const;
+export type CharacterActivity = keyof typeof CHARACTER_ACTIVITIES;
+
+export function isCharacterActivity(
+  value: unknown,
+): value is CharacterActivity {
+  return (
+    typeof value === "string" &&
+    Object.keys(CHARACTER_ACTIVITIES).includes(value)
+  );
+}
+
 export function isCharacterSize(value: unknown): value is CharacterSize {
   return (
     typeof value === "string" && Object.keys(CHARACTER_SIZES).includes(value)
@@ -38,6 +54,7 @@ interface CharacterPreferences {
   visible: boolean;
   position: CharacterPosition;
   size: CharacterSize;
+  activity: CharacterActivity;
 }
 
 export function loadCharacterPreferences(
@@ -48,6 +65,7 @@ export function loadCharacterPreferences(
     visible: true,
     position: "free",
     size: "normal",
+    activity: "normal",
   };
   try {
     const value: unknown = JSON.parse(
@@ -68,6 +86,10 @@ export function loadCharacterPreferences(
           : "free",
       size:
         "size" in value && isCharacterSize(value.size) ? value.size : "normal",
+      activity:
+        "activity" in value && isCharacterActivity(value.activity)
+          ? value.activity
+          : "normal",
     };
   } catch {
     return defaults;
