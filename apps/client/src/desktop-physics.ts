@@ -1,11 +1,11 @@
-import type { CharacterPosition } from "./preferences.ts";
+import { CHARACTER_SIZES, type CharacterPosition } from "./preferences.ts";
 
-export const CHARACTER_SIZE = 42;
-const MARGIN = CHARACTER_SIZE / 2;
+export const CHARACTER_SIZE = CHARACTER_SIZES.normal.pixels;
 const GRAVITY = 1400;
 
 export interface Body {
   position: CharacterPosition;
+  size: number;
   x: number;
   y: number;
   vx: number;
@@ -28,17 +28,18 @@ export interface DragSample {
   time: number;
 }
 
-function track(width: number, height: number) {
-  const left = Math.min(MARGIN, width / 2);
+function track(width: number, height: number, size: number) {
+  const margin = size / 2;
+  const left = Math.min(margin, width / 2);
   // The label moves inward at the ceiling, so only the character needs clearance.
-  const top = Math.min(MARGIN, height / 2);
-  const right = Math.max(left, width - MARGIN);
-  const bottom = Math.max(top, height - MARGIN);
+  const top = Math.min(margin, height / 2);
+  const right = Math.max(left, width - margin);
+  const bottom = Math.max(top, height - margin);
   return { left, top, right, bottom, w: right - left, h: bottom - top };
 }
 
 function walkPose(body: Body, width: number, height: number) {
-  const { left, top, right, bottom, w, h } = track(width, height);
+  const { left, top, right, bottom, w, h } = track(width, height, body.size);
   switch (body.position) {
     case "top":
       return { x: left + body.phase * w, y: top, angle: Math.PI };
@@ -63,6 +64,7 @@ export function createBody(
   width: number,
   height: number,
   position: CharacterPosition = "free",
+  size: number = CHARACTER_SIZE,
 ): Body {
   const seed = Array.from(id).reduce(
     (hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) >>> 0,
@@ -71,6 +73,7 @@ export function createBody(
   const speed = 35 + (seed % 16);
   const body: Body = {
     position,
+    size,
     x: 0,
     y: 0,
     vx: 0,
@@ -96,7 +99,7 @@ export function setBodyPosition(
   width: number,
   height: number,
 ) {
-  const { left, top, right, bottom, w, h } = track(width, height);
+  const { left, top, right, bottom, w, h } = track(width, height, body.size);
   moveBody(body, body.x, body.y, width, height);
   const distances = [
     body.y - top,
@@ -128,7 +131,7 @@ export function moveBody(
   width: number,
   height: number,
 ) {
-  const { left, top, right, bottom } = track(width, height);
+  const { left, top, right, bottom } = track(width, height, body.size);
   body.x = Math.max(left, Math.min(right, x));
   body.y = Math.max(top, Math.min(bottom, y));
 }
@@ -173,7 +176,7 @@ export function advanceBody(
   height: number,
   walking: boolean,
 ) {
-  const { left, top, right, bottom, w, h } = track(width, height);
+  const { left, top, right, bottom, w, h } = track(width, height, body.size);
   const perimeter = Math.max(1, 2 * (w + h));
   const fixedEdge = ["top", "right", "bottom", "left"].indexOf(body.position);
   const walkLength =

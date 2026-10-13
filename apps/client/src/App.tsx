@@ -58,7 +58,12 @@ import {
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
-import { CHARACTER_POSITIONS, isCharacterPosition } from "./preferences";
+import {
+  CHARACTER_POSITIONS,
+  CHARACTER_SIZES,
+  isCharacterPosition,
+  isCharacterSize,
+} from "./preferences";
 import "./App.css";
 
 const emptyProfile: ProfileInput = {
@@ -125,6 +130,7 @@ function App() {
     paused: motionPaused,
     visible: charactersVisible,
     position: preferences.position,
+    size: preferences.size,
     hiddenIds: selection.hiddenIds,
   });
   const attackError = useDesktopAttackRequests(profileKey, async (friendId) => {
@@ -983,6 +989,28 @@ function App() {
                       >
                         {Object.entries(CHARACTER_POSITIONS).map(
                           ([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <label className="field">
+                      캐릭터 크기
+                      <select
+                        value={preferences.size}
+                        onChange={(event) => {
+                          const size = event.target.value;
+                          if (isCharacterSize(size))
+                            setPreferences((current) => ({
+                              ...current,
+                              size,
+                            }));
+                        }}
+                      >
+                        {Object.entries(CHARACTER_SIZES).map(
+                          ([value, { label }]) => (
                             <option key={value} value={value}>
                               {label}
                             </option>

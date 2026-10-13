@@ -8,8 +8,9 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 42px;
-  height: 42px;
+  width: var(--character-size);
+  height: var(--character-size);
+  --caption-offset: calc(var(--character-size) / 2 + 4px);
   margin: 0;
   pointer-events: auto;
   touch-action: none;
@@ -28,8 +29,8 @@
   transform: scaleX(var(--facing));
 }
 .desktop-resident .character {
-  width: 38px;
-  height: 42px;
+  width: calc(var(--character-size) * 38 / 42);
+  height: var(--character-size);
   margin: auto;
   filter: drop-shadow(0 2px 3px #0002);
 }
@@ -181,14 +182,14 @@
   display: none;
   position: absolute;
   z-index: 2;
-  left: 3.5px;
-  top: -6.5px;
-  width: 35px;
-  height: 35px;
+  left: calc(3.5px * var(--character-scale));
+  top: calc(-6.5px * var(--character-scale));
+  width: calc(35px * var(--character-scale));
+  height: calc(35px * var(--character-scale));
   align-items: center;
   justify-content: center;
   color: #754925;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--character-scale));
   font-weight: 900;
   pointer-events: none;
 }
@@ -197,7 +198,7 @@
   position: absolute;
   z-index: -1;
   color: #ffe294;
-  font-size: 38px;
+  font-size: calc(38px * var(--character-scale));
   text-shadow:
     1px 1px #bd7c3f,
     -1px -1px #bd7c3f;
@@ -230,7 +231,10 @@
       -50%,
       calc(100vw - 4px - var(--resident-x) - 100%)
     ),
-    var(--caption-y, max(calc(4px - var(--resident-y)), calc(-100% - 25px)))
+    var(
+      --caption-y,
+      max(calc(4px - var(--resident-y)), calc(-100% - var(--caption-offset)))
+    )
   );
   width: max-content;
   max-width: 84px;
@@ -246,7 +250,7 @@
   pointer-events: none;
 }
 .desktop-resident[data-caption-below="true"] figcaption {
-  --caption-y: 25px;
+  --caption-y: var(--caption-offset);
 }
 .desktop-resident figcaption:has(.chat-bubble) {
   width: 184px;

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  CHARACTER_POSITIONS,
+  CHARACTER_SIZES,
+  type CharacterPosition,
+} from "../src/preferences.ts";
+import {
   advanceBody,
   CHARACTER_SIZE,
   createBody,
@@ -12,6 +17,65 @@ import {
 
 const width = 1470,
   height = 923;
+
+test("all character sizes stay within the viewport when walking, dragged, thrown, and resized", () => {
+  for (const { pixels } of Object.values(CHARACTER_SIZES)) {
+    for (const position of Object.keys(
+      CHARACTER_POSITIONS,
+    ) as CharacterPosition[]) {
+      const body = createBody("sized", width, height, position, pixels);
+      const margin = pixels / 2;
+      const checkBounds = () => {
+        assert.ok(body.x >= margin && body.x <= width - margin);
+        assert.ok(body.y >= margin && body.y <= height - margin);
+      };
+      checkBounds();
+      body.wanderTime = Infinity;
+      body.speed = body.walkSpeed = 600;
+      for (let frame = 0; frame < 600; frame++) {
+        advanceBody(body, 1 / 60, width, height, true);
+        checkBounds();
+      }
+      body.mode = "drag";
+      moveBody(body, -100, -100, width, height);
+      assert.equal(body.x, margin);
+      assert.equal(body.y, margin);
+      moveBody(body, width + 100, height + 100, width, height);
+      assert.equal(body.x, width - margin);
+      assert.equal(body.y, height - margin);
+      Object.assign(body, { mode: "air", vx: -1800, vy: -800 });
+      for (let frame = 0; frame < 1800 && body.mode !== "walk"; frame++) {
+        advanceBody(body, 1 / 60, width, height, false);
+        checkBounds();
+      }
+      assert.equal(body.mode, "walk");
+      advanceBody(body, 0, 20, 20, false);
+      assert.equal(body.x, 10);
+      assert.equal(body.y, 10);
+    }
+  }
+});
+
+test("changing size immediately repositions resting characters on their selected edge", () => {
+  for (const position of ["top", "right", "bottom", "left"] as const) {
+    const body = createBody("resize", width, height, position);
+    for (const { pixels } of Object.values(CHARACTER_SIZES).reverse()) {
+      body.size = pixels;
+      setBodyPosition(body, position, width, height);
+      const expected =
+        position === "top" || position === "left"
+          ? pixels / 2
+          : (position === "bottom" ? height : width) - pixels / 2;
+      assert.equal(
+        position === "top" || position === "bottom" ? body.y : body.x,
+        expected,
+      );
+      const before = { x: body.x, y: body.y };
+      advanceBody(body, 1 / 60, width, height, false);
+      assert.deepEqual({ x: body.x, y: body.y }, before);
+    }
+  }
+});
 
 test("selected edges constrain walking and reverse direction at their ends", () => {
   for (const position of ["top", "bottom", "left", "right"] as const) {

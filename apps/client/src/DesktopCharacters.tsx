@@ -8,7 +8,11 @@ import {
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
-import type { CharacterPosition } from "./preferences";
+import {
+  CHARACTER_SIZES,
+  type CharacterPosition,
+  type CharacterSize,
+} from "./preferences";
 import {
   ATTACK_COOLDOWN_MS,
   type AttackEvent,
@@ -84,7 +88,12 @@ function draw(
   element.dataset.hit = String(
     attack?.target === body && attack.phase === "impact",
   );
-  element.style.transform = `translate3d(${body.x - CHARACTER_SIZE / 2}px, ${body.y - CHARACTER_SIZE / 2}px, 0)`;
+  element.style.transform = `translate3d(${body.x - body.size / 2}px, ${body.y - body.size / 2}px, 0)`;
+  element.style.setProperty("--character-size", `${body.size}px`);
+  element.style.setProperty(
+    "--character-scale",
+    `${body.size / CHARACTER_SIZE}`,
+  );
   element.style.setProperty("--angle", `${body.angle}rad`);
   element.style.setProperty("--facing", `${-body.direction}`);
   element.style.setProperty(
@@ -102,7 +111,7 @@ function draw(
   element.style.setProperty("--resident-x", `${body.x}px`);
   element.style.setProperty("--resident-y", `${body.y}px`);
   element.dataset.captionBelow = String(
-    body.y < captionHeight + CHARACTER_SIZE / 2 + 8,
+    body.y < captionHeight + body.size / 2 + 8,
   );
   element.dataset.motion =
     body.mode === "drag"
@@ -118,6 +127,7 @@ export function DesktopCharacters({
   residents,
   paused,
   position,
+  size,
   profileKey,
   messages,
   attacks,
@@ -127,12 +137,14 @@ export function DesktopCharacters({
   residents: DesktopResident[];
   paused: boolean;
   position: CharacterPosition;
+  size: CharacterSize;
   profileKey: string | null;
   messages?: ChatMessage[];
   attacks?: AttackEvent[];
   attackInbox: AttackInbox;
   connected: boolean;
 }) {
+  const characterSize = CHARACTER_SIZES[size].pixels;
   const [chatTarget, setChatTarget] = useState<string | null>(null);
   const chatTargetRef = useRef(chatTarget);
   chatTargetRef.current = chatTarget;
@@ -158,11 +170,12 @@ export function DesktopCharacters({
         element.releasePointerCapture(held.pointerId);
     }
     for (const resident of entries.current.values()) {
+      resident.body.size = characterSize;
       setBodyPosition(resident.body, position, innerWidth, innerHeight);
       draw(resident, null);
     }
     wakeAnimation.current();
-  }, [position]);
+  }, [position, characterSize]);
 
   useLayoutEffect(() => {
     wakeAnimation.current();
@@ -609,7 +622,13 @@ export function DesktopCharacters({
               const entry = {
                 body:
                   entries.current.get(resident.id)?.body ??
-                  createBody(resident.id, innerWidth, innerHeight, position),
+                  createBody(
+                    resident.id,
+                    innerWidth,
+                    innerHeight,
+                    position,
+                    characterSize,
+                  ),
                 element,
                 captionHeight: caption.offsetHeight,
                 walking: resident.online,

@@ -584,6 +584,16 @@
 .settings-panel > .field {
   margin-top: 0;
 }
+.settings-panel > .field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-panel > .field select {
+  width: 100px;
+  margin-top: 0;
+}
 .update-panel {
   margin-top: 12px;
   font-size: 12px;

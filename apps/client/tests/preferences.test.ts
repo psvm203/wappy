@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   loadCharacterPreferences,
   CHARACTER_POSITIONS,
+  CHARACTER_SIZES,
   PREFERENCES_KEY,
 } from "../src/preferences.ts";
 
@@ -23,18 +24,21 @@ test("character preferences survive restarts while respecting reduced motion and
       paused: false,
       visible: true,
       position: "free",
+      size: "normal",
     });
     stored = JSON.stringify({ paused: true, visible: false });
     assert.deepEqual(loadCharacterPreferences(false), {
       paused: true,
       visible: false,
       position: "free",
+      size: "normal",
     });
     stored = JSON.stringify({ paused: false, visible: false });
     assert.deepEqual(loadCharacterPreferences(true), {
       paused: true,
       visible: false,
       position: "free",
+      size: "normal",
     });
     for (const position of Object.keys(CHARACTER_POSITIONS)) {
       stored = JSON.stringify({ paused: false, visible: true, position });
@@ -43,6 +47,22 @@ test("character preferences survive restarts while respecting reduced motion and
         paused: true,
         visible: true,
         position,
+        size: "normal",
+      });
+    }
+    for (const size of Object.keys(CHARACTER_SIZES)) {
+      stored = JSON.stringify({
+        paused: false,
+        visible: true,
+        position: "top",
+        size,
+      });
+      assert.equal(loadCharacterPreferences(false).size, size);
+      assert.deepEqual(loadCharacterPreferences(true), {
+        paused: true,
+        visible: true,
+        position: "top",
+        size,
       });
     }
     for (const invalid of [
@@ -54,17 +74,23 @@ test("character preferences survive restarts while respecting reduced motion and
       '{"position":"edge"}',
       '{"position":"__proto__"}',
       '{"position":1}',
+      '{"size":"huge"}',
+      '{"size":"__proto__"}',
+      '{"size":72}',
+      '{"size":null}',
     ]) {
       stored = invalid;
       assert.deepEqual(loadCharacterPreferences(false), {
         paused: false,
         visible: true,
         position: "free",
+        size: "normal",
       });
       assert.deepEqual(loadCharacterPreferences(true), {
         paused: true,
         visible: true,
         position: "free",
+        size: "normal",
       });
     }
     Object.defineProperty(globalThis, "localStorage", {
@@ -77,6 +103,7 @@ test("character preferences survive restarts while respecting reduced motion and
       paused: true,
       visible: true,
       position: "free",
+      size: "normal",
     });
   } finally {
     if (original) Object.defineProperty(globalThis, "localStorage", original);

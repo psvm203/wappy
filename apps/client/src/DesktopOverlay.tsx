@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { DesktopCharacters } from "./DesktopCharacters";
+import { isCharacterSize } from "./preferences";
 import { visibleResidents } from "./resident-selection";
 import { collectAttacks, createAttackInbox } from "./online-attacks";
 import {
@@ -64,6 +65,7 @@ export function DesktopOverlay() {
       residents={residents}
       paused={snapshot.paused}
       position={snapshot.position ?? "free"}
+      size={isCharacterSize(snapshot.size) ? snapshot.size : "normal"}
       profileKey={snapshot.profileKey}
       messages={snapshot.state.messages}
       attacks={snapshot.state.attacks}

@@ -6,6 +6,7 @@ import {
   loadCharacterPreferences,
   PREFERENCES_KEY,
   type CharacterPosition,
+  type CharacterSize,
 } from "./preferences";
 import { loadHiddenResidents, saveHiddenResidents } from "./resident-selection";
 
@@ -150,6 +151,7 @@ export interface DesktopSnapshot {
   paused: boolean;
   visible: boolean;
   position: CharacterPosition;
+  size: CharacterSize;
   hiddenIds: string[];
 }
 
@@ -162,6 +164,7 @@ export function useDesktopSync({
   paused,
   visible,
   position,
+  size,
   hiddenIds,
 }: DesktopSnapshot) {
   const [error, setError] = useState("");
@@ -186,6 +189,7 @@ export function useDesktopSync({
           paused,
           visible,
           position,
+          size,
           hiddenIds,
         } satisfies DesktopSnapshot);
         if (!disposed) setError("");
@@ -208,6 +212,15 @@ export function useDesktopSync({
       disposed = true;
       unlisten?.();
     };
-  }, [state, profileKey, connected, paused, visible, position, hiddenIds]);
+  }, [
+    state,
+    profileKey,
+    connected,
+    paused,
+    visible,
+    position,
+    size,
+    hiddenIds,
+  ]);
   return error;
 }
