@@ -69,9 +69,6 @@ export function ProfileForm({
   const edited = useRef(false);
   const composing = useRef(false);
   const timer = useRef<number | undefined>(undefined);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
-    "idle",
-  );
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -100,20 +97,11 @@ export function ProfileForm({
     const attempt = ++saveAttempt.current;
     submitted.current = next;
     setSaveError("");
-    setSaveStatus("saving");
     try {
       await onSave(next);
-      if (saveAttempt.current === attempt)
-        setSaveStatus(
-          draft.current.name.trim() === next.name &&
-            draft.current.character === next.character
-            ? "saved"
-            : "idle",
-        );
     } catch (cause) {
       if (saveAttempt.current !== attempt) return;
       submitted.current = null;
-      setSaveStatus("idle");
       setSaveError(errorMessage(cause));
     }
   }
@@ -126,7 +114,6 @@ export function ProfileForm({
     window.clearTimeout(timer.current);
     if (!autoSave || composing.current) return;
     setSaveError("");
-    setSaveStatus("idle");
     if (delay)
       timer.current = window.setTimeout(() => void saveChanges(), delay);
     else void saveChanges();
@@ -202,20 +189,12 @@ export function ProfileForm({
         </label>
         {children}
         {autoSave ? (
-          saveError ? (
+          saveError && (
             <p className="error" role="alert">
               {saveError}
               <button type="button" onClick={() => void saveChanges()}>
                 다시 저장
               </button>
-            </p>
-          ) : (
-            <p className="hint" role="status">
-              {saveStatus === "saving"
-                ? "저장하는 중…"
-                : saveStatus === "saved"
-                  ? "저장했어요."
-                  : "변경하면 자동으로 저장돼요."}
             </p>
           )
         ) : (
@@ -224,7 +203,7 @@ export function ProfileForm({
             disabled={!profile.name.trim() || !canSave}
             type="submit"
           >
-            {busy ? "저장하는 중…" : "이 모습으로 함께하기"}
+            이 모습으로 함께하기
             <span aria-hidden="true">↗</span>
           </button>
         )}
