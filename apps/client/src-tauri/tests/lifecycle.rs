@@ -97,61 +97,6 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .map_err(|error| error.to_string())
 }
 
-fn pointer_priority(
-    desktop: &tauri::WebviewWindow,
-    sidebar: &tauri::WebviewWindow,
-) -> Result<(), String> {
-    let cursor = desktop
-        .cursor_position()
-        .map_err(|error| error.to_string())?;
-    let origin = desktop
-        .inner_position()
-        .map_err(|error| error.to_string())?;
-    let visible = sidebar.is_visible().map_err(|error| error.to_string())?;
-    let result = (|| {
-        sidebar.show().map_err(|error| error.to_string())?;
-        let size = sidebar.inner_size().map_err(|error| error.to_string())?;
-        sidebar
-            .set_cursor_position(tauri::PhysicalPosition::new(
-                size.width / 2,
-                size.height / 2,
-            ))
-            .map_err(|error| error.to_string())?;
-        // The underlying window must be found even after the overlay takes input;
-        // otherwise character capture would oscillate on every cursor poll.
-        for ignore in [true, false] {
-            desktop
-                .set_ignore_cursor_events(ignore)
-                .map_err(|error| error.to_string())?;
-            desktop
-                .eval(
-                    r#"(async () => {
-                delete document.body.dataset.windowBehind;
-                document.body.dataset.windowBehind = String(
-                    await window.__TAURI_INTERNALS__.invoke('desktop_window_at_cursor')
-                );
-            })()"#,
-                )
-                .map_err(|error| error.to_string())?;
-            text_rendered(desktop, "body[data-window-behind='true']", "", true)?;
-        }
-        Ok(())
-    })();
-    desktop
-        .set_ignore_cursor_events(true)
-        .map_err(|error| error.to_string())?;
-    desktop
-        .set_cursor_position(tauri::PhysicalPosition::new(
-            cursor.x - origin.x as f64,
-            cursor.y - origin.y as f64,
-        ))
-        .map_err(|error| error.to_string())?;
-    if !visible {
-        sidebar.hide().map_err(|error| error.to_string())?;
-    }
-    result
-}
-
 fn text_rendered(
     window: &tauri::WebviewWindow,
     selector: &str,
@@ -373,8 +318,6 @@ fn main() -> Result<(), String> {
                 document.body.dataset.updaterScopeDenied = String(results.every(Boolean));
             })()"#).map_err(|error| error.to_string())?;
             text_rendered(&desktop, "body[data-updater-scope-denied='true']", "", true)?;
-            println!("CHECK: underlying windows keep pointer priority");
-            pointer_priority(&desktop, &sidebar)?;
             let autostart = std::env::args().any(|arg| arg == "--autostart");
             if sidebar.is_visible().unwrap_or(false) == autostart {
                 return Err("Initial sidebar visibility did not match the launch mode".into());
