@@ -51,11 +51,7 @@ import { filterFriends, type FriendView } from "./friend-filter";
 import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import { saveSession, type SavedSession } from "./sessions";
-import {
-  isLocalServer,
-  parseInvitation,
-  WAPPY_SERVER,
-} from "./invitations";
+import { isLocalServer, parseInvitation, WAPPY_SERVER } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
 import {
@@ -328,20 +324,22 @@ function App() {
   function updateProfile(profile: ProfileInput) {
     if (session && currentSession.current === session) setProfileDraft(profile);
     // Keep writes ordered even when the editor is closed and reopened.
-    const save = profileSave.current.catch(() => {}).then(async () => {
-      if (!session || currentSession.current !== session)
-        throw new ApiError(409, "현재 프로필에서 다시 시도해 주세요.");
-      const updated = parseSidebarState({
-        self: await request(session, "PATCH /profile", profile),
-        friends: [],
-      }).self;
-      if (updated.id !== state?.self.id)
-        throw new ApiError(502, "프로필 저장 결과를 확인하지 못했어요.");
-      if (currentSession.current !== session) return;
-      setState((current) =>
-        current ? { ...current, self: updated } : current,
-      );
-    });
+    const save = profileSave.current
+      .catch(() => {})
+      .then(async () => {
+        if (!session || currentSession.current !== session)
+          throw new ApiError(409, "현재 프로필에서 다시 시도해 주세요.");
+        const updated = parseSidebarState({
+          self: await request(session, "PATCH /profile", profile),
+          friends: [],
+        }).self;
+        if (updated.id !== state?.self.id)
+          throw new ApiError(502, "프로필 저장 결과를 확인하지 못했어요.");
+        if (currentSession.current !== session) return;
+        setState((current) =>
+          current ? { ...current, self: updated } : current,
+        );
+      });
     const completed = save.finally(() => {
       if (currentSession.current === session)
         setProfileDraft((current) => (current === profile ? null : current));
@@ -498,16 +496,11 @@ function App() {
     );
   }
   const presenceHidden =
-    connection === "online" &&
-    state?.presence?.sharing === false;
+    connection === "online" && state?.presence?.sharing === false;
   const errorAlert = error && (
     <p className="error" role="alert">
       {error}
-      <button
-        type="button"
-        aria-label="오류 닫기"
-        onClick={() => setError("")}
-      >
+      <button type="button" aria-label="오류 닫기" onClick={() => setError("")}>
         ×
       </button>
     </p>
@@ -686,9 +679,7 @@ function App() {
             </p>
           )}
           {desktop && <StartupSettings />}
-          {desktop && !updates.version && (
-            <UpdateSettings state={updates} />
-          )}
+          {desktop && !updates.version && <UpdateSettings state={updates} />}
         </div>
       ) : (
         <>
@@ -718,8 +709,8 @@ function App() {
               <details>
                 <summary>이 기기에서 다시 시작하기</summary>
                 <p>
-                  새 프로필로 시작할 수 있어요.
-                  유효한 로그인 정보가 없으면 기존 프로필로 돌아올 수 없어요.
+                  새 프로필로 시작할 수 있어요. 유효한 로그인 정보가 없으면 기존
+                  프로필로 돌아올 수 없어요.
                 </p>
                 <button
                   className="text-button danger"
@@ -787,7 +778,6 @@ function App() {
                 <div className="empty-state">
                   <span className="loading-orbit" />
                   <h2>친구들을 만나러 가는 중</h2>
-                  <p>{session.server}</p>
                 </div>
               )}
             {state && panel === "friends" && (
@@ -1026,8 +1016,7 @@ function App() {
                   </>
                 ) : (
                   <p className="hint">
-                    자동 실행과 앱 업데이트는 데스크톱 앱에서 설정할 수
-                    있어요.
+                    자동 실행과 앱 업데이트는 데스크톱 앱에서 설정할 수 있어요.
                   </p>
                 )}
               </section>
