@@ -169,7 +169,7 @@ export function ProfileForm({
     <form onSubmit={submit} className="profile-form">
       <fieldset disabled={busy} aria-label="프로필 설정">
         {beforeProfile}
-        {autoSave && nameField}
+        {nameField}
         {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
           <section key={category} aria-label={category}>
             <h2 className="character-category-title">{category}</h2>
@@ -196,7 +196,6 @@ export function ProfileForm({
             </div>
           </section>
         ))}
-        {!autoSave && nameField}
         {children}
         {autoSave ? (
           saveError && (
