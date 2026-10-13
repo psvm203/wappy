@@ -35,18 +35,23 @@ test("attack snapshots reject spoofed participants, duplicates, invalid times an
     parseSidebarState({ ...state, attacks: [event(1)] }).attacks,
     [event(1)],
   );
+  const observed = { ...event(2), attackerId: "other" };
+  assert.deepEqual(
+    parseSidebarState({ ...state, attacks: [observed] }).attacks,
+    [observed],
+  );
   for (const attacks of [
     [event(1), event(1)],
     [event(2), event(1)],
     [{ ...event(1), attackerId: "missing" }],
-    [{ ...event(1), attackerId: "other" }],
+    [{ ...event(1), targetId: "missing" }],
     [{ ...event(1), id: -1 }],
     [{ ...event(1), sentAt: NaN }],
   ])
     assert.throws(() => parseSidebarState({ ...state, attacks }));
   assert.throws(() => parseAttackEvent({ ...event(1), targetId: "self" }));
   const blocked = applyBlockingSettings(
-    parseSidebarState({ ...state, attacks: [event(1)] }),
+    parseSidebarState({ ...state, attacks: [event(1), observed] }),
     {
       revision: 1,
       profiles: [{ id: "friend", name: "친구", character: "chiikawa" }],
@@ -56,13 +61,15 @@ test("attack snapshots reject spoofed participants, duplicates, invalid times an
 });
 
 test("out-of-order polls play each incoming attack once", () => {
-  const inbox = createAttackInbox("friend");
-  collectAttacks(inbox, [event(2)], online, true, 0);
-  collectAttacks(inbox, [event(1), event(2)], online, true, 100);
-  assert.equal(nextAttack(inbox, 100)?.id, 2);
-  assert.equal(nextAttack(inbox, 100)?.id, 1);
-  collectAttacks(inbox, [event(1), event(2)], online, true, 200);
-  assert.equal(nextAttack(inbox, 200), undefined);
+  for (const selfId of ["friend", "observer"]) {
+    const inbox = createAttackInbox(selfId);
+    collectAttacks(inbox, [event(2)], online, true, 0);
+    collectAttacks(inbox, [event(1), event(2)], online, true, 100);
+    assert.deepEqual(nextAttack(inbox, 100), event(2));
+    assert.deepEqual(nextAttack(inbox, 100), event(1));
+    collectAttacks(inbox, [event(1), event(2)], online, true, 200);
+    assert.equal(nextAttack(inbox, 200), undefined);
+  }
 });
 
 test("server echoes never replay a locally animated attack, including delayed or lost acknowledgements", () => {

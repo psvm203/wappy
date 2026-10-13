@@ -115,7 +115,7 @@ export interface SidebarState {
   messages?: ChatMessage[];
   /** The authenticated profile's block list; absent on older servers. */
   blocking?: BlockingSettings;
-  /** Recent attacks involving self; absent on servers without online attacks. */
+  /** Recent attacks between self or visible friends; absent on servers without online attacks. */
   attacks?: AttackEvent[];
 }
 export type BlockedProfile = Pick<Profile, "id" | "name" | "character">;
@@ -405,8 +405,7 @@ export function parseSidebarState(value: unknown): SidebarState {
       if (
         attack.id <= previousId ||
         !ids.has(attack.attackerId) ||
-        !ids.has(attack.targetId) ||
-        (attack.attackerId !== self.id && attack.targetId !== self.id)
+        !ids.has(attack.targetId)
       )
         throw new Error("잘못된 공격 참여자 또는 순서입니다.");
       previousId = attack.id;

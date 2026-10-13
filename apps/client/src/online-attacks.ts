@@ -31,7 +31,7 @@ export function collectAttacks(
     if (
       enabled &&
       // Outgoing attacks already animate on click, even if the acknowledgement is delayed or lost.
-      event.targetId === inbox.selfId &&
+      event.attackerId !== inbox.selfId &&
       visibleOnlineIds.has(event.attackerId) &&
       visibleOnlineIds.has(event.targetId)
     )

@@ -119,9 +119,16 @@ export function createApp(options: {
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
     ) AND recipient_id IS NULL AND sent_at > ? ORDER BY id DESC LIMIT ?
   `);
-  const selectAttacks =
-    db.prepare(`SELECT id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt
-    FROM attack_events WHERE (attacker_id = ? OR target_id = ?) AND sent_at > ?
+  // Room friendships exclude blocked profiles; both participants must be visible.
+  const selectAttacks = db.prepare(`
+    WITH visible(id) AS (
+      SELECT ?
+      UNION SELECT friend_id FROM friendships WHERE user_id = ?
+      UNION SELECT user_id FROM friendships WHERE friend_id = ?
+    )
+    SELECT id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt
+    FROM attack_events WHERE attacker_id IN (SELECT id FROM visible)
+      AND target_id IN (SELECT id FROM visible) AND sent_at > ?
     ORDER BY id DESC LIMIT ?`);
   const selectChanges = db.prepare("SELECT total_changes() AS changes");
   const selectDataVersion = db.prepare("PRAGMA data_version");
@@ -299,6 +306,7 @@ export function createApp(options: {
             room,
             attacks: (
               selectAttacks.all(
+                self!.id,
                 self!.id,
                 self!.id,
                 time - ATTACK_TTL_MS,

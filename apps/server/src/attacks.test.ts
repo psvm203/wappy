@@ -17,7 +17,7 @@ import {
 import { createApp } from "./server.ts";
 
 test(
-  "online attacks authenticate, reach only both participants, expire, and revoke with the friendship",
+  "online attacks authenticate, reach room observers, expire, and respect blocks and room changes",
   { timeout: 10_000 },
   async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "wappy-attacks-"));
@@ -81,11 +81,13 @@ test(
     }
     const a = await create("A"),
       b = await create("B"),
-      c = await create("C");
+      c = await create("C"),
+      d = await create("D");
     await connect(a.token, b.token);
     await connect(a.token, c.token);
     const beforeB = await call("/state", b.token),
-      beforeC = await call("/state", c.token);
+      beforeC = await call("/state", c.token),
+      beforeD = await call("/state", d.token);
     assert.deepEqual(parseSidebarState(beforeB.body).attacks, []);
     assert.ok(beforeB.etag);
     assert.equal(
@@ -111,13 +113,13 @@ test(
     const event = parseAttackEvent(sent.body);
     assert.equal(event.attackerId, a.profile.id);
     assert.equal(event.targetId, b.profile.id);
-    for (const token of [a.token, b.token])
+    for (const token of [a.token, b.token, c.token])
       assert.deepEqual(
         parseSidebarState((await call("/state", token)).body).attacks,
         [event],
       );
     assert.deepEqual(
-      parseSidebarState((await call("/state", c.token)).body).attacks,
+      parseSidebarState((await call("/state", d.token)).body).attacks,
       [],
     );
     assert.equal(
@@ -126,8 +128,50 @@ test(
     );
     assert.equal(
       (await call("/state", c.token, undefined, beforeC.etag)).status,
+      200,
+    );
+    assert.equal(
+      (await call("/state", d.token, undefined, beforeD.etag)).status,
       304,
     );
+    for (const [blocker, blocked] of [
+      [c, a],
+      [a, c],
+      [c, b],
+      [b, c],
+    ]) {
+      const beforeBlock = await call("/state", c.token);
+      assert.equal(
+        (
+          await call("/friends/block", blocker.token, {
+            friendId: blocked.profile.id,
+          })
+        ).status,
+        200,
+      );
+      const hidden = await call("/state", c.token, undefined, beforeBlock.etag);
+      assert.equal(hidden.status, 200);
+      assert.deepEqual(parseSidebarState(hidden.body).attacks, []);
+      assert.deepEqual(
+        parseSidebarState((await call("/state", b.token)).body).attacks,
+        [event],
+      );
+      await call("/friends/unblock", blocker.token, {
+        friendId: blocked.profile.id,
+      });
+      await connect(a.token, c.token);
+      assert.deepEqual(
+        parseSidebarState((await call("/state", c.token)).body).attacks,
+        [event],
+      );
+    }
+    await connect(d.token, c.token);
+    assert.deepEqual(
+      parseSidebarState((await call("/state", c.token)).body).attacks,
+      [],
+      "observers leaving the room lose access to its attacks",
+    );
+    await connect(a.token, c.token);
     assert.equal(
       (await call("/friends/attack", a.token, { friendId: c.profile.id }))
         .status,
@@ -152,11 +196,17 @@ test(
       concurrent.map((result) => result.status).sort(),
       [201, 429],
     );
-    const cached = await call("/state", b.token);
+    const cached = await Promise.all(
+      [b.token, c.token].map((token) => call("/state", token)),
+    );
     now += ATTACK_TTL_MS;
-    const expired = await call("/state", b.token, undefined, cached.etag);
-    assert.equal(expired.status, 200);
-    assert.deepEqual(parseSidebarState(expired.body).attacks, []);
+    for (const [index, token] of [b.token, c.token].entries()) {
+      const expired = await call(
+        "/state", token, undefined, cached[index]!.etag,
+      );
+      assert.equal(expired.status, 200);
+      assert.deepEqual(parseSidebarState(expired.body).attacks, []);
+    }
     await call("/presence", b.token, { sharing: false }, undefined, "PATCH");
     assert.equal(
       (await call("/friends/attack", a.token, { friendId: b.profile.id }))
