@@ -909,12 +909,15 @@ function App() {
               <div className="invite-panel">
                 <section className="invite-card">
                   <h2>방 초대 코드</h2>
-                  {state.room && (
-                    <p>
-                      현재 방: <strong>{state.room.name}</strong>
-                    </p>
-                  )}
-                  <p>참여자 누구나 같은 방으로 초대할 수 있어요.</p>
+                  <p>
+                    {state.room && (
+                      <>
+                        현재 방: <strong>{state.room.name}</strong>
+                        <br />
+                      </>
+                    )}
+                    참여자 누구나 같은 방으로 초대할 수 있어요.
+                  </p>
                   <InviteCode
                     key={`${profileKey}:${state.room?.id ?? ""}`}
                     session={session}
