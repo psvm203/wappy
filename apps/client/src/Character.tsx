@@ -26,6 +26,13 @@ import {
   Tuxedosam,
   Keroppi,
 } from "./Sanrio";
+import {
+  Slime,
+  OrangeMushroom,
+  PinkBean,
+  StoneSpirit,
+  Yeti,
+} from "./MapleStory";
 
 const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   chiikawa: Chiikawa,
@@ -48,6 +55,11 @@ const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   pekkle: Pekkle,
   tuxedosam: Tuxedosam,
   keroppi: Keroppi,
+  slime: Slime,
+  "orange-mushroom": OrangeMushroom,
+  "pink-bean": PinkBean,
+  "stone-spirit": StoneSpirit,
+  yeti: Yeti,
 };
 
 export function Character({

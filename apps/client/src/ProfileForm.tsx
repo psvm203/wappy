@@ -41,6 +41,13 @@ const CHARACTER_CATEGORIES = {
     "black-widow",
     "hawkeye",
   ],
+  메이플스토리: [
+    "slime",
+    "orange-mushroom",
+    "pink-bean",
+    "stone-spirit",
+    "yeti",
+  ],
 } satisfies Record<string, ProfileInput["character"][]>;
 
 export function ProfileForm({

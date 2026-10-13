@@ -28,6 +28,11 @@ export const CHARACTERS = [
   "pekkle",
   "tuxedosam",
   "keroppi",
+  "slime",
+  "orange-mushroom",
+  "pink-bean",
+  "stone-spirit",
+  "yeti",
 ] as const;
 export type Character = (typeof CHARACTERS)[number];
 export const CHARACTER_NAMES: Record<Character, string> = {
@@ -51,6 +56,11 @@ export const CHARACTER_NAMES: Record<Character, string> = {
   pekkle: "아히루노페클",
   tuxedosam: "턱시도샘",
   keroppi: "케로케로케로피",
+  slime: "슬라임",
+  "orange-mushroom": "주황버섯",
+  "pink-bean": "핑크빈",
+  "stone-spirit": "돌의 정령",
+  yeti: "예티",
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;

@@ -4,7 +4,7 @@
 
 ## 주요 기능
 
-- 치이카와, 어벤져스, 산리오 캐릭터로 프로필 만들기
+- 치이카와, 산리오, 어벤져스, 메이플스토리 캐릭터로 프로필 만들기
 - 5자리 초대 코드로 방에 참여하고 친구들의 접속 상태 확인하기
 - 바탕화면 캐릭터 이동, 표시 여부 설정, 움직임 일시정지
 - 캐릭터 말풍선 채팅과 온라인 친구 간 공격 효과
@@ -92,17 +92,17 @@ Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 O
 
 ## 개발 명령
 
-| 명령                               | 설명                                                 |
-| ---------------------------------- | ---------------------------------------------------- |
-| `pnpm desktop`                     | API 서버와 데스크톱 개발 앱 실행                     |
-| `pnpm dev`                         | API 서버와 Vite 개발 서버 실행                       |
-| `pnpm build`                       | 공유 API 패키지, 웹 클라이언트, 서버 빌드            |
-| `pnpm test`                        | 클라이언트·서버의 Node.js 테스트 실행                |
-| `pnpm check-types`                 | 워크스페이스 타입 검사                               |
-| `pnpm performance`                 | 서버 상태 조회의 응답 크기·지연·메모리 성능 검사     |
-| `pnpm format`                      | TypeScript·TSX·Markdown 파일 포맷                    |
-| `pnpm --filter server start`       | 빌드된 API 서버 실행                                 |
-| `pnpm --filter client tauri build` | 현재 플랫폼의 데스크톱 배포 파일 빌드                |
+| 명령                               | 설명                                             |
+| ---------------------------------- | ------------------------------------------------ |
+| `pnpm desktop`                     | API 서버와 데스크톱 개발 앱 실행                 |
+| `pnpm dev`                         | API 서버와 Vite 개발 서버 실행                   |
+| `pnpm build`                       | 공유 API 패키지, 웹 클라이언트, 서버 빌드        |
+| `pnpm test`                        | 클라이언트·서버의 Node.js 테스트 실행            |
+| `pnpm check-types`                 | 워크스페이스 타입 검사                           |
+| `pnpm performance`                 | 서버 상태 조회의 응답 크기·지연·메모리 성능 검사 |
+| `pnpm format`                      | TypeScript·TSX·Markdown 파일 포맷                |
+| `pnpm --filter server start`       | 빌드된 API 서버 실행                             |
+| `pnpm --filter client tauri build` | 현재 플랫폼의 데스크톱 배포 파일 빌드            |
 
 Rust 코드 검사는 별도로 실행합니다.
 
