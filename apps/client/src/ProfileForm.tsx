@@ -69,9 +69,6 @@ export function ProfileForm({
   const edited = useRef(false);
   const composing = useRef(false);
   const timer = useRef<number | undefined>(undefined);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
-    "idle",
-  );
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -100,20 +97,11 @@ export function ProfileForm({
     const attempt = ++saveAttempt.current;
     submitted.current = next;
     setSaveError("");
-    setSaveStatus("saving");
     try {
       await onSave(next);
-      if (saveAttempt.current === attempt)
-        setSaveStatus(
-          draft.current.name.trim() === next.name &&
-            draft.current.character === next.character
-            ? "saved"
-            : "idle",
-        );
     } catch (cause) {
       if (saveAttempt.current !== attempt) return;
       submitted.current = null;
-      setSaveStatus("idle");
       setSaveError(errorMessage(cause));
     }
   }
@@ -126,7 +114,6 @@ export function ProfileForm({
     window.clearTimeout(timer.current);
     if (!autoSave || composing.current) return;
     setSaveError("");
-    setSaveStatus("idle");
     if (delay)
       timer.current = window.setTimeout(() => void saveChanges(), delay);
     else void saveChanges();
@@ -144,11 +131,38 @@ export function ProfileForm({
       character: profile.character,
     });
   }
+  const nameField = (
+    <label className="field">
+      이름
+      <input
+        autoComplete="nickname"
+        required
+        maxLength={MAX_NAME_LENGTH}
+        placeholder="친구들이 부를 이름"
+        value={profile.name}
+        onChange={(event) =>
+          changeProfile({ ...draft.current, name: event.target.value }, 300)
+        }
+        onCompositionStart={() => {
+          composing.current = true;
+          window.clearTimeout(timer.current);
+        }}
+        onCompositionEnd={(event) => {
+          composing.current = false;
+          changeProfile(
+            { ...draft.current, name: event.currentTarget.value },
+            300,
+          );
+        }}
+        onBlur={() => void saveChanges()}
+      />
+    </label>
+  );
   return (
     <form onSubmit={submit} className="profile-form">
-      <fieldset disabled={busy}>
-        <legend>나를 닮은 친구를 골라요</legend>
+      <fieldset disabled={busy} aria-label="프로필 설정">
         {beforeProfile}
+        {autoSave && nameField}
         {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
           <section key={category} aria-label={category}>
             <h2 className="character-category-title">{category}</h2>
@@ -175,47 +189,12 @@ export function ProfileForm({
             </div>
           </section>
         ))}
-        <label className="field">
-          이름
-          <input
-            autoComplete="nickname"
-            required
-            maxLength={MAX_NAME_LENGTH}
-            placeholder="친구들이 부를 이름"
-            value={profile.name}
-            onChange={(event) =>
-              changeProfile({ ...draft.current, name: event.target.value }, 300)
-            }
-            onCompositionStart={() => {
-              composing.current = true;
-              window.clearTimeout(timer.current);
-            }}
-            onCompositionEnd={(event) => {
-              composing.current = false;
-              changeProfile(
-                { ...draft.current, name: event.currentTarget.value },
-                300,
-              );
-            }}
-            onBlur={() => void saveChanges()}
-          />
-        </label>
+        {!autoSave && nameField}
         {children}
         {autoSave ? (
-          saveError ? (
+          saveError && (
             <p className="error" role="alert">
               {saveError}
-              <button type="button" onClick={() => void saveChanges()}>
-                다시 저장
-              </button>
-            </p>
-          ) : (
-            <p className="hint" role="status">
-              {saveStatus === "saving"
-                ? "저장하는 중…"
-                : saveStatus === "saved"
-                  ? "저장했어요."
-                  : "변경하면 자동으로 저장돼요."}
             </p>
           )
         ) : (
@@ -224,7 +203,7 @@ export function ProfileForm({
             disabled={!profile.name.trim() || !canSave}
             type="submit"
           >
-            {busy ? "저장하는 중…" : "이 모습으로 함께하기"}
+            이 모습으로 함께하기
             <span aria-hidden="true">↗</span>
           </button>
         )}

@@ -52,7 +52,7 @@ export function StartupSettings() {
   }, [sync]);
 
   return (
-    <section className="invite-card startup-panel" aria-label="앱 시작 설정">
+    <section className="startup-panel" aria-label="앱 시작 설정">
       <label className="setting-toggle">
         <input
           type="checkbox"

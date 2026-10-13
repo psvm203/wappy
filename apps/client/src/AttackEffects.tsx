@@ -1,6 +1,7 @@
 import type { Ref } from "react";
 import { Shield } from "./Avengers";
 import { attackVisual, type Attack } from "./desktop-attack";
+import { CHARACTER_SIZE } from "./desktop-physics";
 
 /** Updated by the same animation clock as the bodies, without a React render per frame. */
 export function drawAttackEffect(
@@ -11,6 +12,7 @@ export function drawAttackEffect(
   svg.dataset.kind = attack?.kind ?? "";
   svg.dataset.phase = attack?.phase ?? "";
   if (!attack || attack.kind === "dash") return;
+  const scale = attack.attacker.size / CHARACTER_SIZE;
   const { sourceX, sourceY, x, y, angle, progress } = attackVisual(
     attack,
     innerWidth,
@@ -33,14 +35,17 @@ export function drawAttackEffect(
     line.setAttribute("d", path);
   svg
     .querySelector(".attack-projectile")
-    ?.setAttribute("transform", `translate(${x} ${y}) rotate(${angle})`);
+    ?.setAttribute(
+      "transform",
+      `translate(${x} ${y}) rotate(${angle}) scale(${scale})`,
+    );
   svg
     .querySelector(".flying-shield")
     ?.setAttribute("transform", `rotate(${attack.elapsed * 1400})`);
   const muzzle = svg.querySelector(".attack-muzzle");
   muzzle?.setAttribute(
     "transform",
-    `translate(${sourceX} ${sourceY}) rotate(${angle})`,
+    `translate(${sourceX} ${sourceY}) rotate(${angle}) scale(${scale})`,
   );
   muzzle?.setAttribute(
     "opacity",
@@ -56,7 +61,7 @@ export function drawAttackEffect(
   const shockwave = svg.querySelector(".smash-effect");
   shockwave?.setAttribute(
     "transform",
-    `translate(${attack.impactX} ${attack.impactY}) scale(${0.6 + impact * 1.8})`,
+    `translate(${attack.impactX} ${attack.impactY}) scale(${(0.6 + impact * 1.8) * scale})`,
   );
   shockwave?.setAttribute("opacity", String(1 - impact));
 }

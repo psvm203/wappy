@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { SidebarState } from "@wappy/api";
-import { loadCharacterPreferences, PREFERENCES_KEY } from "./preferences";
+import {
+  loadCharacterPreferences,
+  PREFERENCES_KEY,
+  type CharacterPosition,
+  type CharacterSize,
+} from "./preferences";
 import { loadHiddenResidents, saveHiddenResidents } from "./resident-selection";
 
 const NO_HIDDEN_RESIDENTS: string[] = [];
@@ -145,6 +150,8 @@ export interface DesktopSnapshot {
   connected: boolean;
   paused: boolean;
   visible: boolean;
+  position: CharacterPosition;
+  size: CharacterSize;
   hiddenIds: string[];
 }
 
@@ -156,6 +163,8 @@ export function useDesktopSync({
   connected,
   paused,
   visible,
+  position,
+  size,
   hiddenIds,
 }: DesktopSnapshot) {
   const [error, setError] = useState("");
@@ -179,6 +188,8 @@ export function useDesktopSync({
           connected,
           paused,
           visible,
+          position,
+          size,
           hiddenIds,
         } satisfies DesktopSnapshot);
         if (!disposed) setError("");
@@ -201,6 +212,15 @@ export function useDesktopSync({
       disposed = true;
       unlisten?.();
     };
-  }, [state, profileKey, connected, paused, visible, hiddenIds]);
+  }, [
+    state,
+    profileKey,
+    connected,
+    paused,
+    visible,
+    position,
+    size,
+    hiddenIds,
+  ]);
   return error;
 }

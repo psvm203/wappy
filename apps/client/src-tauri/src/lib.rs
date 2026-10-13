@@ -7,6 +7,18 @@ pub use tray::{open_sidebar, show_sidebar};
 
 const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
 
+#[tauri::command]
+fn updater_enabled(app: tauri::AppHandle) -> bool {
+    // Release builds inject the public key; previews never contact the update feed.
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|config| config.get("pubkey"))
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|key| !key.trim().is_empty())
+}
+
 fn raise_desktop(desktop: &WebviewWindow) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     return desktop.with_webview(|webview| unsafe {
@@ -120,6 +132,8 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         }
     }));
     builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(
             tauri_plugin_opener::Builder::new()
                 .open_js_links_on_click(false)
@@ -191,6 +205,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            updater_enabled,
             tray::open_sidebar,
             set_sidebar_compact,
             set_sidebar_pinned,

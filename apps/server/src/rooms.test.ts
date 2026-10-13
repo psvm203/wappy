@@ -42,9 +42,10 @@ test("automatic room codes are shared, survive restart, and move only the accept
     token?: string,
     body?: unknown,
     etag?: string,
+    method = body === undefined ? "GET" : "POST",
   ) {
     const response = await fetch(base + path, {
-      method: body === undefined ? "GET" : "POST",
+      method,
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -198,9 +199,38 @@ test("automatic room codes are shared, survive restart, and move only the accept
   );
   assert.equal((await call("/invites/accept", d.token, fromB)).status, 409);
 
+  const originalRoom = (await state(a)).room;
+  assert.equal(originalRoom?.name, "A의 방");
+  async function rename(person: Session, name: string) {
+    const response = await call(
+      "/profile",
+      person.token,
+      { name, character: person.profile.character },
+      undefined,
+      "PATCH",
+    );
+    assert.equal(response.status, 200);
+  }
+  // Names can match; only the permanent invitation's owner names the room.
+  await rename(b, "A");
+  const beforeRename = await call("/state", b.token);
+  await rename(a, "새 방장 이름");
+  const renamed = await call("/state", b.token, undefined, beforeRename.etag);
+  assert.equal(renamed.status, 200);
+  const renamedRoom = { ...originalRoom, name: "새 방장 이름의 방" };
+  assert.deepEqual(renamed.body.room, renamedRoom);
+  await rename(b, "새 참여자 이름");
+  for (const person of [a, b, c, d])
+    assert.deepEqual((await state(person)).room, renamedRoom);
+  assert.deepEqual((await call("/invites/preview", undefined, first)).body, {
+    name: "새 방장 이름",
+    character: a.profile.character,
+  });
+
   await close();
   server = createApp({ databasePath, now: () => now });
   await listen();
+  assert.deepEqual((await state(b)).room, renamedRoom);
   await peers(d, [a, b]);
   await peers(e, [f]);
   assert.deepEqual(await invite(a), first);

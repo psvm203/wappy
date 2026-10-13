@@ -34,7 +34,6 @@ import {
   useDesktopSync,
   useResidentSelection,
 } from "./desktop";
-import { DesktopControls } from "./DesktopControls";
 import {
   residentSelectionKey,
   toggleResidentVisibility,
@@ -47,6 +46,7 @@ import { useDesktopChatRequests } from "./chat-bridge";
 import { InviteField } from "./InviteField";
 import { InviteCode } from "./InviteCode";
 import { StartupSettings } from "./StartupSettings";
+import { UpdateSettings, useAppUpdates } from "./UpdateSettings";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
@@ -58,6 +58,12 @@ import {
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
+import {
+  CHARACTER_POSITIONS,
+  CHARACTER_SIZES,
+  isCharacterPosition,
+  isCharacterSize,
+} from "./preferences";
 import "./App.css";
 
 const emptyProfile: ProfileInput = {
@@ -87,9 +93,9 @@ function App() {
         : serverState,
     [serverState, profileDraft],
   );
-  const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
-    "friends",
-  );
+  const [panel, setPanel] = useState<
+    "friends" | "invite" | "profile" | "settings"
+  >("friends");
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -110,6 +116,7 @@ function App() {
   } = useCharacterPreferences();
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   const desktop = isTauri();
+  const updates = useAppUpdates(desktop);
   const profileKey =
     session && state
       ? residentSelectionKey(session.server, state.self.id)
@@ -122,6 +129,8 @@ function App() {
     connected: !!session && connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
+    position: preferences.position,
+    size: preferences.size,
     hiddenIds: selection.hiddenIds,
   });
   const attackError = useDesktopAttackRequests(profileKey, async (friendId) => {
@@ -242,7 +251,10 @@ function App() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(""), 5000);
+    const timer = window.setTimeout(
+      () => setNotice(""),
+      notice === "초대 코드를 복사했어요." ? 2000 : 5000,
+    );
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -488,14 +500,6 @@ function App() {
   const presenceHidden =
     connection === "online" &&
     state?.presence?.sharing === false;
-  const desktopControls = (
-    <DesktopControls
-      desktop={desktop}
-      compact={compact}
-      preferences={preferences}
-      onChange={setPreferences}
-    />
-  );
   const errorAlert = error && (
     <p className="error" role="alert">
       {error}
@@ -521,6 +525,14 @@ function App() {
           ⠿
         </div>
         <button
+          className="icon-button"
+          onClick={toggleCompact}
+          aria-label="사이드바 펼치기"
+          title="사이드바 펼치기"
+        >
+          ‹
+        </button>
+        <button
           className="compact-open"
           onClick={toggleCompact}
           aria-label="사이드바 펼치기"
@@ -545,7 +557,6 @@ function App() {
             </div>
           ))}
         </div>
-        {desktopControls}
         {desktopError && (
           <p className="error" role="alert">
             {desktopError}
@@ -556,13 +567,6 @@ function App() {
             {error}
           </p>
         )}
-        <button
-          className="icon-button"
-          onClick={toggleCompact}
-          aria-label="사이드바 펼치기"
-        >
-          ‹
-        </button>
       </main>
     );
 
@@ -606,6 +610,15 @@ function App() {
           </div>
         )}
       </header>
+
+      {desktop && updates.version && (!session || panel !== "settings") && (
+        <div className="update-banner">
+          <UpdateSettings
+            state={updates}
+            disabled={busy || profileDraft !== null}
+          />
+        </div>
+      )}
 
       {!session ? (
         <div className="onboarding scroll-area">
@@ -673,6 +686,9 @@ function App() {
             </p>
           )}
           {desktop && <StartupSettings />}
+          {desktop && !updates.version && (
+            <UpdateSettings state={updates} />
+          )}
         </div>
       ) : (
         <>
@@ -731,6 +747,7 @@ function App() {
                 ["friends", "친구들"],
                 ["invite", "초대하기"],
                 ["profile", "내 모습"],
+                ["settings", "설정"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -764,23 +781,25 @@ function App() {
               </p>
             )}
             {(!state || panel !== "invite") && errorAlert}
-            {!state && panel !== "profile" && connection !== "unauthorized" && (
-              <div className="empty-state">
-                <span className="loading-orbit" />
-                <h2>친구들을 만나러 가는 중</h2>
-                <p>{session.server}</p>
-              </div>
-            )}
+            {!state &&
+              (panel === "friends" || panel === "invite") &&
+              connection !== "unauthorized" && (
+                <div className="empty-state">
+                  <span className="loading-orbit" />
+                  <h2>친구들을 만나러 가는 중</h2>
+                  <p>{session.server}</p>
+                </div>
+              )}
             {state && panel === "friends" && (
               <>
-                <div className="section-heading">
-                  <h1>
-                    함께 있는 친구들<span>{state.friends.length}</span>
-                  </h1>
-                  <span className="count-badge">{onlineCount} online</span>
-                </div>
                 {state.friends.length > 0 && (
                   <>
+                    <div className="section-heading">
+                      <h1>
+                        함께 있는 친구들<span>{state.friends.length}</span>
+                      </h1>
+                      <span className="count-badge">{onlineCount} online</span>
+                    </div>
                     <section
                       className="friend-filters"
                       aria-label="친구 목록 필터"
@@ -835,7 +854,7 @@ function App() {
                       className="primary"
                       onClick={() => setPanel("invite")}
                     >
-                      첫 친구 초대하기 <span aria-hidden="true">+</span>
+                      친구 초대하기 <span aria-hidden="true">+</span>
                     </button>
                   </div>
                 ) : listedFriends.length === 0 ? (
@@ -885,12 +904,15 @@ function App() {
               <div className="invite-panel">
                 <section className="invite-card">
                   <h2>방 초대 코드</h2>
-                  {state.room && (
-                    <p>
-                      현재 방: <strong>{state.room.name}</strong>
-                    </p>
-                  )}
-                  <p>참여자 누구나 같은 방으로 초대할 수 있어요.</p>
+                  <p>
+                    {state.room && (
+                      <>
+                        현재 방: <strong>{state.room.name}</strong>
+                        <br />
+                      </>
+                    )}
+                    참여자 누구나 같은 방으로 초대할 수 있어요.
+                  </p>
                   <InviteCode
                     key={`${profileKey}:${state.room?.id ?? ""}`}
                     session={session}
@@ -938,20 +960,77 @@ function App() {
                 </form>
               </div>
             )}
-            {panel === "profile" && (
-              <>
-                {state && (
-                  <ProfileForm
-                    key={profileKey}
-                    initial={profileDraft ?? state.self}
-                    busy={busy}
-                    onChange={setProfileDraft}
-                    onSave={updateProfile}
-                    autoSave
-                  />
+            {state && panel === "profile" && (
+              <ProfileForm
+                key={profileKey}
+                initial={profileDraft ?? state.self}
+                busy={busy}
+                onChange={setProfileDraft}
+                onSave={updateProfile}
+                autoSave
+              />
+            )}
+            {panel === "settings" && (
+              <section className="settings-panel" aria-label="앱 설정">
+                {desktop ? (
+                  <>
+                    <label className="field">
+                      캐릭터 위치
+                      <select
+                        value={preferences.position}
+                        onChange={(event) => {
+                          const position = event.target.value;
+                          if (isCharacterPosition(position))
+                            setPreferences((current) => ({
+                              ...current,
+                              position,
+                            }));
+                        }}
+                      >
+                        {Object.entries(CHARACTER_POSITIONS).map(
+                          ([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <label className="field">
+                      캐릭터 크기
+                      <select
+                        value={preferences.size}
+                        onChange={(event) => {
+                          const size = event.target.value;
+                          if (isCharacterSize(size))
+                            setPreferences((current) => ({
+                              ...current,
+                              size,
+                            }));
+                        }}
+                      >
+                        {Object.entries(CHARACTER_SIZES).map(
+                          ([value, { label }]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <StartupSettings />
+                    <UpdateSettings
+                      state={updates}
+                      disabled={busy || profileDraft !== null}
+                    />
+                  </>
+                ) : (
+                  <p className="hint">
+                    자동 실행과 앱 업데이트는 데스크톱 앱에서 설정할 수
+                    있어요.
+                  </p>
                 )}
-                {desktop && <StartupSettings />}
-              </>
+              </section>
             )}
           </div>
           {state && (

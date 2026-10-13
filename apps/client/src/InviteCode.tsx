@@ -47,15 +47,15 @@ export function InviteCode({
     <>
       {inviteCode ? (
         <>
-          <label className="field">
-            친구에게 보낼 코드
+          <div className="field">
             <input
               className="invite-code"
+              aria-label="초대 코드"
               readOnly
               value={inviteCode}
               onFocus={(event) => event.target.select()}
             />
-          </label>
+          </div>
           <button
             className="primary"
             onClick={async () => {

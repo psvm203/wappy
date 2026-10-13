@@ -76,7 +76,7 @@ function aimHero({ attacker, target, kind, jumpAngle }: Attack) {
 /** Weapon tips in Avengers.tsx share (94, 55) in the character's SVG viewBox. */
 export function attackVisual(attack: Attack, width: number, height: number) {
   const { attacker, target, kind, phase } = attack;
-  const reach = (44 * CHARACTER_SIZE) / 110;
+  const reach = (44 * attacker.size) / 110;
   const sourceX =
     attacker.x - attacker.direction * Math.cos(attacker.angle) * reach;
   const sourceY =
@@ -132,6 +132,7 @@ export function advanceAttack(
   const dt = Math.max(0, Math.min(elapsed, 0.05));
   attack.elapsed += dt;
   const { attacker, target } = attack;
+  const contactScale = (attacker.size + target.size) / (2 * CHARACTER_SIZE);
   if (attack.kind !== "dash") {
     // A resized viewport may clamp the firing position while a projectile is out.
     moveBody(attacker, attacker.x, attacker.y, width, height);
@@ -159,10 +160,10 @@ export function advanceAttack(
       moveBody(
         attacker,
         attack.startX +
-          (target.x + upX * 19 - attack.startX) * progress +
+          (target.x + upX * 19 * contactScale - attack.startX) * progress +
           upX * jump,
         attack.startY +
-          (target.y + upY * 19 - attack.startY) * progress +
+          (target.y + upY * 19 * contactScale - attack.startY) * progress +
           upY * jump,
         width,
         height,
@@ -170,8 +171,10 @@ export function advanceAttack(
     } else if (attack.kind === "dash") {
       moveBody(
         attacker,
-        attack.startX + (target.x - attack.nx * 24 - attack.startX) * eased,
-        attack.startY + (target.y - attack.ny * 24 - attack.startY) * eased,
+        attack.startX +
+          (target.x - attack.nx * 24 * contactScale - attack.startX) * eased,
+        attack.startY +
+          (target.y - attack.ny * 24 * contactScale - attack.startY) * eased,
         width,
         height,
       );

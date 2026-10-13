@@ -9,6 +9,11 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
 import {
+  CHARACTER_SIZES,
+  type CharacterPosition,
+  type CharacterSize,
+} from "./preferences";
+import {
   ATTACK_COOLDOWN_MS,
   type AttackEvent,
   type ChatMessage,
@@ -35,6 +40,7 @@ import {
   moveBody,
   needsAnimation,
   releaseVelocity,
+  setBodyPosition,
   type Body,
   type DragSample,
 } from "./desktop-physics";
@@ -43,6 +49,7 @@ import "./DesktopCharacters.css";
 type Resident = {
   body: Body;
   element: HTMLElement;
+  captionHeight: number;
   walking: boolean;
   character: CharacterKind;
 };
@@ -72,13 +79,21 @@ function moveHeldBody(body: Body, held: Drag) {
   );
 }
 
-function draw({ body, element, walking }: Resident, attack: Attack | null) {
+function draw(
+  { body, element, captionHeight, walking }: Resident,
+  attack: Attack | null,
+) {
   element.dataset.attack = attack?.attacker === body ? attack.phase : "";
   element.dataset.attackStyle = attack?.attacker === body ? attack.kind : "";
   element.dataset.hit = String(
     attack?.target === body && attack.phase === "impact",
   );
-  element.style.transform = `translate3d(${body.x - CHARACTER_SIZE / 2}px, ${body.y - CHARACTER_SIZE / 2}px, 0)`;
+  element.style.transform = `translate3d(${body.x - body.size / 2}px, ${body.y - body.size / 2}px, 0)`;
+  element.style.setProperty("--character-size", `${body.size}px`);
+  element.style.setProperty(
+    "--character-scale",
+    `${body.size / CHARACTER_SIZE}`,
+  );
   element.style.setProperty("--angle", `${body.angle}rad`);
   element.style.setProperty("--facing", `${-body.direction}`);
   element.style.setProperty(
@@ -95,7 +110,9 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
   );
   element.style.setProperty("--resident-x", `${body.x}px`);
   element.style.setProperty("--resident-y", `${body.y}px`);
-  element.dataset.ceiling = String(body.y < CHARACTER_SIZE);
+  element.dataset.captionBelow = String(
+    body.y < captionHeight + body.size / 2 + 8,
+  );
   element.dataset.motion =
     body.mode === "drag"
       ? "drag"
@@ -109,6 +126,8 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
 export function DesktopCharacters({
   residents,
   paused,
+  position,
+  size,
   profileKey,
   messages,
   attacks,
@@ -117,12 +136,15 @@ export function DesktopCharacters({
 }: {
   residents: DesktopResident[];
   paused: boolean;
+  position: CharacterPosition;
+  size: CharacterSize;
   profileKey: string | null;
   messages?: ChatMessage[];
   attacks?: AttackEvent[];
   attackInbox: AttackInbox;
   connected: boolean;
 }) {
+  const characterSize = CHARACTER_SIZES[size].pixels;
   const [chatTarget, setChatTarget] = useState<string | null>(null);
   const chatTargetRef = useRef(chatTarget);
   chatTargetRef.current = chatTarget;
@@ -139,25 +161,23 @@ export function DesktopCharacters({
   const wakeAnimation = useRef(() => {});
 
   useLayoutEffect(() => {
-    if (chatTarget) {
-      const resident = entries.current.get(chatTarget);
-      if (resident) {
-        const caption = resident.element.querySelector("figcaption")!;
-        const minimumY = caption.offsetHeight + CHARACTER_SIZE / 2 + 8;
-        if (resident.body.y < minimumY) {
-          moveBody(
-            resident.body,
-            resident.body.x,
-            minimumY,
-            innerWidth,
-            innerHeight,
-          );
-          resident.body.mode = "air";
-          resident.body.vx = resident.body.vy = 0;
-          draw(resident, attack.current);
-        }
-      }
+    stopAttack();
+    const held = drag.current;
+    drag.current = null;
+    if (held) {
+      const element = entries.current.get(held.id)?.element;
+      if (element?.hasPointerCapture(held.pointerId))
+        element.releasePointerCapture(held.pointerId);
     }
+    for (const resident of entries.current.values()) {
+      resident.body.size = characterSize;
+      setBodyPosition(resident.body, position, innerWidth, innerHeight);
+      draw(resident, null);
+    }
+    wakeAnimation.current();
+  }, [position, characterSize]);
+
+  useLayoutEffect(() => {
     wakeAnimation.current();
   }, [chatTarget]);
 
@@ -305,13 +325,7 @@ export function DesktopCharacters({
     };
     const resize = () => {
       for (const resident of entries.current.values()) {
-        moveBody(
-          resident.body,
-          resident.body.x,
-          resident.body.y,
-          innerWidth,
-          innerHeight,
-        );
+        advanceBody(resident.body, 0, innerWidth, innerHeight, false);
         draw(resident, attack.current);
       }
       wake();
@@ -604,16 +618,30 @@ export function DesktopCharacters({
             data-composing={chatTarget === resident.id}
             ref={(element) => {
               if (!element) return;
+              const caption = element.querySelector("figcaption")!;
               const entry = {
                 body:
                   entries.current.get(resident.id)?.body ??
-                  createBody(resident.id, innerWidth, innerHeight),
+                  createBody(
+                    resident.id,
+                    innerWidth,
+                    innerHeight,
+                    position,
+                    characterSize,
+                  ),
                 element,
+                captionHeight: caption.offsetHeight,
                 walking: resident.online,
                 character: resident.character,
               };
               entries.current.set(resident.id, entry);
               draw(entry, attack.current);
+              const observer = new ResizeObserver(() => {
+                entry.captionHeight = caption.offsetHeight;
+                draw(entry, attack.current);
+              });
+              observer.observe(caption);
+              return () => observer.disconnect();
             }}
             title={`${name} · ${resident.isSelf ? "클릭해서 채팅" : "클릭해서 공격"} · 드래그해서 이동`}
             onPointerDown={(event) => startDrag(event, resident.id)}
@@ -633,7 +661,7 @@ export function DesktopCharacters({
               aria-label={
                 resident.isSelf
                   ? profileKey
-                    ? `${name} 캐릭터 위에 채팅 입력창 열기`
+                    ? `${name} 캐릭터 채팅 입력창 열기`
                     : undefined
                   : `내 캐릭터로 ${name} 공격하기`
               }
@@ -662,9 +690,11 @@ export function DesktopCharacters({
                   onClose={() => setChatTarget(null)}
                 />
               ) : (
-                <ChatBubble message={chat} />
+                <>
+                  <ChatBubble message={chat} />
+                  <span className="resident-name">{name}</span>
+                </>
               )}
-              <span className="resident-name">{name}</span>
             </figcaption>
           </figure>
         );

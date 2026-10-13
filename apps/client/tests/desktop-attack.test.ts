@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CHARACTER_SIZES } from "../src/preferences.ts";
 import {
   advanceAttack,
   attackVisual,
@@ -15,6 +16,49 @@ import {
 
 const width = 1200,
   height = 800;
+
+test("attack origins and contact distances follow the selected character size", () => {
+  for (const { pixels } of Object.values(CHARACTER_SIZES)) {
+    for (const character of ["chiikawa", "ironman", "hulk"] as const) {
+      const attacker = createBody("self", width, height, "free", pixels);
+      const target = createBody("friend", width, height, "free", pixels);
+      moveBody(attacker, 120, 400, width, height);
+      moveBody(target, 900, 400, width, height);
+      target.angle = 0;
+      const attack = createAttack(attacker, target, character)!;
+      const visual = attackVisual(attack, width, height);
+      assert.ok(
+        Math.abs(
+          Math.hypot(visual.sourceX - attacker.x, visual.sourceY - attacker.y) -
+            (pixels * 44) / 110,
+        ) < 0.001,
+      );
+      let hits = 0;
+      for (let frame = 0; frame < 180; frame++) {
+        const step = advanceAttack(attack, 1 / 60, width, height, true);
+        assert.ok(attacker.x >= pixels / 2 && attacker.x <= width - pixels / 2);
+        assert.ok(
+          attacker.y >= pixels / 2 && attacker.y <= height - pixels / 2,
+        );
+        if (step === "hit") {
+          hits++;
+          if (character !== "ironman") {
+            const distance =
+              ((character === "hulk" ? 19 : 24) * pixels) / CHARACTER_SIZE;
+            assert.ok(
+              Math.abs(
+                Math.hypot(attacker.x - target.x, attacker.y - target.y) -
+                  distance,
+              ) < 0.001,
+            );
+          }
+        }
+        if (step === "done") break;
+      }
+      assert.equal(hits, 1);
+    }
+  }
+});
 
 test("a dash follows a moving target, hits once, then both characters return to walking", () => {
   const attacker = createBody("self", width, height);
