@@ -19,7 +19,6 @@ import {
   type Output,
   type Profile,
   type ChatMessage,
-  type BlockedProfile,
 } from "@wappy/api";
 
 const hash = (value: string) =>
@@ -94,21 +93,6 @@ export function createApp(options: {
   const selectPresence = db.prepare(
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
-  const selectBlocks = db.prepare(
-    "SELECT blocked_id AS id, name, character FROM profile_blocks WHERE user_id = ? ORDER BY name, blocked_id",
-  );
-  const selectBlockingRevision = db.prepare(
-    "SELECT revision FROM blocking_settings WHERE user_id = ?",
-  );
-  const advanceBlocking =
-    db.prepare(`INSERT INTO blocking_settings VALUES (?, 1)
-    ON CONFLICT(user_id) DO UPDATE SET revision = blocking_settings.revision + 1`);
-  const blockedPair = db.prepare(`SELECT 1 FROM profile_blocks
-    WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)`);
-  const blocking = (id: string) => ({
-    revision: Number(selectBlockingRevision.get(id)?.revision ?? 0),
-    profiles: selectBlocks.all(id) as unknown as BlockedProfile[],
-  });
   // Keep legacy private rows out of the broadcast feed.
   const selectMessages = db.prepare(`
     SELECT id, sender_id AS senderId, text, sent_at AS sentAt
@@ -119,7 +103,7 @@ export function createApp(options: {
       UNION ALL SELECT message_id FROM chat_recipients WHERE friend_id = ?
     ) AND recipient_id IS NULL AND sent_at > ? ORDER BY id DESC LIMIT ?
   `);
-  // Room friendships exclude blocked profiles; both participants must be visible.
+  // Both participants must be visible to this room member.
   const selectAttacks = db.prepare(`
     WITH visible(id) AS (
       SELECT ?
@@ -313,7 +297,6 @@ export function createApp(options: {
                 ATTACK_HISTORY_LIMIT,
               ) as unknown as AttackEvent[]
             ).reverse(),
-            blocking: blocking(self!.id),
             messages,
             presence: {
               sharing: presence ? presence.sharing === 1 : true,
@@ -478,11 +461,6 @@ export function createApp(options: {
             const roomId = invite.room_id as string;
             const currentRoom = selectRoom.get(self!.id)?.id;
             const friendId = invite.owner_id as string;
-            if (blockedPair.get(self!.id, friendId, friendId, self!.id))
-              throw new HttpError(
-                409,
-                "이 초대장으로는 방에 참여할 수 없어요.",
-              );
             if (currentRoom !== roomId) {
               db.prepare(
                 "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
@@ -504,12 +482,9 @@ export function createApp(options: {
               .prepare(
                 `INSERT OR IGNORE INTO friendships
               SELECT MIN(?, m.user_id), MAX(?, m.user_id) FROM room_members m
-              WHERE m.room_id = ? AND m.user_id <> ?
-              AND NOT EXISTS (SELECT 1 FROM profile_blocks
-                WHERE (user_id = ? AND blocked_id = m.user_id)
-                   OR (user_id = m.user_id AND blocked_id = ?))`,
+              WHERE m.room_id = ? AND m.user_id <> ?`,
               )
-              .run(self!.id, self!.id, roomId, self!.id, self!.id, self!.id);
+              .run(self!.id, self!.id, roomId, self!.id);
             if (!membership.changes && !connections.changes)
               throw new HttpError(409, "이미 참여 중인 방입니다.");
             return friendId;
@@ -546,50 +521,10 @@ export function createApp(options: {
           reply(res, route, { ok: true });
           break;
         }
-        case "POST /friends/block": {
-          const friendId = field(body, "friendId");
-          if (friendId === self!.id)
-            throw new HttpError(400, "내 프로필은 차단할 수 없어요.");
-          const pair = [self!.id, friendId].sort();
-          transaction(db, () => {
-            if (!profile(friendId))
-              throw new HttpError(404, "프로필을 찾을 수 없어요.");
-            const result = db
-              .prepare(
-                `INSERT OR IGNORE INTO profile_blocks (user_id, blocked_id, name, character)
-                SELECT ?, id, name, character FROM users WHERE id = ?`,
-              )
-              .run(self!.id, friendId);
-            if (result.changes) advanceBlocking.run(self!.id);
-            db.prepare(
-              `DELETE FROM chat_messages
-              WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)`,
-            ).run(pair[0]!, pair[1]!, pair[1]!, pair[0]!);
-            db.prepare(
-              "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
-            ).run(pair[0]!, pair[1]!);
-          });
-          reply(res, route, blocking(self!.id));
-          break;
-        }
-        case "POST /friends/unblock": {
-          const friendId = field(body, "friendId");
-          transaction(db, () => {
-            const result = db
-              .prepare(
-                "DELETE FROM profile_blocks WHERE user_id = ? AND blocked_id = ?",
-              )
-              .run(self!.id, friendId);
-            if (result.changes) advanceBlocking.run(self!.id);
-          });
-          reply(res, route, blocking(self!.id));
-          break;
-        }
         case "POST /friends/attack": {
           const friendId = field(body, "friendId");
           const pair = [self!.id, friendId].sort();
           if (
-            blockedPair.get(self!.id, friendId, friendId, self!.id) ||
             !db
               .prepare(
                 "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?",

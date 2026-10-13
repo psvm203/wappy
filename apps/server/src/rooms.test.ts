@@ -151,11 +151,6 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
   });
   assert.equal(otherChat.status, 201);
 
-  await call("/friends/block", e.token, { friendId: d.profile.id });
-  assert.equal((await call("/invites/accept", d.token, otherRoom)).status, 409);
-  await peers(d, [a, b, c]);
-  await call("/friends/unblock", e.token, { friendId: d.profile.id });
-
   // A failure after leaving the original room must roll the entire move back.
   inspection = new DatabaseSync(databasePath);
   inspection.exec(
@@ -188,11 +183,9 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
   assert.equal(later.status, 201);
   assert.deepEqual((await state(d)).messages, []);
 
-  // Blocking a non-inviter still applies when joining their room through someone else.
-  await call("/friends/block", c.token, { friendId: d.profile.id });
   assert.equal((await call("/invites/accept", d.token, fromB)).status, 200);
-  await peers(d, [a, b]);
-  await peers(c, [a, b]);
+  await peers(d, [a, b, c]);
+  await peers(c, [a, b, d]);
   await peers(e, [f]);
   assert.deepEqual(
     (await state(d)).messages,
@@ -233,7 +226,7 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
   server = createApp({ databasePath, now: () => now });
   await listen();
   assert.deepEqual((await state(b)).room, renamedRoom);
-  await peers(d, [a, b]);
+  await peers(d, [a, b, c]);
   await peers(e, [f]);
   assert.deepEqual(await invite(a), first);
   assert.deepEqual(await invite(e), otherRoom);

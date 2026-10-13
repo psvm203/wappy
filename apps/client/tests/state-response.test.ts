@@ -4,7 +4,6 @@ import {
   CHARACTERS,
   CHARACTER_NAMES,
   REMOVED_CHARACTERS,
-  parseBlockingSettings,
   parseProfile,
   parseInvitePreview,
   parseSidebarState,
@@ -14,7 +13,7 @@ import {
 import { reconcilePresence } from "../src/presence.ts";
 import { saveSession, SAVED_SESSIONS_KEY } from "../src/sessions.ts";
 
-test("legacy status messages are discarded from profiles, server snapshots and saved sessions", () => {
+test("legacy status and blocking data are discarded from server snapshots and saved sessions", () => {
   const input = { name: "Alice", character: "chiikawa" };
   const profile = { id: "self", ...input };
   const legacy = { ...profile, status: "previous status" };
@@ -24,6 +23,7 @@ test("legacy status messages are discarded from profiles, server snapshots and s
     parseSidebarState({
       self: legacy,
       friends: [{ ...legacy, id: "friend", online: true }],
+      blocking: { revision: 1, profiles: [{ ...profile, id: "friend" }] },
     }),
     { self: profile, friends: [{ ...profile, id: "friend", online: true }] },
   );
@@ -82,15 +82,6 @@ test("unsupported characters fall back to chiikawa in snapshots and saved sessio
     assert.deepEqual(
       parseInvitePreview({ ...input, expiresAt: 1_800_000_000_000 }),
       { name: input.name, character: "chiikawa" },
-    );
-    assert.deepEqual(
-      parseBlockingSettings({ revision: 2, profiles: [profile] }),
-      {
-        revision: 2,
-        profiles: [
-          { id: profile.id, name: profile.name, character: "chiikawa" },
-        ],
-      },
     );
     const session = {
       server: "https://one.test",

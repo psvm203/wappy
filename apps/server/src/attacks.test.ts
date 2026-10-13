@@ -17,7 +17,7 @@ import {
 import { createApp } from "./server.ts";
 
 test(
-  "online attacks authenticate, reach room observers, expire, and respect blocks and room changes",
+  "online attacks authenticate, reach room observers, expire, and respect room changes",
   { timeout: 10_000 },
   async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "wappy-attacks-"));
@@ -134,37 +134,6 @@ test(
       (await call("/state", d.token, undefined, beforeD.etag)).status,
       304,
     );
-    for (const [blocker, blocked] of [
-      [c, a],
-      [a, c],
-      [c, b],
-      [b, c],
-    ]) {
-      const beforeBlock = await call("/state", c.token);
-      assert.equal(
-        (
-          await call("/friends/block", blocker.token, {
-            friendId: blocked.profile.id,
-          })
-        ).status,
-        200,
-      );
-      const hidden = await call("/state", c.token, undefined, beforeBlock.etag);
-      assert.equal(hidden.status, 200);
-      assert.deepEqual(parseSidebarState(hidden.body).attacks, []);
-      assert.deepEqual(
-        parseSidebarState((await call("/state", b.token)).body).attacks,
-        [event],
-      );
-      await call("/friends/unblock", blocker.token, {
-        friendId: blocked.profile.id,
-      });
-      await connect(a.token, c.token);
-      assert.deepEqual(
-        parseSidebarState((await call("/state", c.token)).body).attacks,
-        [event],
-      );
-    }
     await connect(d.token, c.token);
     assert.deepEqual(
       parseSidebarState((await call("/state", c.token)).body).attacks,
@@ -235,7 +204,7 @@ test(
         .status,
       201,
     );
-    await call("/friends/block", b.token, { friendId: a.profile.id });
+    await call("/friends/remove", a.token, { friendId: b.profile.id });
     assert.equal(
       (await call("/friends/attack", a.token, { friendId: b.profile.id }))
         .status,
@@ -245,19 +214,6 @@ test(
       parseSidebarState((await call("/state", a.token)).body).attacks,
       [],
     );
-    await call("/friends/unblock", b.token, { friendId: a.profile.id });
-    await connect(a.token, b.token);
-    assert.deepEqual(
-      parseSidebarState((await call("/state", b.token)).body).attacks,
-      [],
-    );
-    now += ATTACK_COOLDOWN_MS;
-    assert.equal(
-      (await call("/friends/attack", a.token, { friendId: b.profile.id }))
-        .status,
-      201,
-    );
-    await call("/friends/remove", a.token, { friendId: b.profile.id });
     await connect(a.token, b.token);
     assert.deepEqual(
       parseSidebarState((await call("/state", b.token)).body).attacks,

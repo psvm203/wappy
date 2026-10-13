@@ -11,7 +11,6 @@ import {
   createAttackInbox,
   nextAttack,
 } from "../src/online-attacks.ts";
-import { applyBlockingSettings } from "../src/blocking.ts";
 
 const event = (id: number): AttackEvent => ({
   id,
@@ -50,14 +49,6 @@ test("attack snapshots reject spoofed participants, duplicates, invalid times an
   ])
     assert.throws(() => parseSidebarState({ ...state, attacks }));
   assert.throws(() => parseAttackEvent({ ...event(1), targetId: "self" }));
-  const blocked = applyBlockingSettings(
-    parseSidebarState({ ...state, attacks: [event(1), observed] }),
-    {
-      revision: 1,
-      profiles: [{ id: "friend", name: "친구", character: "chiikawa" }],
-    },
-  );
-  assert.deepEqual(blocked.attacks, []);
 });
 
 test("out-of-order polls play each incoming attack once", () => {

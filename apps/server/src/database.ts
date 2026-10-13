@@ -18,17 +18,6 @@ export function openDatabase(databasePath: string) {
       friend_id TEXT NOT NULL REFERENCES users(id),
       PRIMARY KEY (user_id, friend_id), CHECK (user_id < friend_id)
     ) STRICT;
-    CREATE TABLE IF NOT EXISTS profile_blocks (
-      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL, character TEXT NOT NULL,
-      PRIMARY KEY (user_id, blocked_id), CHECK (user_id <> blocked_id)
-    ) STRICT;
-    CREATE INDEX IF NOT EXISTS blocks_target ON profile_blocks(blocked_id);
-    CREATE TABLE IF NOT EXISTS blocking_settings (
-      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      revision INTEGER NOT NULL CHECK (revision >= 1)
-    ) STRICT;
     CREATE TABLE IF NOT EXISTS invites (
       code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL UNIQUE REFERENCES users(id)
     ) STRICT;
@@ -130,10 +119,7 @@ export function openDatabase(databasePath: string) {
     db.exec(`
       INSERT OR IGNORE INTO friendships
         SELECT a.user_id, b.user_id FROM room_members a
-        JOIN room_members b ON a.room_id = b.room_id AND a.user_id < b.user_id
-        WHERE NOT EXISTS (SELECT 1 FROM profile_blocks
-          WHERE (user_id = a.user_id AND blocked_id = b.user_id)
-             OR (user_id = b.user_id AND blocked_id = a.user_id));
+        JOIN room_members b ON a.room_id = b.room_id AND a.user_id < b.user_id;
       ALTER TABLE invites RENAME TO legacy_invites;
       CREATE TABLE invites (
         code_hash TEXT PRIMARY KEY,
@@ -177,12 +163,27 @@ export function openDatabase(databasePath: string) {
       .all())
       assignRoomInvite(db, room.id as string, room.owner_id as string);
   });
-  for (const table of ["users", "profile_blocks"]) {
-    db.prepare(
-      `UPDATE ${table} SET character = 'chiikawa'
-       WHERE character IN (${REMOVED_CHARACTERS.map(() => "?").join(",")})`,
-    ).run(...REMOVED_CHARACTERS);
-  }
+  // Retire blocking without leaving members of the same room disconnected.
+  transaction(db, () => {
+    if (
+      db.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_blocks'",
+      ).get()
+    )
+      db.exec(`
+        INSERT OR IGNORE INTO friendships
+          SELECT MIN(b.user_id, b.blocked_id), MAX(b.user_id, b.blocked_id)
+          FROM profile_blocks b
+          JOIN room_members a ON a.user_id = b.user_id
+          JOIN room_members t ON t.user_id = b.blocked_id AND t.room_id = a.room_id;
+        DROP TABLE profile_blocks;
+      `);
+    db.exec("DROP TABLE IF EXISTS blocking_settings");
+  });
+  db.prepare(
+    `UPDATE users SET character = 'chiikawa'
+     WHERE character IN (${REMOVED_CHARACTERS.map(() => "?").join(",")})`,
+  ).run(...REMOVED_CHARACTERS);
   return db;
 }
 

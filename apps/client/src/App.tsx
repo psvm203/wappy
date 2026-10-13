@@ -50,7 +50,6 @@ import { InviteCode } from "./InviteCode";
 import { StartupSettings } from "./StartupSettings";
 import { UpdateSettings, useAppUpdates } from "./UpdateSettings";
 import { filterFriends, type FriendView } from "./friend-filter";
-import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
 import { saveSession, type SavedSession } from "./sessions";
 import { isLocalServer, parseInvitation, WAPPY_SERVER } from "./invitations";
@@ -189,9 +188,7 @@ function App() {
   }
 
   function applyState(next: SidebarState) {
-    setState((current) =>
-      reconcilePresence(current, reconcileBlocking(current, next)),
-    );
+    setState((current) => reconcilePresence(current, next));
   }
 
   async function sendChat(text: string) {

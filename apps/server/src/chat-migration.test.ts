@@ -149,10 +149,14 @@ test("removed social features reject requests and legacy data stays hidden", asy
         (friend: Record<string, unknown>) => !("wave" in friend),
       ),
     );
-    for (const field of ["directChat", "chatReporting", "unreadChatIds"])
+    for (const field of [
+      "directChat", "chatReporting", "unreadChatIds", "blocking",
+    ])
       assert.equal(field in snapshot, false);
   }
   for (const [path, body] of [
+    ["/friends/block", { friendId: bob.profile.id }],
+    ["/friends/unblock", { friendId: bob.profile.id }],
     ["/friends/wave", { friendId: bob.profile.id }],
     ["/waves/read", { waveId: "legacy-wave" }],
     ["/chat/direct", { text: "private", friendId: bob.profile.id }],

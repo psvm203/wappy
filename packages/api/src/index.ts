@@ -113,15 +113,8 @@ export interface SidebarState {
   presence?: PresenceSettings;
   /** Absent on servers that do not support chat. */
   messages?: ChatMessage[];
-  /** The authenticated profile's block list; absent on older servers. */
-  blocking?: BlockingSettings;
   /** Recent attacks between self or visible friends; absent on servers without online attacks. */
   attacks?: AttackEvent[];
-}
-export type BlockedProfile = Pick<Profile, "id" | "name" | "character">;
-export interface BlockingSettings {
-  revision: number;
-  profiles: BlockedProfile[];
 }
 interface PresenceSettings {
   sharing: boolean;
@@ -155,14 +148,6 @@ interface ApiRoutes {
   "POST /invites/accept": { input: { code: string }; output: Profile };
   /** Only the current room's owner can remove another member from the room. */
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
-  "POST /friends/block": {
-    input: { friendId: string };
-    output: BlockingSettings;
-  };
-  "POST /friends/unblock": {
-    input: { friendId: string };
-    output: BlockingSettings;
-  };
   "POST /friends/attack": { input: { friendId: string }; output: AttackEvent };
 }
 export type Route = keyof ApiRoutes;
@@ -244,31 +229,6 @@ export function parsePresenceSettings(value: unknown): PresenceSettings {
   )
     throw new Error("잘못된 접속 공개 설정입니다.");
   return { sharing: value.sharing, revision: value.revision };
-}
-
-export function parseBlockingSettings(value: unknown): BlockingSettings {
-  if (
-    !isRecord(value) ||
-    !Number.isSafeInteger(value.revision) ||
-    (value.revision as number) < 0 ||
-    !Array.isArray(value.profiles)
-  )
-    throw new Error("잘못된 차단 목록입니다.");
-  const ids = new Set<string>();
-  const profiles = value.profiles.map((input): BlockedProfile => {
-    if (
-      !isRecord(input) ||
-      typeof input.id !== "string" ||
-      !input.id ||
-      input.id.length > 128 ||
-      ids.has(input.id)
-    )
-      throw new Error("잘못된 차단 프로필입니다.");
-    const { name, character } = parseProfileSnapshot(input);
-    ids.add(input.id);
-    return { id: input.id, name, character };
-  });
-  return { revision: value.revision as number, profiles };
 }
 
 /** Runtime validation at the HTTP boundary; TypeScript alone cannot validate JSON. */
@@ -386,12 +346,6 @@ export function parseSidebarState(value: unknown): SidebarState {
         return message;
       });
   }
-  const blocking =
-    value.blocking === undefined
-      ? undefined
-      : parseBlockingSettings(value.blocking);
-  if (blocking?.profiles.some((profile) => ids.has(profile.id)))
-    throw new Error("차단한 프로필이 친구 목록에 포함되어 있습니다.");
   let attacks: AttackEvent[] | undefined;
   if (value.attacks !== undefined) {
     if (
@@ -418,7 +372,6 @@ export function parseSidebarState(value: unknown): SidebarState {
     ...(room === undefined ? {} : { room }),
     ...(attacks === undefined ? {} : { attacks }),
     ...(messages === undefined ? {} : { messages }),
-    ...(blocking === undefined ? {} : { blocking }),
     ...(value.presence === undefined
       ? {}
       : { presence: parsePresenceSettings(value.presence) }),
