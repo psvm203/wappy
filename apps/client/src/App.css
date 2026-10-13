@@ -178,30 +178,6 @@
   flex: 1;
   padding: 14px 20px 20px;
 }
-.section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 5px;
-  margin: 1px 0 17px;
-}
-.section-heading h1 {
-  font-size: 13px;
-  letter-spacing: -0.4px;
-}
-.section-heading h1 span {
-  margin-left: 6px;
-  color: #68745e;
-  font-size: 11px;
-}
-.count-badge {
-  color: #526c49;
-  background: #edf2e6;
-  padding: 4px 7px;
-  font-size: 9px;
-  border-radius: 6px;
-  white-space: nowrap;
-}
 .friend-list {
   list-style: none;
   margin: 0;

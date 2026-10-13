@@ -734,50 +734,42 @@ function App() {
             {session && state && panel === "friends" && (
               <>
                 {state.friends.length > 0 && (
-                  <>
-                    <div className="section-heading">
-                      <h1>
-                        함께 있는 친구들<span>{state.friends.length}</span>
-                      </h1>
-                      <span className="count-badge">{onlineCount} online</span>
-                    </div>
-                    <section
-                      className="friend-filters"
-                      aria-label="친구 목록 필터"
+                  <section
+                    className="friend-filters"
+                    aria-label="친구 목록 필터"
+                  >
+                    <div
+                      className="friend-views"
+                      role="group"
+                      aria-label="친구 목록 보기"
                     >
-                      <div
-                        className="friend-views"
-                        role="group"
-                        aria-label="친구 목록 보기"
-                      >
-                        {(
-                          [
-                            ["all", "전체", state.friends.length],
-                            ["online", "접속 중", onlineCount],
-                          ] as const
-                        ).map(([view, label, count]) => (
-                          <button
-                            key={view}
-                            id={`friend-view-${view}`}
-                            aria-pressed={friendView === view}
-                            onClick={() => setFriendView(view)}
-                          >
-                            {label} <span>{count}</span>
-                          </button>
-                        ))}
+                      {(
+                        [
+                          ["all", "전체", state.friends.length],
+                          ["online", "접속 중", onlineCount],
+                        ] as const
+                      ).map(([view, label, count]) => (
+                        <button
+                          key={view}
+                          id={`friend-view-${view}`}
+                          aria-pressed={friendView === view}
+                          onClick={() => setFriendView(view)}
+                        >
+                          {label} <span>{count}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {friendView !== "all" && (
+                      <div className="friend-results">
+                        <button
+                          className="text-button"
+                          onClick={resetFriendFilters}
+                        >
+                          필터 초기화
+                        </button>
                       </div>
-                      {friendView !== "all" && (
-                        <div className="friend-results">
-                          <button
-                            className="text-button"
-                            onClick={resetFriendFilters}
-                          >
-                            필터 초기화
-                          </button>
-                        </div>
-                      )}
-                    </section>
-                  </>
+                    )}
+                  </section>
                 )}
                 {state.friends.length === 0 ? (
                   <div className="empty-state invitation-empty">
