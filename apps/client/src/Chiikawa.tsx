@@ -507,93 +507,113 @@ export function Rakko({ asleep }: { asleep: boolean }) {
   return (
     <g
       transform="translate(100 0) scale(-1 1)"
-      fill="#fff2cb"
-      stroke="#302c2a"
-      strokeWidth="2.3"
+      fill="#fff3d8"
+      stroke="#171713"
+      strokeWidth="1.3"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <g fill="#627c75" strokeWidth="1.8">
-        <path d="M80 17L82 10Q85 7 86 11L85 16M85 17L88 10Q92 8 91 12L89 18" />
-        <path d="M77 20Q80 13 87 17C97 22 95 36 89 43L87 50L80 47L82 38Q74 28 77 20Z" />
-        <path d="M83 54L88 56L81 73Q78 76 77 72Z" fill="#302c2a" />
-        <path d="M85 43L94 46L90 60L82 57Z" fill="#fffef4" />
-        <path
-          d="M84 47L92 50M83 51L91 54M83 55L89 57"
-          fill="none"
-          strokeWidth="1.4"
-        />
-      </g>
       <path
-        d="M24 66Q13 77 5 73L8 85Q13 84 18 88Q23 93 31 94L25 86Q17 80 28 74Z"
-        fill="#fffef4"
-        strokeWidth="1.8"
+        d="M77 64Q86 68 94 68Q91 72 90 79C89 85 87 88 83 89Q79 90 77 94Q74 97 70 94L65 90Z"
+        fill="#fffefd"
       />
+      <path d="M80 73q2 2.5 5 3M86 78l.5.3" fill="none" strokeWidth="1.1" />
       <path
-        d="M13 80L17 78M17 85L20 82M25 91L27 89"
-        fill="none"
-        strokeWidth="1.3"
-      />
-      <path
-        d="M52 12Q59 12 65 15L67 14L70 18Q76 19 79 24L82 24L83 29Q87 34 87 40L90 42L88 47Q90 53 87 59L89 61L87 65Q90 73 87 79L89 81L86 84Q85 90 80 93L80 95L74 95Q68 99 62 97L59 99L55 97Q47 99 42 97L39 99L36 96Q28 96 24 91L21 92L21 87Q16 83 17 77L14 74L16 70Q13 64 16 59L14 56L16 51Q13 45 17 40L15 37L19 33Q19 26 24 23L24 20L30 19Q34 14 41 14L43 11L47 13Z"
+        d="M10 51C7 33 15 16 32 12C50 6 70 13 78 27Q85 39 83 52Q82 59 82 67C82 82 74 94 62 97Q41 101 29 93C19 87 16 77 16 68Q10 61 10 51Z"
         stroke="none"
       />
       <path
-        d="M43 13L44 16M53 13L53 16M64 16L63 19M73 21L71 23M81 29L78 30M86 43L83 43M87 54L85 53M87 62L85 63M88 80L86 81M83 89L81 88M75 95L74 92M65 97L64 94M44 97L44 94M34 95L35 92M25 91L27 89M19 83L22 82M16 73L18 73M16 61L18 60M16 51L18 50M18 39L20 39M22 28L24 29M31 20L33 22"
-        fill="none"
-        strokeWidth="1.5"
-      />
-      <g fill="#302c2a" stroke="none">
-        <path d="M15 34Q10 34 11 38Q13 40 16 38Z" />
-        <path d="M85 33Q90 32 91 36Q90 39 86 38Z" />
-        <path d="M45 94Q43 100 47 100Q51 100 50 95Z" />
-        <path d="M57 95Q55 100 59 100Q63 100 62 94Z" />
-      </g>
-      <path
-        d="M37 28L36 35L40 38L34 38L28 43L30 36L27 33L33 33Z"
-        fill="#fff9e6"
-        strokeWidth="1.9"
-      />
-      <path d="M33 41L40 42M60 41L63 40" fill="none" strokeWidth="1.7" />
-      {asleep ? (
-        <path
-          d="M30 47Q35 51 40 47M59 47Q64 51 69 47"
-          fill="none"
-          strokeWidth="2"
-        />
-      ) : (
-        <g strokeWidth="1.9">
-          <ellipse cx="35" cy="47" rx="4.5" ry="3" fill="#fffef3" />
-          <ellipse cx="64" cy="47" rx="4.5" ry="3" fill="#fffef3" />
-          <path d="M32 46H38M61 46H67" fill="none" strokeWidth="1.6" />
-          <path d="M34 48H36M63 48H65" fill="none" strokeWidth="1.8" />
-        </g>
-      )}
-      <g fill="#f3a8b1" stroke="none">
-        <ellipse cx="28" cy="54" rx="5.5" ry="3.8" />
-        <ellipse cx="73" cy="54" rx="5.5" ry="3.8" />
-      </g>
-      <path
-        d="M25 53L24 55M28 53L27 55M31 53L30 55M70 53L69 55M73 53L72 55M76 53L75 55"
+        d="M10 40.5l1.3.1M13.5 29.5l1.3.7M18.5 21.7l1.8 1M22.8 17.6l1.4 1.6M31 13l.6 1.5M41 10l-.4 1.8M51.8 10.4l-.6 1.5M62.5 13.5l-1.1 1.7M73.2 21l-1.1 1M82 42l1.3.4M82 47.3l.9.1M81 53l.6.3M20 79l1.5.1M21.6 83.8l1.2-.2M24.5 87l1-.6M27.5 90l1-.9M30.5 93l.9-1.2M35 95.5l.6-1.1M42 96.5l-.2 1.1M48.5 96.5l-.2 1.5M56 96.6l.4 1.2M62.8 95.2l1 .9M68 92.5l1.3.6M73 88.5l1 1M78 83h1.4M79.3 77.5h1.4M80 71l.6.1"
         fill="none"
         strokeWidth="1.1"
       />
-      <path d="M49 48H51M49 51H51" fill="none" strokeWidth="1.1" />
-      <path d="M47 54Q50 53 53 54L50 57Z" fill="#302c2a" strokeWidth="1.2" />
+      <g fill="#171713" stroke="none">
+        <path d="M9 49Q11 48 12 50Q13 53 10 53.5Q6.5 54 8 51Z" />
+        <path d="M78 31Q81 30 82 32Q82.5 35 80 36Q77 36 77 33Z" />
+        <path d="M36 95.8Q38 96.8 40.5 96Q41 98 39.5 100Q36 102 35.5 98Z" />
+        <path d="M65 95Q67 93.5 69.5 95.5L71 99Q70 101 67.5 100Q65.5 98.5 65 95Z" />
+      </g>
+      <g fill="#fffefd" strokeWidth="1.1">
+        <path d="M7 56L9.5 54.5L16 63L13.5 65Z" />
+        <path
+          d="M6 57L10.5 54M8 60L12 57.5M10 62.5L14 60M12 65L17 62"
+          fill="none"
+        />
+      </g>
       <path
-        d="M44 58Q47 62 50 58Q54 61 56 57M49 63H52"
+        d="M34 47.7l1.6.4M47.7 45.8l.8-1M40.7 47.8l.2.2M42.4 47.5l.1.3"
         fill="none"
-        strokeWidth="1.8"
+        strokeWidth="1"
+      />
+      {asleep ? (
+        <path
+          d="M27.4 51.2q4 3 8.1-1.5M49.1 47.6q4 3 8.1-1.4"
+          fill="none"
+          strokeWidth="1.3"
+        />
+      ) : (
+        <g fill="#171713" stroke="none">
+          <g transform="rotate(-13 31.5 52)">
+            <ellipse cx="31.5" cy="52" rx="4.6" ry="3.1" />
+            <path
+              d="M29 50.8Q31.8 49.4 34.2 50.8Q33 52 29 51.5ZM28.6 53Q31.6 54.1 34.6 52.6Q33 55 29.5 54Z"
+              fill="#fffefd"
+            />
+          </g>
+          <g transform="rotate(-10 53.1 48.2)">
+            <ellipse cx="53.1" cy="48.2" rx="4.7" ry="3.2" />
+            <path
+              d="M50.5 47Q53.1 45.5 55.8 46.8Q55.4 48.3 51 47.9ZM50 49.2Q53.1 50.1 56.4 48.6Q54.3 51.3 51 50.1Z"
+              fill="#fffefd"
+            />
+          </g>
+        </g>
+      )}
+      <g fill="#f8b9c4" stroke="none">
+        <ellipse
+          cx="24.5"
+          cy="58.7"
+          rx="5.8"
+          ry="3.8"
+          transform="rotate(-14 24.5 58.7)"
+        />
+        <ellipse
+          cx="64.2"
+          cy="51.8"
+          rx="5.8"
+          ry="3.8"
+          transform="rotate(-14 64.2 51.8)"
+        />
+      </g>
+      <path
+        d="M21.6 57.8l-.8 2M24 57.5l-.9 2.2M26.4 57.2l-.9 2M28.6 57l-.8 1.9M60.7 51.2l-1 2M63.3 50.7l-1 2.2M65.9 50.4l-1 2.1M68.2 50.2l-.8 1.8"
+        fill="none"
+        strokeWidth=".9"
       />
       <path
-        d="M18 62Q49 76 86 61L87 68Q83 79 52 79Q26 79 18 72Q15 68 18 62Z"
-        fill="#fffef4"
-        strokeWidth="2"
+        d="M41.2 55.9Q43 55 45.3 55.5Q45.8 56.1 43.8 57.5L43.2 58.5L42.5 57.2Q40.8 56.7 41.2 55.9Z"
+        fill="#171713"
+        stroke="none"
       />
       <path
-        d="M20 66L22 67M26 69Q40 74 58 73M79 68L83 66M20 71L23 72"
+        d="M39.2 58.5Q39.7 60.7 43.2 58.5Q46.2 60.3 47 57.9M44 61.8q.7.4 1.4-.2"
         fill="none"
         strokeWidth="1.2"
+      />
+      <path
+        d="M16 66Q36 70 59 64.5Q75 61 83 55Q85 57.3 84.2 60.3Q87 62.2 84.5 65.8C79 73.7 62 77.8 44 78.2Q23 78.9 17.4 74Q14 72.2 16.3 70.7Q13.7 69 16 66Z"
+        fill="#fffefd"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M15.8 67.6q.2 2.1 2.1 2.9M20.1 71l.8.4M83.9 58.8q-.6 2.7-2.2 3.7M79.5 61.3l.2.2M78.6 58.4l.2.1M76.9 59.5l.2.1M80.1 56.9l.2.1"
+        fill="none"
+        strokeWidth="1"
+      />
+      <path
+        d="M42.7 75Q45.1 73.6 47.5 74.5Q50 73.7 52 74.4Q55.1 73.9 56.5 75.8Q57.2 77.6 54.8 79Q52 80.6 49.3 79.6Q47.2 81 45.2 79.7Q42.7 81.2 40.7 79.2Q39.4 77.3 42.7 75Z"
+        fill="#171713"
+        stroke="none"
       />
     </g>
   );
