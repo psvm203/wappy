@@ -258,130 +258,125 @@ export function Momonga({ asleep }: { asleep: boolean }) {
 export function Kurimanju({ asleep }: { asleep: boolean }) {
   return (
     <g
-      fill="#ffe7bb"
-      stroke="#302923"
-      strokeWidth="2.4"
+      fill="#ffe4b8"
+      stroke="#33251f"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      <path d="M87.5 52.7C93 62.1 90.4 74.7 87.4 82.5Q83.7 91 74.8 92.7L75.8 95.6Q73.8 96.2 71.2 94.7C63.9 97.2 57.8 99.5 52 98.8C41.3 98.2 30.9 93.2 26.1 83.4Q21.8 83.3 23 77C12.4 71.7 9 62.4 8.5 53.8Q7.7 47.8 9.4 42.8C5.9 41.7 7.2 39.4 10.8 38.4L11.1 37.3C12.6 29.5 20.4 21.1 29.7 15.9C37.5 11.5 47.4 10.3 55.2 11.5Q57.5 13 60.2 11.8Q66 10 64.3 16.8C77.6 20.3 84.7 35.6 84 50.1" />
       <path
-        d="M86 51L82 27L86 26L90 50ZM90 50L88 26L92 26L94 49Z"
-        fill="#f5d889"
-        strokeWidth="1.8"
+        d="M12 34C15.5 26.4 22.2 19.9 29.7 15.9C37.5 11.5 47.4 10.3 55.2 11.5C54.1 19.3 47.7 26.1 40.7 30.6C32.1 36.2 20.8 38 12 34Z"
+        fill="#986b50"
       />
-      <path d="M62 13Q67 10 69 13L68 18C81 22 89 35 88 50L89 62C99 79 88 94 75 96L77 99L71 97Q54 104 36 97Q24 92 22 84C10 80 7 67 8 54Q7 44 11 39Q5 36 12 33C16 21 32 13 46 12Q54 11 62 13Z" />
-      <path
-        d="M12 33C19 19 37 9 62 13C58 26 48 34 35 37Q21 40 12 36Z"
-        fill="#9d7256"
-      />
-      <path d="M88 50Q94 45 94 49Q95 53 89 56" />
-      <g fill="#f5b6bc" stroke="none">
+      <path d="M84 50.1Q86 47.7 87.4 46.3Q89.8 42.8 91.1 45.9Q92.3 49.4 87.5 52.7" />
+      <g fill="#ffb5bd" stroke="none">
         <ellipse
-          cx="25"
-          cy="54"
+          cx="28"
+          cy="52.4"
           rx="6.5"
           ry="4.5"
-          transform="rotate(-22 25 54)"
+          transform="rotate(-24 28 52.4)"
         />
         <ellipse
-          cx="64"
-          cy="39"
+          cx="63"
+          cy="35.5"
           rx="6.5"
-          ry="4.5"
-          transform="rotate(-22 64 39)"
+          ry="4.8"
+          transform="rotate(-24 63 35.5)"
         />
       </g>
       {asleep ? (
-        <path d="M28 46q4 3 8-2M49 38q4 3 8-2" fill="none" strokeWidth="2" />
+        <path
+          d="M30.8 44.1q3.4 3.5 6.1-1.5M50.1 34q3.4 3.5 6.1-1.5"
+          fill="none"
+        />
       ) : (
-        <g fill="#302923" stroke="none">
+        <g fill="#33251f" stroke="none">
           <ellipse
-            cx="32"
-            cy="45"
-            rx="3.2"
-            ry="3.8"
-            transform="rotate(18 32 45)"
+            cx="33.8"
+            cy="44.3"
+            rx="2.9"
+            ry="3.3"
+            transform="rotate(24 33.8 44.3)"
           />
           <ellipse
-            cx="53"
-            cy="36"
-            rx="3.2"
-            ry="3.8"
-            transform="rotate(18 53 36)"
+            cx="53.2"
+            cy="34.1"
+            rx="3"
+            ry="3.4"
+            transform="rotate(24 53.2 34.1)"
           />
-          <g fill="#fff9e8">
+          <g fill="#fffdf3">
             <ellipse
-              cx="32"
-              cy="43.7"
-              rx="1.5"
-              ry=".9"
-              transform="rotate(-20 32 43.7)"
+              cx="34.1"
+              cy="43.1"
+              rx="1.2"
+              ry=".8"
+              transform="rotate(-30 34.1 43.1)"
             />
             <ellipse
-              cx="53"
-              cy="34.7"
-              rx="1.5"
+              cx="53.5"
+              cy="32.9"
+              rx="1.3"
               ry=".9"
-              transform="rotate(-20 53 34.7)"
+              transform="rotate(-30 53.5 32.9)"
             />
-            <path
-              d="M30.8 46.5l1.3-.3M51.8 37.5l1.3-.3"
-              stroke="#fff9e8"
-              strokeWidth=".8"
-            />
+            <path d="M32.2 45.2q1.4.7 2.6-.6q-.9 1.9-2.6.6M51.5 35.1q1.5.7 2.8-.6q-1 2-2.8.6" />
           </g>
         </g>
       )}
       <path
-        d="M21 53v3M25 51v4M29 50v3M60 39v3M64 37v4M68 36v3"
+        d="M24.4 52.3l-.2 3.1M27 51.5v3M29.6 50.7l.1 2.8M32 50.3v2.3M59.5 35.8l-.1 2.6M62.1 34.3l.1 2.8M64.7 32.8l.1 2.8M67.1 32.5v2.6"
+        fill="none"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M41.7 46.3q1.8 1.5.2 4.1M42.9 48.1q3.1.1 3.2-2.3M45.9 44.3q-.6 2.2 1.5 3M49.1 44.8q-1.2 1.3-.3 2.4"
         fill="none"
         strokeWidth="1.5"
       />
       <path
-        d="M40 46q2 2 1 5M41 49q4 0 4-3M47 44q-1 3 2 4"
-        fill="none"
-        strokeWidth="1.9"
+        d="M48.1 47Q54 46.9 60.2 49.4L60.5 51.9Q54.2 51.5 47.5 48.9Z"
+        fill="#dfbd70"
+        strokeWidth="1.5"
       />
+      <path d="M50.2 48.7l7.8 1.7" fill="none" strokeWidth=".8" />
       <path
-        d="M48 47Q54 48 60 50L60 53Q53 53 47 50Z"
-        fill="#e0bc6f"
-        strokeWidth="1.8"
-      />
-      <path d="M50 49l7 2" fill="none" strokeWidth="1" />
-      <path
-        d="M75 67Q76 60 79 63Q81 65 81 68M48 84Q48 77 45 77Q41 77 41 85M49 81Q57 81 60 78"
+        d="M73 68.5Q72.8 63.1 76.1 62.5Q78.6 62 79.6 67M47.6 81.8Q48.4 74 51.6 74.3Q54.6 74.7 54.4 79.3M54.5 77.8Q61.5 77.1 65.1 74"
         fill="none"
-        strokeWidth="2.1"
+        strokeWidth="1.6"
       />
-      <g transform="rotate(-18 29 75)">
+      <g fill="#fffdf3" stroke="none">
+        <path d="M33 60Q30.6 58.7 33.6 57.1Q33.3 54.5 35.9 54.4Q38 54.5 38 57Q40.7 56.6 41 59.1Z" />
+        <circle cx="40.8" cy="54.3" r=".9" />
+      </g>
+      <g transform="rotate(-20 37 72)">
         <path
-          d="M22 65Q29 61 37 65L38 83Q30 88 22 84Z"
-          fill="#d4d3cf"
-          strokeWidth="2"
-        />
-        <ellipse
-          cx="29.5"
-          cy="65"
-          rx="7.5"
-          ry="2.5"
-          fill="#ebe8df"
-          strokeWidth="1.7"
-        />
-        <ellipse
-          cx="29"
-          cy="64.5"
-          rx="2.1"
-          ry=".8"
-          fill="#302923"
-          stroke="none"
-        />
-        <path
-          d="M26 70v2M30 69v2M34 70v2M26 75q4 2 8-1M25 80q5-2 10-1M26 83l8-2"
-          fill="none"
+          d="M32.5 61.5Q27.7 57.9 30.1 57.5Q34.2 57.4 36.2 61"
+          fill="#e8e7e1"
           strokeWidth="1.4"
         />
+        <path
+          d="M29.7 63Q29.5 60.3 37 60.3Q44.5 60.3 44.3 63L44.8 78.8Q44.2 81.7 37.2 81.7Q30.5 81.7 29.4 79Z"
+          fill="#d2d3ce"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M30.2 63.6Q36.8 60.8 43.8 63.6M30.6 78.5Q36.9 81.1 43.5 78.5"
+          fill="none"
+          strokeWidth="1.1"
+        />
+        <path
+          d="M33.3 66.5v1.8M36.6 65.5v1.8M40 66.1v1.6M33 70q2 2.1 4 .5M32.8 72.6l3.1.5M37.6 71.2l3.1-.8M33.2 77.1q3.8-2.7 8.1-.9M35 78.7q2.9-1.5 6.4-1.4"
+          fill="none"
+          strokeWidth="1.1"
+        />
       </g>
-      <path d="M23 78Q19 76 19 81Q19 85 24 85Q30 82 26 80" strokeWidth="2" />
+      <path
+        d="M26.1 79Q28.3 76.1 29.1 76Q31.5 75 33.3 77.1Q34.4 80.5 31.8 82.9Q29.8 84.8 26.1 83.4"
+        strokeWidth="1.6"
+      />
     </g>
   );
 }
