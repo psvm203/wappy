@@ -6,7 +6,6 @@ body:
     attributes:
       value: |
         신고 내용은 공개됩니다. 로그인 토큰·초대장·서버 주소나 개인정보가 담긴 화면은 첨부하지 마세요.
-        앱의 **도움말·앱 정보 → 문제 확인 정보 복사**를 사용하면 주소와 로그인 정보 없이 실행 상태를 전달할 수 있습니다.
   - type: textarea
     id: problem
     attributes:
@@ -25,7 +24,7 @@ body:
     id: environment
     attributes:
       label: 문제 확인 정보
-      description: 앱에서 복사한 정보를 붙여넣어 주세요. 앱을 열 수 없다면 운영체제와 아는 앱 버전만 적어 주세요.
+      description: 사용 중인 운영체제와 앱 버전을 적어 주세요.
       render: text
     validations:
       required: true

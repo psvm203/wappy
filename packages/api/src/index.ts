@@ -86,7 +86,7 @@ export interface Profile extends ProfileInput {
 export interface Friend extends Profile {
   online: boolean;
 }
-export interface Room {
+interface Room {
   id: string;
   name: string;
   /** Permanent room code, shared by all members; absent on older servers. */
@@ -111,7 +111,7 @@ export interface BlockingSettings {
   revision: number;
   profiles: BlockedProfile[];
 }
-export interface PresenceSettings {
+interface PresenceSettings {
   sharing: boolean;
   revision: number;
 }
@@ -131,7 +131,7 @@ export interface ApiErrorBody {
 }
 
 /** The client and server share method, path, request and response types. */
-export interface ApiRoutes {
+interface ApiRoutes {
   "POST /session": { input: ProfileInput; output: Session };
   "GET /state": { input: undefined; output: SidebarState };
   "POST /chat": { input: { text: string }; output: ChatMessage };

@@ -10,7 +10,7 @@ export interface SavedSession {
 export interface SavedProfile extends SavedSession {
   profile?: Profile;
 }
-type SessionStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+type SessionStorage = Pick<Storage, "getItem" | "setItem">;
 
 function parseSession(value: unknown): SavedSession | null {
   try {
@@ -60,14 +60,6 @@ function readSavedSessions(storage: SessionStorage): SavedProfile[] {
   return [...sessions.values()];
 }
 
-export function loadSavedSessions(storage?: SessionStorage): SavedProfile[] {
-  try {
-    return readSavedSessions(storage ?? localStorage);
-  } catch {
-    return [];
-  }
-}
-
 function sameProfile(a: SavedProfile, b: SavedProfile): boolean {
   return (
     a.server === b.server &&
@@ -95,30 +87,4 @@ export function saveSession(
     SESSION_KEY,
     JSON.stringify({ server: session.server, token: session.token }),
   );
-}
-
-export function parkSession(
-  session: SavedProfile,
-  storage: SessionStorage = localStorage,
-): SavedProfile[] {
-  const previous = readSavedSessions(storage);
-  const saved = [
-    ...previous.filter((item) => !sameProfile(item, session)),
-    { ...previous.find((item) => sameProfile(item, session)), ...session },
-  ];
-  // Never remove the active credential until its saved copy was written successfully.
-  storage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(saved));
-  storage.removeItem(SESSION_KEY);
-  return saved;
-}
-
-export function forgetSavedSession(
-  session: SavedSession,
-  storage: SessionStorage = localStorage,
-): SavedProfile[] {
-  const saved = readSavedSessions(storage).filter(
-    (item) => item.server !== session.server || item.token !== session.token,
-  );
-  storage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(saved));
-  return saved;
 }

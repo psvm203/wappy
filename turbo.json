@@ -8,9 +8,6 @@
       "outputs": ["dist/**"],
       "env": ["VITE_API_URL"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
     "check-types": {
       "dependsOn": ["^build", "^check-types"]
     },

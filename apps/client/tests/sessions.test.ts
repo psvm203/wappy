@@ -4,14 +4,11 @@ import {
   SESSION_KEY,
   SAVED_SESSIONS_KEY,
   loadSession,
-  loadSavedSessions,
   saveSession,
-  parkSession,
-  forgetSavedSession,
   type SavedProfile,
 } from "../src/sessions.ts";
 
-test("server switching preserves distinct profiles and updates only the identity after reauthentication", () => {
+test("saving a session preserves existing profiles and updates only the matching credential", () => {
   const values = new Map<string, string>();
   let fail = "";
   const storage = {
@@ -20,11 +17,9 @@ test("server switching preserves distinct profiles and updates only the identity
       if (fail === `write:${key}`) throw new Error("Storage full");
       values.set(key, value);
     },
-    removeItem: (key: string) => {
-      if (fail === `remove:${key}`) throw new Error("Storage unavailable");
-      values.delete(key);
-    },
   };
+  const savedProfiles = () =>
+    JSON.parse(storage.getItem(SAVED_SESSIONS_KEY) ?? "[]");
   const alice: SavedProfile = {
     server: "https://one.test",
     token: "a".repeat(43),
@@ -54,14 +49,14 @@ test("server switching preserves distinct profiles and updates only the identity
     server: alice.server,
     token: alice.token,
   });
-  assert.deepEqual(loadSavedSessions(storage), []);
-  assert.deepEqual(parkSession(alice, storage), [alice]);
-  assert.equal(loadSession(storage), null);
+  storage.setItem(SAVED_SESSIONS_KEY, JSON.stringify([alice]));
   saveSession(bob, storage);
-  assert.deepEqual(loadSavedSessions(storage), [alice]);
-  parkSession(bob, storage);
-  parkSession(elsewhere, storage);
-  assert.deepEqual(loadSavedSessions(storage), [alice, bob, elsewhere]);
+  assert.deepEqual(savedProfiles(), [alice]);
+  assert.deepEqual(loadSession(storage), {
+    server: bob.server,
+    token: bob.token,
+  });
+  storage.setItem(SAVED_SESSIONS_KEY, JSON.stringify([alice, bob, elsewhere]));
   const renewed = {
     ...alice,
     token: "d".repeat(43),
@@ -72,32 +67,20 @@ test("server switching preserves distinct profiles and updates only the identity
     server: alice.server,
     token: renewed.token,
   });
-  assert.deepEqual(loadSavedSessions(storage), [bob, elsewhere, renewed]);
+  assert.deepEqual(savedProfiles(), [bob, elsewhere, renewed]);
+  saveSession({ server: renewed.server, token: renewed.token }, storage);
   assert.deepEqual(
-    forgetSavedSession(alice, storage),
+    savedProfiles(),
     [bob, elsewhere, renewed],
-    "stale removal cannot delete a newly issued credential",
-  );
-  assert.deepEqual(forgetSavedSession(bob, storage), [elsewhere, renewed]);
-  parkSession({ server: renewed.server, token: renewed.token }, storage);
-  assert.deepEqual(
-    loadSavedSessions(storage),
-    [elsewhere, renewed],
-    "offline switching preserves cached display information",
+    "saving credentials preserves cached display information",
   );
 
-  saveSession(renewed, storage);
-  for (const operation of [
-    `write:${SAVED_SESSIONS_KEY}`,
-    `remove:${SESSION_KEY}`,
-  ]) {
-    fail = operation;
-    assert.throws(() => parkSession(renewed, storage));
-    assert.deepEqual(loadSession(storage), {
-      server: renewed.server,
-      token: renewed.token,
-    });
-  }
+  fail = `write:${SAVED_SESSIONS_KEY}`;
+  assert.throws(() => saveSession(alice, storage));
+  assert.deepEqual(loadSession(storage), {
+    server: renewed.server,
+    token: renewed.token,
+  });
   fail = `write:${SESSION_KEY}`;
   assert.throws(() => saveSession(elsewhere, storage));
   assert.deepEqual(loadSession(storage), {
@@ -106,8 +89,7 @@ test("server switching preserves distinct profiles and updates only the identity
   });
   fail = "";
   storage.setItem(SAVED_SESSIONS_KEY, "{damaged");
-  assert.deepEqual(loadSavedSessions(storage), []);
-  assert.throws(() => parkSession(renewed, storage));
+  assert.throws(() => saveSession(renewed, storage));
   assert.equal(
     storage.getItem(SAVED_SESSIONS_KEY),
     "{damaged",
@@ -125,8 +107,9 @@ test("server switching preserves distinct profiles and updates only the identity
       { ...bob, profile: { name: null } },
     ]),
   );
-  assert.deepEqual(loadSavedSessions(storage), [
-    alice,
+  saveSession(renewed, storage);
+  assert.deepEqual(savedProfiles(), [
     { server: bob.server, token: bob.token },
+    renewed,
   ]);
 });

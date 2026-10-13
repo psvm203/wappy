@@ -2,7 +2,6 @@ import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { parseSidebarState } from "@wappy/api";
 import type { SavedSession } from "./sessions";
 import { subscribeBrowserState, type StateUpdate } from "./state-polling";
-export type { StateUpdate } from "./state-polling";
 
 export function subscribeState(
   session: SavedSession,

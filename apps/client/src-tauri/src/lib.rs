@@ -3,7 +3,7 @@ use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent}
 pub mod startup;
 mod state_sync;
 mod tray;
-pub use tray::{open_sidebar, show_sidebar};
+pub use tray::show_sidebar;
 
 const AUTOSTART_ARGUMENT: &str = startup::AUTOSTART_ARGUMENT;
 
@@ -92,17 +92,6 @@ fn set_sidebar_compact(window: WebviewWindow, compact: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
-fn set_sidebar_pinned(window: WebviewWindow, pinned: bool) -> Result<(), String> {
-    window
-        .set_always_on_top(pinned)
-        .map_err(|error| error.to_string())?;
-    if let Some(desktop) = window.app_handle().get_webview_window("desktop") {
-        raise_desktop(&desktop).map_err(|error| error.to_string())?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
 fn desktop_cursor_position(window: WebviewWindow) -> Result<(f64, f64), String> {
     if window.label() != "desktop" {
         return Err("Only the character window can track the cursor".into());
@@ -134,11 +123,6 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
     builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(
-            tauri_plugin_opener::Builder::new()
-                .open_js_links_on_click(false)
-                .build(),
-        )
         .manage(state_sync::StatePolling::default())
         .on_page_load(|webview, payload| {
             if webview.label() == "main"
@@ -206,9 +190,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         })
         .invoke_handler(tauri::generate_handler![
             updater_enabled,
-            tray::open_sidebar,
             set_sidebar_compact,
-            set_sidebar_pinned,
             desktop_cursor_position,
             tray::sync_tray_controls,
             state_sync::start_state_polling,

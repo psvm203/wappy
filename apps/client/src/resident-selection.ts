@@ -1,7 +1,7 @@
 import type { Friend, SidebarState } from "@wappy/api";
 import { serverUrl } from "./invitations.ts";
 
-export const RESIDENT_SELECTION_PREFIX = "wappy.residents.v1:";
+const RESIDENT_SELECTION_PREFIX = "wappy.residents.v1:";
 
 export function residentSelectionKey(
   server: string,

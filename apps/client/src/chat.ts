@@ -13,7 +13,7 @@ export function latestChat(
   }
 }
 
-export const CHAT_CLICK_SLOP = 6;
+const CHAT_CLICK_SLOP = 6;
 export function movedForDrag(
   startX: number,
   startY: number,

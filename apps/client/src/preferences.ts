@@ -33,7 +33,7 @@ export function isCharacterPosition(
   );
 }
 
-export interface CharacterPreferences {
+interface CharacterPreferences {
   paused: boolean;
   visible: boolean;
   position: CharacterPosition;

@@ -7,14 +7,12 @@
     "desktop": "turbo run desktop --filter=client",
     "test": "turbo run test",
     "performance": "pnpm --filter @wappy/api build && node apps/server/scripts/performance.mjs",
-    "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
     "prettier": "3.9.6",
-    "turbo": "^2.11.7",
-    "typescript": "7.0.2"
+    "turbo": "^2.11.7"
   },
   "packageManager": "pnpm@11.25.0",
   "engines": {

@@ -12,7 +12,7 @@ import {
   type SidebarState,
 } from "@wappy/api";
 import { reconcilePresence } from "../src/presence.ts";
-import { loadSavedSessions, SAVED_SESSIONS_KEY } from "../src/sessions.ts";
+import { saveSession, SAVED_SESSIONS_KEY } from "../src/sessions.ts";
 
 test("legacy status messages are discarded from profiles, server snapshots and saved sessions", () => {
   const input = { name: "Alice", character: "chiikawa" };
@@ -32,14 +32,17 @@ test("legacy status messages are discarded from profiles, server snapshots and s
     token: "a".repeat(43),
     profile: legacy,
   };
-  assert.deepEqual(
-    loadSavedSessions({
-      getItem: () => JSON.stringify([session]),
-      setItem() {},
-      removeItem() {},
-    }),
-    [{ ...session, profile }],
+  let saved = JSON.stringify([session]);
+  saveSession(
+    { server: session.server, token: session.token },
+    {
+      getItem: () => saved,
+      setItem: (key, value) => {
+        if (key === SAVED_SESSIONS_KEY) saved = value;
+      },
+    },
   );
+  assert.deepEqual(JSON.parse(saved), [{ ...session, profile }]);
 });
 
 test("retired characters are rejected for new profiles but old snapshots and saved sessions remain usable", () => {
@@ -81,15 +84,17 @@ test("retired characters are rejected for new profiles but old snapshots and sav
       token: "a".repeat(43),
       profile,
     };
-    assert.deepEqual(
-      loadSavedSessions({
-        getItem: (key) =>
-          key === SAVED_SESSIONS_KEY ? JSON.stringify([session]) : null,
-        setItem() {},
-        removeItem() {},
-      }),
-      [{ ...session, profile: migrated }],
+    let saved = JSON.stringify([session]);
+    saveSession(
+      { server: session.server, token: session.token },
+      {
+        getItem: () => saved,
+        setItem: (key, value) => {
+          if (key === SAVED_SESSIONS_KEY) saved = value;
+        },
+      },
     );
+    assert.deepEqual(JSON.parse(saved), [{ ...session, profile: migrated }]);
   }
 });
 

@@ -320,31 +320,6 @@ fn main() -> Result<(), String> {
                 document.body.dataset.updaterScopeDenied = String(results.every(Boolean));
             })()"#).map_err(|error| error.to_string())?;
             text_rendered(&desktop, "body[data-updater-scope-denied='true']", "", true)?;
-            println!("CHECK: restricted browser permissions");
-            for window in [&sidebar, &desktop] {
-                let requests = if window.label() == "main" {
-                    serde_json::json!([
-                        {"url": "https://github.com/psvm203/wappy/issues/new?body=scope-check"},
-                        {"url": "https://example.invalid/wappy-scope-check"},
-                        {"url": "file:///wappy-scope-check"},
-                        {"url": "https://github.com/psvm203/wappy/issues/new", "with": "wappy-scope-check"}
-                    ])
-                } else {
-                    serde_json::json!([{"url": "https://github.com/psvm203/wappy/issues/new"}])
-                };
-                window
-                    .eval(format!(
-                        r#"(async () => {{
-                    const results = await Promise.all({requests}.map(args =>
-                        window.__TAURI_INTERNALS__.invoke('plugin:opener|open_url', args)
-                            .then(() => false, error => /not allowed/i.test(String(error)))
-                    ));
-                    document.body.dataset.supportScopeDenied = String(results.every(Boolean));
-                }})()"#
-                    ))
-                    .map_err(|error| error.to_string())?;
-                text_rendered(window, "body[data-support-scope-denied='true']", "", true)?;
-            }
             let autostart = std::env::args().any(|arg| arg == "--autostart");
             if sidebar.is_visible().unwrap_or(false) == autostart {
                 return Err("Initial sidebar visibility did not match the launch mode".into());
@@ -457,9 +432,6 @@ fn main() -> Result<(), String> {
             )?;
             if sidebar.is_visible().unwrap_or(true) {
                 return Err("A presence update unexpectedly opened the sidebar".into());
-            }
-            if client_lib::open_sidebar(desktop.clone()).is_ok() {
-                return Err("The character window bypassed sidebar navigation validation".into());
             }
             sidebar
                 .eval("document.querySelector('.resident-selection').open = true;")

@@ -97,7 +97,6 @@ Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 O
 | `pnpm build`                       | 공유 API 패키지, 웹 클라이언트, 서버 빌드            |
 | `pnpm test`                        | 클라이언트·서버의 Node.js 테스트 실행                |
 | `pnpm check-types`                 | 워크스페이스 타입 검사                               |
-| `pnpm lint`                        | lint 스크립트가 있는 패키지 검사(현재 `packages/ui`) |
 | `pnpm performance`                 | 서버 상태 조회의 응답 크기·지연·메모리 성능 검사     |
 | `pnpm format`                      | TypeScript·TSX·Markdown 파일 포맷                    |
 | `pnpm --filter server start`       | 빌드된 API 서버 실행                                 |
@@ -158,8 +157,6 @@ apps/
     scripts/               성능 검사
 packages/
   api/                     공유 API 타입, 입력 검증, 캐릭터 정의
-  ui/                      공용 UI 컴포넌트
-  eslint-config/           공유 ESLint 설정
   typescript-config/       공유 TypeScript 설정
 .github/
   workflows/               검사·릴리스 워크플로
