@@ -1,8 +1,15 @@
 import type { ComponentType } from "react";
 import { CHARACTER_NAMES, type Character as CharacterKind } from "@wappy/api";
-import { Chiikawa, Hachiware, Usagi } from "./ChiikawaTrio";
-import { Momonga, Kurimanju, Furuhonya } from "./ChiikawaFriends";
-import { Rakko, Shisa } from "./ChiikawaGuardians";
+import {
+  Chiikawa,
+  Hachiware,
+  Usagi,
+  Momonga,
+  Kurimanju,
+  Furuhonya,
+  Rakko,
+  Shisa,
+} from "./Chiikawa";
 import {
   IronMan,
   CaptainAmerica,

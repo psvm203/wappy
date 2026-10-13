@@ -975,12 +975,19 @@ function App() {
                         onChange={(event) => {
                           const position = event.target.value;
                           if (isCharacterPosition(position))
-                            setPreferences((current) => ({ ...current, position }));
+                            setPreferences((current) => ({
+                              ...current,
+                              position,
+                            }));
                         }}
                       >
-                        {Object.entries(CHARACTER_POSITIONS).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
+                        {Object.entries(CHARACTER_POSITIONS).map(
+                          ([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ),
+                        )}
                       </select>
                     </label>
                     <StartupSettings />

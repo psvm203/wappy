@@ -19,9 +19,7 @@ if (process.platform !== "darwin") {
   const directory = mkdtempSync(join(tmpdir(), "wappy-public-overlay-"));
   try {
     for (const name of [
-      "ChiikawaTrio",
-      "ChiikawaFriends",
-      "ChiikawaGuardians",
+      "Chiikawa",
       "Avengers",
       "Sanrio",
       "Character",
@@ -46,7 +44,7 @@ if (process.platform !== "darwin") {
           '"@wappy/api"',
           JSON.stringify(import.meta.resolve("@wappy/api")),
         )
-        .replace(/"(\.\/(?:Chiikawa\w+|Avengers|Sanrio))"/g, '"$1.mjs"');
+        .replace(/"(\.\/(?:Chiikawa|Avengers|Sanrio))"/g, '"$1.mjs"');
       writeFileSync(join(directory, `${name}.mjs`), compiled);
     }
     const { Character } = await import(
