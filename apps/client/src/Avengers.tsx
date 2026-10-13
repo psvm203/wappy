@@ -78,7 +78,7 @@ export function IronMan({ asleep }: { asleep: boolean }) {
           strokeWidth="1"
         />
       )}
-      <path d="M43 47h14m-10-5h6" fill="none" strokeWidth="1.7" />
+      <path d="M43 47h14" fill="none" strokeWidth="1.7" />
       <g className="hero-attack-pose" visibility="hidden">
         <path d="m67 59 15-9 9 2v12H78l-9 6" fill="#b6383e" />
         <path d="m77 54 4 10" stroke="#efc365" strokeWidth="4" />
