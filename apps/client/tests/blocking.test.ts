@@ -88,7 +88,10 @@ test("blocking responses validate private snapshots without allowing a blocked f
     { revision: 1, profiles: null },
     { revision: 1, profiles: [blockedBob, blockedBob] },
     { revision: 1, profiles: [{ ...blockedBob, id: "" }] },
-    { revision: 1, profiles: [{ ...blockedBob, character: "missing" }] },
+    ...[undefined, null, 42, {}, [], "", " "].map((character) => ({
+      revision: 1,
+      profiles: [{ ...blockedBob, character }],
+    })),
   ])
     assert.throws(() => parseBlockingSettings(invalid));
 });

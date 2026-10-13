@@ -30,7 +30,10 @@ test("invitation previews validate display data and discard private fields", () 
     { ...preview, name: "" },
     { ...preview, name: "x".repeat(25) },
     { ...preview, name: "A\nB" },
-    { ...preview, character: "unknown" },
+    ...[undefined, null, 42, {}, [], "", " "].map((character) => ({
+      ...preview,
+      character,
+    })),
   ])
     assert.throws(() => parseInvitePreview(invalid));
 });

@@ -45,9 +45,14 @@ test("legacy status messages are discarded from profiles, server snapshots and s
   assert.deepEqual(JSON.parse(saved), [{ ...session, profile }]);
 });
 
-test("retired characters are rejected for new profiles but old snapshots and saved sessions remain usable", () => {
+test("unsupported characters fall back to chiikawa in snapshots and saved sessions but new writes stay strict", () => {
   assert.equal(CHARACTERS.length, 25);
-  for (const character of REMOVED_CHARACTERS) {
+  for (const character of [
+    ...REMOVED_CHARACTERS,
+    "future-character",
+    "__proto__",
+    "constructor",
+  ]) {
     const input = { name: "기존 친구", character };
     const profile = { id: "self", ...input };
     const migrated = { ...profile, character: "chiikawa" };
@@ -59,11 +64,19 @@ test("retired characters are rejected for new profiles but old snapshots and sav
     assert.deepEqual(
       parseSidebarState({
         self: profile,
-        friends: [{ ...profile, id: "friend", online: false }],
+        friends: [
+          { ...profile, id: "friend", online: false },
+          { ...profile, id: "online-friend", online: true },
+          { ...profile, id: "known-friend", character: "usagi", online: true },
+        ],
       }),
       {
         self: migrated,
-        friends: [{ ...migrated, id: "friend", online: false }],
+        friends: [
+          { ...migrated, id: "friend", online: false },
+          { ...migrated, id: "online-friend", online: true },
+          { ...profile, id: "known-friend", character: "usagi", online: true },
+        ],
       },
     );
     assert.deepEqual(
@@ -149,7 +162,10 @@ test("invalid server states cannot become online or corrupt character rendering"
     { error: "not a state" },
     { self, friends: {} },
     { self: { ...self, id: null }, friends: [] },
-    { self, friends: [{ ...friend, character: "missing" }] },
+    ...[undefined, null, 42, {}, [], "", " "].map((character) => ({
+      self,
+      friends: [{ ...friend, character }],
+    })),
     { self, friends: [{ ...friend, online: "false" }] },
     { self, friends: [{ ...friend, name: null }] },
     { self, friends: [friend, friend] },

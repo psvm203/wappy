@@ -288,12 +288,13 @@ export function parseProfile(value: unknown): ProfileInput {
   return { name, character: value.character as Character };
 }
 
-/** Old server responses and saved profiles remain readable; new writes stay strict. */
+/** Unknown characters in snapshots fall back locally; new writes stay strict. */
 function parseProfileSnapshot(value: unknown): ProfileInput {
   return parseProfile(
     isRecord(value) &&
       typeof value.character === "string" &&
-      REMOVED_CHARACTERS.includes(value.character)
+      value.character.trim() &&
+      !CHARACTERS.includes(value.character as Character)
       ? { ...value, character: "chiikawa" }
       : value,
   );
