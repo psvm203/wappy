@@ -124,6 +124,26 @@ test("release preparation requires keys and a matching stable tag; publishing re
   await writeJson("release-metadata/latest.json", apiManifest);
   const apiResult = run("check-release", publishEnv);
   assert.equal(apiResult.status, 0, apiResult.stderr);
+  const draftPrefix =
+    "https://github.com/example/wappy/releases/download/untagged-draft/";
+  await writeJson("release-assets.json", {
+    ...release,
+    assets: release.assets.map((asset) => ({
+      ...asset,
+      url: `${draftPrefix}${asset.name}`,
+    })),
+  });
+  const draftResult = run("check-release", publishEnv);
+  assert.equal(draftResult.status, 0, draftResult.stderr);
+  await writeJson("release-metadata/latest.json", {
+    ...apiManifest,
+    platforms: {
+      ...apiManifest.platforms,
+      "windows-x86_64": { ...windows, url: `${draftPrefix}Wappy-setup.exe` },
+    },
+  });
+  assert.notEqual(run("check-release", publishEnv).status, 0);
+  await writeJson("release-assets.json", release);
   for (const platforms of [
     { ...manifest.platforms, "darwin-x86_64": undefined },
     {

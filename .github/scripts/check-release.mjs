@@ -24,8 +24,10 @@ for (const [platform, entry] of Object.entries(manifest.platforms)) {
     (asset) => entry.url === asset.url || entry.url === asset.apiUrl,
   );
   assert.ok(asset?.size > 0, `Missing updater bundle for ${platform}`);
+  // Draft browser URLs use an untagged alias; the API URL above already
+  // identifies an asset belonging to this release and survives publication.
   assert.ok(
-    asset.url.startsWith(prefix),
+    entry.url === asset.apiUrl || asset.url.startsWith(prefix),
     `${platform} must download from this release`,
   );
   const name = asset.name;
