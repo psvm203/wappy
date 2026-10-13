@@ -47,6 +47,7 @@ import { useDesktopChatRequests } from "./chat-bridge";
 import { InviteField } from "./InviteField";
 import { InviteCode } from "./InviteCode";
 import { StartupSettings } from "./StartupSettings";
+import { UpdateSettings, useAppUpdates } from "./UpdateSettings";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { reconcileBlocking } from "./blocking";
 import { reconcilePresence } from "./presence";
@@ -110,6 +111,7 @@ function App() {
   } = useCharacterPreferences();
   const { paused: motionPaused, visible: charactersVisible } = preferences;
   const desktop = isTauri();
+  const updates = useAppUpdates(desktop);
   const profileKey =
     session && state
       ? residentSelectionKey(session.server, state.self.id)
@@ -546,6 +548,16 @@ function App() {
           ))}
         </div>
         {desktopControls}
+        {updates.version && (
+          <button
+            className="icon-button"
+            onClick={toggleCompact}
+            aria-label="업데이트 확인"
+            title="새 버전이 있어요"
+          >
+            ↑
+          </button>
+        )}
         {desktopError && (
           <p className="error" role="alert">
             {desktopError}
@@ -606,6 +618,15 @@ function App() {
           </div>
         )}
       </header>
+
+      {desktop && updates.version && (
+        <div className="update-banner">
+          <UpdateSettings
+            state={updates}
+            disabled={busy || profileDraft !== null}
+          />
+        </div>
+      )}
 
       {!session ? (
         <div className="onboarding scroll-area">
@@ -673,6 +694,9 @@ function App() {
             </p>
           )}
           {desktop && <StartupSettings />}
+          {desktop && !updates.version && (
+            <UpdateSettings state={updates} />
+          )}
         </div>
       ) : (
         <>
@@ -951,6 +975,9 @@ function App() {
                   />
                 )}
                 {desktop && <StartupSettings />}
+                {desktop && !updates.version && (
+                  <UpdateSettings state={updates} />
+                )}
               </>
             )}
           </div>

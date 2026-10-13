@@ -586,6 +586,22 @@
 .startup-panel {
   margin-top: 20px;
 }
+.update-panel {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.update-panel p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.update-panel progress {
+  width: 100%;
+  accent-color: #678b57;
+}
+.update-banner {
+  flex-shrink: 0;
+  margin: 0 20px 12px;
+}
 .startup-panel .setting-toggle {
   margin-top: 0;
 }

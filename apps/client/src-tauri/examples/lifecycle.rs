@@ -306,6 +306,20 @@ fn main() -> Result<(), String> {
             let desktop = handle
                 .get_webview_window("desktop")
                 .ok_or("Missing character window")?;
+            text_rendered(
+                &sidebar,
+                ".update-panel",
+                "이 빌드는 자동 업데이트를 지원하지 않습니다.",
+                true,
+            )?;
+            desktop.eval(r#"(async () => {
+                const results = await Promise.all(['plugin:updater|check', 'plugin:process|restart'].map(command =>
+                    window.__TAURI_INTERNALS__.invoke(command)
+                        .then(() => false, error => /not allowed/i.test(String(error)))
+                ));
+                document.body.dataset.updaterScopeDenied = String(results.every(Boolean));
+            })()"#).map_err(|error| error.to_string())?;
+            text_rendered(&desktop, "body[data-updater-scope-denied='true']", "", true)?;
             println!("CHECK: restricted browser permissions");
             for window in [&sidebar, &desktop] {
                 let requests = if window.label() == "main" {

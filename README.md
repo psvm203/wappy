@@ -180,7 +180,31 @@ Tauri 패키지는 해당 운영체제에서 빌드합니다. `.github/workflows
 
 GitHub Actions의 **Check Wappy → Artifacts**에서 해당 커밋의 테스트용 설치 파일을 받을 수 있습니다. macOS는 Apple Silicon·Intel을 모두 담은 **universal DMG**, Windows는 **x64 NSIS 설치 프로그램**입니다. Windows 설치는 현재 사용자에게 적용하고 한국어·영어를 선택할 수 있습니다. WebView2가 없으면 설치 과정에서 내려받으므로 인터넷 연결이 필요합니다. 아티팩트는 7일 동안 보관하며, 워크플로를 수동으로 다시 실행할 수도 있습니다. [Tauri Windows 설치 프로그램](https://v2.tauri.app/distribute/windows-installer/), [macOS DMG](https://v2.tauri.app/distribute/dmg/)
 
-이 파일들은 개발자 배포 서명·Apple 공증이 없는 테스트용 빌드입니다. 일반 사용자에게 배포하기 전에는 해당 인증서를 설정하고 설치·업데이트·삭제를 실제 기기에서 검증해야 합니다. 워크플로는 GitHub Release를 발행하거나 서버를 배포하지 않습니다. 별도 서버에 참여하려면 서버 주소와 코드가 포함된 초대장 전체를 입력하세요.
+이 파일들은 개발자 배포 서명·Apple 공증이 없는 테스트용 빌드이며 자동 업데이트가 비활성화되어 있습니다. 일반 사용자에게 배포하기 전에는 해당 인증서를 설정하고 설치·업데이트·삭제를 실제 기기에서 검증해야 합니다. `Check Wappy`는 GitHub Release를 발행하거나 서버를 배포하지 않습니다. 별도 서버에 참여하려면 서버 주소와 코드가 포함된 초대장 전체를 입력하세요.
+
+### 자동 업데이트와 릴리스
+
+서명 키를 포함해 빌드한 데스크톱 앱은 시작할 때와 6시간마다 GitHub Releases의 새 버전을 확인합니다. 앱으로 돌아왔을 때도 확인 주기가 지났으면 조회합니다. 시작 화면·프로필 화면의 **업데이트 확인** 버튼으로 직접 확인할 수 있습니다. 새 버전은 사이드바에 표시되며, **업데이트하고 재시작**을 눌러야 다운로드·서명 검증·설치가 진행됩니다. Windows는 설치 프로그램이 앱을 종료하고 다시 실행하며, macOS는 교체 후 앱이 재시작합니다. 확인·다운로드·서명 검증 실패 시 앱을 강제로 종료하지 않고 재시도를 제공합니다. 로그인 저장소, 앱 식별자, 자동 실행 설정은 변경하지 않습니다.
+
+최초 한 번 업데이트 서명 키를 생성하고 GitHub 저장소에 공개키 변수와 개인키 Secret을 설정하세요. 개인키는 저장소 밖에 보관하고 안전한 별도 장소에 백업해야 합니다. 이미 배포한 뒤에는 같은 키를 계속 사용해야 합니다. 다음 명령은 macOS/Linux 기준이며 `gh` 로그인과 저장소 설정 권한이 필요합니다.
+
+```sh
+umask 077
+mkdir -p ~/.tauri
+pnpm --filter client tauri signer generate -w ~/.tauri/wappy.key
+gh variable set TAURI_SIGNING_PUBLIC_KEY < ~/.tauri/wappy.key.pub
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/wappy.key
+# 키에 암호를 설정했다면 대화형으로 같은 암호를 입력합니다.
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+공개키 변수에는 `.pub` 파일의 전체 내용을 넣습니다. 기본 설정의 빈 공개키는 개발·PR 빌드에서 업데이트 조회를 끕니다. 릴리스 워크플로가 공개키와 `createUpdaterArtifacts: true`를 담은 무시되는 `tauri.release.conf.json`을 생성하고 빌드에 병합합니다. 개인키는 앱이나 설정 파일에 포함되지 않습니다. 공개 Release 파일을 사용할 수 있어야 하므로 비공개 소스 저장소에서 배포하려면 공개 배포 저장소 또는 별도 HTTPS 호스팅으로 엔드포인트와 릴리스 업로드 대상을 함께 변경하세요. 앱에 GitHub 접근 토큰을 넣지 마세요.
+
+`apps/client/src-tauri/tauri.conf.json`의 버전을 올리고 클라이언트의 `package.json`·`Cargo.toml`·`Cargo.lock` 버전도 맞춘 뒤, `v0.2.0`처럼 같은 버전의 태그를 푸시합니다. `.github/workflows/release.yml`은 기존 검사를 통과한 후 macOS universal·Windows x64를 빌드하고, 설치 파일·업데이트 파일·서명·`latest.json`을 초안 Release에 업로드합니다. 두 OS의 빌드와 세 플랫폼(`darwin-aarch64`, `darwin-x86_64`, `windows-x86_64`)의 다운로드 주소·파일·서명이 모두 확인되어야 Release를 공개합니다. 실패한 Release는 초안으로 남으며 기존 공개 버전은 유지됩니다. 이 워크플로는 정식 버전만 허용하고 서버는 배포하지 않습니다.
+
+업데이트 서명은 OS 코드 서명과 별개입니다. macOS Developer ID 서명·공증에는 `APPLE_CERTIFICATE`(인증서의 base64), `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`(앱 전용 암호), `APPLE_TEAM_ID` Secrets를 사용합니다. Windows Authenticode 서명은 선택한 인증서 공급자의 서명 설정을 추가해야 합니다. 현재 Windows 릴리스에는 해당 서명 단계가 없습니다. [Tauri updater](https://v2.tauri.app/plugin/updater/), [macOS 서명·공증](https://v2.tauri.app/distribute/sign/macos/), [Windows 코드 서명](https://v2.tauri.app/distribute/sign/windows/)
+
+기존 updater 없는 설치본은 첫 지원 버전을 한 번 직접 설치해야 합니다. 공개 배포 전에는 이전 버전에서 다음 버전으로 실제 업데이트하여 재실행, 로그인·캐릭터 설정·자동 실행 유지, 네트워크 실패와 잘못된 서명 거부를 macOS·Windows 각각에서 확인하세요. macOS 앱은 DMG 안에서 실행하지 말고 Applications에 설치합니다. 로컬 서명 빌드는 위 공개키/개인키 환경변수와 `GITHUB_REF_NAME=v<앱 버전>`을 설정하고 `node .github/scripts/prepare-release.mjs`를 실행한 다음 `pnpm --filter client tauri build --config src-tauri/tauri.release.conf.json`으로 만들 수 있습니다.
 
 로컬에서 두 macOS 아키텍처를 함께 빌드하려면 다음 명령을 사용합니다. Windows에서는 해당 OS에서 `pnpm --filter client tauri build --ci --target x86_64-pc-windows-msvc`를 실행하면 `apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/`에 설치 파일이 생성됩니다.
 
