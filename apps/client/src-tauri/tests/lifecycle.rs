@@ -7,7 +7,7 @@ use std::{
     net::TcpListener,
     process::Command,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, Ordering},
         mpsc::{self, Receiver},
         Arc,
     },
@@ -103,56 +103,60 @@ fn text_rendered(
     text: &str,
     present: bool,
 ) -> Result<(), String> {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    // A delayed signal from an earlier observation must never satisfy this one.
-    let event = format!(
-        "wappy:lifecycle-rendered-{}",
-        SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    );
-    let js_event = serde_json::to_string(&event).map_err(|error| error.to_string())?;
     let selector = serde_json::to_string(selector).map_err(|error| error.to_string())?;
     let text = serde_json::to_string(text).map_err(|error| error.to_string())?;
-    let (sent, received) = mpsc::channel();
-    let listener = window.app_handle().listen_any(event, move |event| {
-        if let Ok(matches) = serde_json::from_str::<bool>(event.payload()) {
-            let _ = sent.send(matches);
-        }
-    });
-    // Native polling also observes focus/style changes that have no DOM mutation,
-    // and does not depend on the WebView timers disabled by this smoke check.
+    // Read directly through the native evaluation callback, without a temporary
+    // event listener or the WebView timers disabled by this smoke check.
     let result = (|| -> Result<(), String> {
+        // Keep delayed replies for this observation, isolated from later checks.
+        let (sent, received) = mpsc::channel();
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
-            window.eval(format!(r#"(() => {{
+            let sent = sent.clone();
+            window
+                .eval_with_callback(
+                    format!(
+                        r#"(() => {{
         const element = document.querySelector({selector});
-        const matches = !!element === {present} && (!element || element.textContent.includes({text}));
-        window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{ target: {{ kind: 'AnyLabel', label: 'main' }}, event: {js_event}, payload: matches }});
-      }})()"#)).map_err(|error| error.to_string())?;
-            if received.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-                .map_err(|error| error.to_string())? {
-                return Ok(());
+        return !!element === {present} && (!element || element.textContent.includes({text}));
+      }})()"#
+                    ),
+                    move |value| {
+                        let _ = sent.send(value);
+                    },
+                )
+                .map_err(|error| error.to_string())?;
+            let wait =
+                Duration::from_millis(250).min(deadline.saturating_duration_since(Instant::now()));
+            match received.recv_timeout(wait) {
+                Ok(value) => {
+                    if serde_json::from_str::<bool>(&value).map_err(|error| error.to_string())? {
+                        return Ok(());
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(error) => return Err(error.to_string()),
             }
             thread::sleep(Duration::from_millis(50));
         }
         Err("timed out after 5 seconds".into())
-    })().map_err(|error| format!("Expected UI did not render ({selector}, text={text}, present={present}): {error}"));
-    window.app_handle().unlisten(listener);
+    })()
+    .map_err(|error| {
+        format!("Expected UI did not render ({selector}, text={text}, present={present}): {error}")
+    });
     if result.is_err() {
         let (sent, received) = mpsc::channel();
-        let listener = window
-            .app_handle()
-            .listen_any("wappy:lifecycle-diagnostic", move |event| {
-                let _ = sent.send(event.payload().to_string());
-            });
-        let _ = window.eval(format!(
-            r#"window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', {{
-          target: {{ kind: 'AnyLabel', label: 'main' }}, event: 'wappy:lifecycle-diagnostic',
-          payload: {{ focused: document.hasFocus(), visible: document.visibilityState,
+        let _ = window.eval_with_callback(
+            format!(
+                r#"({{ focused: document.hasFocus(), visible: document.visibilityState,
             active: document.activeElement?.outerHTML.slice(0, 500),
             matched: document.querySelector({selector})?.outerHTML.slice(0, 500),
-            friend: document.querySelector('.friend-card')?.outerHTML.slice(0, 500) }}
-        }});"#
-        ));
+            friend: document.querySelector('.friend-card')?.outerHTML.slice(0, 500) }})"#
+            ),
+            move |value| {
+                let _ = sent.send(value);
+            },
+        );
         eprintln!(
             "UI DIAGNOSTIC: native focused={:?}, visible={:?}, minimized={:?}; DOM={:?}",
             window.is_focused(),
@@ -160,27 +164,21 @@ fn text_rendered(
             window.is_minimized(),
             received.recv_timeout(Duration::from_secs(2))
         );
-        window.app_handle().unlisten(listener);
     }
     result
 }
 
 fn animation_frames(window: &tauri::WebviewWindow) -> Result<u64, String> {
     let (sent, received) = mpsc::channel();
-    let listener = window
-        .app_handle()
-        .listen_any("wappy:lifecycle-frames", move |event| {
-            if let Ok(count) = serde_json::from_str::<u64>(event.payload()) {
-                let _ = sent.send(count);
-            }
-        });
-    window.eval("window.__TAURI_INTERNALS__.invoke('plugin:event|emit_to', { target: { kind: 'AnyLabel', label: 'main' }, event: 'wappy:lifecycle-frames', payload: window.__wappyFrames });")
+    window
+        .eval_with_callback("window.__wappyFrames", move |value| {
+            let _ = sent.send(value);
+        })
         .map_err(|error| error.to_string())?;
     let result = received
         .recv_timeout(Duration::from_secs(5))
-        .map_err(|error| format!("Animation frame count was not received: {error}"));
-    window.app_handle().unlisten(listener);
-    result
+        .map_err(|error| format!("Animation frame count was not received: {error}"))?;
+    serde_json::from_str(&result).map_err(|error| format!("Invalid animation frame count: {error}"))
 }
 
 fn presence_server() -> Result<(String, Receiver<String>), String> {
