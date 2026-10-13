@@ -222,6 +222,11 @@ test(
     assert.equal(
       (await call("/friends/remove", b.token, { friendId: a.profile.id }))
         .status,
+      403,
+    );
+    assert.equal(
+      (await call("/friends/remove", a.token, { friendId: b.profile.id }))
+        .status,
       200,
     );
     assert.deepEqual(

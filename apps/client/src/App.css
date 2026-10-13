@@ -321,11 +321,6 @@
   background: transparent;
   color: #9ba58f;
   font-size: 15px;
-  opacity: 0;
-}
-.friend-card:hover .remove-button,
-.remove-button:focus-visible {
-  opacity: 1;
 }
 .remove-confirm {
   width: 100%;

@@ -8,6 +8,7 @@ export function FriendCard({
   connected,
   message,
   busy,
+  canKick,
   removing,
   onRemovingChange,
   onRemove,
@@ -17,6 +18,7 @@ export function FriendCard({
   connected: boolean;
   message?: ChatMessage;
   busy: boolean;
+  canKick: boolean;
   removing: boolean;
   onRemovingChange: (removing: boolean) => void;
   onRemove: () => void;
@@ -49,17 +51,19 @@ export function FriendCard({
         </small>
       </div>
       {children}
-      <button
-        className="remove-button"
-        aria-label={`${friend.name} 친구 연결 해제`}
-        title="친구 연결 해제"
-        onClick={() => onRemovingChange(!removing)}
-      >
-        ×
-      </button>
-      {removing && (
+      {canKick && (
+        <button
+          className="remove-button"
+          aria-label={`${friend.name} 님 추방`}
+          title="추방"
+          onClick={() => onRemovingChange(!removing)}
+        >
+          ×
+        </button>
+      )}
+      {canKick && removing && (
         <div className="remove-confirm">
-          <p>{friend.name} 님과 연결을 해제할까요?</p>
+          <p>{friend.name} 님을 추방할까요?</p>
           <button
             className="text-button"
             onClick={() => onRemovingChange(false)}
@@ -71,7 +75,7 @@ export function FriendCard({
             disabled={busy}
             onClick={onRemove}
           >
-            연결 해제
+            추방
           </button>
         </div>
       )}

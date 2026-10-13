@@ -123,7 +123,11 @@ test("chat reaches only friends at send time, persists, expires and is removed w
     (await call("/state", undefined, bob.token)).body.messages.length,
     2,
   );
-  await call("/friends/remove", { friendId: alice.profile.id }, bob.token);
+  assert.equal(
+    (await call("/friends/remove", { friendId: bob.profile.id }, alice.token))
+      .status,
+    200,
+  );
   assert.deepEqual(
     (await call("/state", undefined, bob.token)).body.messages,
     [],

@@ -99,6 +99,8 @@ export interface Friend extends Profile {
 interface Room {
   id: string;
   name: string;
+  /** The room creator; absent on servers without owner-only removal. */
+  ownerId?: string;
   /** Permanent room code, shared by all members; absent on older servers. */
   inviteCode?: string;
 }
@@ -151,6 +153,7 @@ interface ApiRoutes {
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
   "POST /invites/accept": { input: { code: string }; output: Profile };
+  /** Only the current room's owner can remove another member from the room. */
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
   "POST /friends/block": {
     input: { friendId: string };
@@ -350,9 +353,17 @@ export function parseSidebarState(value: unknown): SidebarState {
         !/^[A-HJ-NP-Z2-9]{5}$/.test(input.inviteCode))
     )
       throw new Error("잘못된 방 초대 코드입니다.");
+    if (
+      input.ownerId !== undefined &&
+      (typeof input.ownerId !== "string" ||
+        !input.ownerId ||
+        input.ownerId.length > 128)
+    )
+      throw new Error("잘못된 방장 정보입니다.");
     room = {
       id: input.id,
       name: input.name,
+      ...(input.ownerId === undefined ? {} : { ownerId: input.ownerId }),
       ...(input.inviteCode === undefined ? {} : { inviteCode: input.inviteCode }),
     };
   }

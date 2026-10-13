@@ -87,7 +87,7 @@ export function createApp(options: {
     WHERE m.user_id = ?
   `);
   const selectInviteProfile = db.prepare(`
-    SELECT users.name, users.character
+    SELECT users.id, users.name, users.character
     FROM invites JOIN users ON users.id = invites.owner_id
     WHERE invites.code_hash = ?
   `);
@@ -289,7 +289,10 @@ export function createApp(options: {
           // The permanent code keeps the room's owner stable across name changes.
           if (room?.inviteCode) {
             const owner = selectInviteProfile.get(hash(room.inviteCode));
-            if (owner) room.name = `${owner.name}의 방`;
+            if (owner) {
+              room.name = `${owner.name}의 방`;
+              room.ownerId = owner.id as string;
+            }
           }
           const state: Output<"GET /state"> = {
             self: self!,
@@ -506,24 +509,50 @@ export function createApp(options: {
           reply(res, route, profile(friendId));
           break;
         }
-        case "POST /friends/remove":
+        case "POST /friends/remove": {
+          const friendId = field(body, "friendId");
+          if (friendId === self!.id)
+            throw new HttpError(400, "자신을 추방할 수 없어요.");
+          transaction(db, () => {
+            const room = selectRoom.get(self!.id);
+            if (
+              !room ||
+              selectInviteProfile.get(hash(room.inviteCode as string))?.id !==
+                self!.id
+            )
+              throw new HttpError(403, "방장만 친구를 추방할 수 있어요.");
+            if (selectRoom.get(friendId)?.id !== room.id)
+              throw new HttpError(404, "같은 방의 친구를 찾을 수 없어요.");
+            // Cascading deletes revoke chat delivery and attacks for every room member.
+            db.prepare(
+              "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
+            ).run(friendId, friendId);
+            db.prepare(
+              "DELETE FROM chat_messages WHERE recipient_id IS NOT NULL AND (sender_id = ? OR recipient_id = ?)",
+            ).run(friendId, friendId);
+            db.prepare("DELETE FROM room_members WHERE user_id = ?").run(
+              friendId,
+            );
+            createRoom(db, profile(friendId));
+          });
+          reply(res, route, { ok: true });
+          break;
+        }
         case "POST /friends/block": {
           const friendId = field(body, "friendId");
-          if (route === "POST /friends/block" && friendId === self!.id)
+          if (friendId === self!.id)
             throw new HttpError(400, "내 프로필은 차단할 수 없어요.");
           const pair = [self!.id, friendId].sort();
           transaction(db, () => {
-            if (route === "POST /friends/block") {
-              if (!profile(friendId))
-                throw new HttpError(404, "프로필을 찾을 수 없어요.");
-              const result = db
-                .prepare(
-                  `INSERT OR IGNORE INTO profile_blocks (user_id, blocked_id, name, character)
+            if (!profile(friendId))
+              throw new HttpError(404, "프로필을 찾을 수 없어요.");
+            const result = db
+              .prepare(
+                `INSERT OR IGNORE INTO profile_blocks (user_id, blocked_id, name, character)
                 SELECT ?, id, name, character FROM users WHERE id = ?`,
-                )
-                .run(self!.id, friendId);
-              if (result.changes) advanceBlocking.run(self!.id);
-            }
+              )
+              .run(self!.id, friendId);
+            if (result.changes) advanceBlocking.run(self!.id);
             db.prepare(
               `DELETE FROM chat_messages
               WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)`,
@@ -532,9 +561,7 @@ export function createApp(options: {
               "DELETE FROM friendships WHERE user_id = ? AND friend_id = ?",
             ).run(pair[0]!, pair[1]!);
           });
-          if (route === "POST /friends/block")
-            reply(res, route, blocking(self!.id));
-          else reply(res, route, { ok: true });
+          reply(res, route, blocking(self!.id));
           break;
         }
         case "POST /friends/unblock": {

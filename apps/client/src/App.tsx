@@ -883,6 +883,7 @@ function App() {
                         connected={connection === "online"}
                         message={latestChat(state.messages, friend.id)}
                         busy={busy}
+                        canKick={state.room?.ownerId === state.self.id}
                         removing={removing === friend.id}
                         onRemovingChange={(removing) =>
                           setRemoving(removing ? friend.id : null)

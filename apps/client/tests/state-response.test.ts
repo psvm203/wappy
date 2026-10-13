@@ -244,6 +244,16 @@ test("current room metadata is validated without exposing extra server fields", 
     { ...state, room },
   );
   assert.equal(parseSidebarState(state).room, undefined);
+  for (const ownerId of [state.self.id, "another-profile"]) {
+    assert.deepEqual(
+      parseSidebarState({ ...state, room: { ...room, ownerId } }).room,
+      { ...room, ownerId },
+    );
+  }
+  for (const ownerId of [null, 1, true, {}, "", "x".repeat(129)])
+    assert.throws(() =>
+      parseSidebarState({ ...state, room: { ...room, ownerId } }),
+    );
   assert.deepEqual(
     parseSidebarState({ ...state, room: { ...room, inviteCode: "A7K3M" } }).room,
     { ...room, inviteCode: "A7K3M" },

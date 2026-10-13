@@ -10,7 +10,7 @@ import { parseSidebarState, type Session } from "@wappy/api";
 import { openDatabase } from "./database.ts";
 import { createApp } from "./server.ts";
 
-test("automatic room codes are shared, survive restart, and move only the accepting profile", async (t) => {
+test("automatic rooms support shared codes, isolated moves and owner-only kicks across restarts", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-rooms-"));
   const databasePath = join(directory, "rooms.sqlite");
   let now = 1_800_000_000_000;
@@ -91,6 +91,7 @@ test("automatic room codes are shared, survive restart, and move only the accept
   const initialCodes = await Promise.all([a, b, c, d, e, f].map(invite));
   assert.equal(new Set(initialCodes.map((invite) => invite.code)).size, 6);
   const first = await invite(a);
+  assert.equal((await state(a)).room?.ownerId, a.profile.id);
   assert.equal((await call("/invites/accept", b.token, first)).status, 200);
   const beforeB = await call("/state", b.token);
   // Looking up a code through an older client cannot rotate the room's code.
@@ -133,6 +134,7 @@ test("automatic room codes are shared, survive restart, and move only the accept
       [a, b, c, d].filter((other) => other !== person),
     );
     assert.equal((await state(person)).room?.id, (await state(a)).room?.id);
+    assert.equal((await state(person)).room?.ownerId, a.profile.id);
     assert.deepEqual(await invite(person), first);
   }
   assert.deepEqual(
@@ -251,6 +253,89 @@ test("automatic room codes are shared, survive restart, and move only the accept
       .count,
     6,
   );
+
+  now += 60_001;
+  for (const [caller, target, status] of [
+    [b, c.profile.id, 403],
+    [b, a.profile.id, 403],
+    [e, b.profile.id, 404],
+    [a, a.profile.id, 400],
+    [a, "missing", 404],
+  ] as const) {
+    assert.equal(
+      (await call("/friends/remove", caller.token, {
+        friendId: target,
+        ownerId: caller.profile.id,
+      })).status,
+      status,
+    );
+  }
+  await peers(b, [a, c, d, f]);
+  assert.equal(
+    (await call("/friends/remove", undefined, { friendId: b.profile.id }))
+      .status,
+    401,
+  );
+  await state(c);
+  const kickMessage = await call("/chat", b.token, { text: "추방 전 메시지" });
+  assert.equal(kickMessage.status, 201);
+  const kickAttack = await call("/friends/attack", b.token, {
+    friendId: c.profile.id,
+  });
+  assert.equal(kickAttack.status, 201);
+  const beforeKick = await call("/state", c.token);
+  assert.ok(beforeKick.body.messages.some(
+    (message: { id: number }) => message.id === kickMessage.body.id,
+  ));
+  assert.ok(beforeKick.body.attacks.some(
+    (attack: { id: number }) => attack.id === kickAttack.body.id,
+  ));
+  inspection.exec(
+    "CREATE TRIGGER fail_kick BEFORE INSERT ON rooms BEGIN SELECT RAISE(ABORT, 'test rollback'); END",
+  );
+  const kickLog = t.mock.method(console, "error", () => {});
+  assert.equal(
+    (await call("/friends/remove", a.token, { friendId: b.profile.id })).status,
+    500,
+  );
+  kickLog.mock.restore();
+  inspection.exec("DROP TRIGGER fail_kick");
+  await peers(b, [a, c, d, f]);
+  assert.equal((await state(b)).room?.ownerId, a.profile.id);
+  assert.deepEqual((await call("/state", c.token)).body, beforeKick.body);
+  assert.equal(
+    (await call("/friends/remove", a.token, { friendId: b.profile.id })).status,
+    200,
+  );
+  await peers(b, []);
+  const kickedRoom = (await state(b)).room;
+  assert.equal(kickedRoom?.ownerId, b.profile.id);
+  assert.notEqual(kickedRoom?.id, originalRoom?.id);
+  for (const person of [a, c, d, f]) {
+    const remaining = await state(person);
+    assert.ok(remaining.friends.every((friend) => friend.id !== b.profile.id));
+    assert.ok(
+      remaining.messages?.every((message) => message.senderId !== b.profile.id),
+    );
+    assert.ok(
+      remaining.attacks?.every((attack) =>
+        attack.attackerId !== b.profile.id && attack.targetId !== b.profile.id,
+      ),
+    );
+    assert.equal(remaining.room?.id, originalRoom?.id);
+  }
+  assert.equal(
+    (await call("/state", c.token, undefined, beforeKick.etag)).status,
+    200,
+  );
+  assert.deepEqual(await invite(a), first);
+  await close();
+  server = createApp({ databasePath, now: () => now });
+  await listen();
+  await peers(b, []);
+  assert.deepEqual((await state(b)).room, kickedRoom);
+  assert.equal((await state(c)).room?.ownerId, a.profile.id);
+  assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
 });
 
 test("legacy connected groups migrate once into separate rooms without exposing old chat or restoring removed links", (t) => {

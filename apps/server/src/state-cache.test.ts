@@ -132,7 +132,7 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
   assert.equal(next.body.messages.length, 0);
   await write("/chat", { text: "new" }, bob.token);
   a = await state(alice.token);
-  await write("/friends/remove", { friendId: bob.profile.id }, alice.token);
+  await write("/friends/remove", { friendId: alice.profile.id }, bob.token);
   next = await state(alice.token, a.etag);
   assert.equal(next.body.friends.length, 0);
   assert.equal(next.body.messages.length, 0);

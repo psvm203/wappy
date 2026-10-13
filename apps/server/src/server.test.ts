@@ -485,18 +485,30 @@ test("profiles, invitations, presence and friendship persist safely end to end",
       ).status,
       409,
     );
-    // Carol cannot remove Alice's friendship with Bob.
-    await call("POST", "/friends/remove", carol.token, {
-      friendId: bob.profile.id,
-    });
+    // Only the room owner can remove a member, including through older clients.
+    assert.equal(
+      (await call("POST", "/friends/remove", carol.token, {
+        friendId: bob.profile.id,
+      })).status,
+      403,
+    );
     assert.equal(
       ((await call("GET", "/state", alice.token)).body as SidebarState).friends
         .length,
       2,
     );
-    await call("POST", "/friends/remove", bob.token, {
-      friendId: alice.profile.id,
-    });
+    assert.equal(
+      (await call("POST", "/friends/remove", bob.token, {
+        friendId: alice.profile.id,
+      })).status,
+      403,
+    );
+    assert.equal(
+      (await call("POST", "/friends/remove", alice.token, {
+        friendId: bob.profile.id,
+      })).status,
+      200,
+    );
     assert.equal(
       ((await call("GET", "/state", alice.token)).body as SidebarState).friends
         .length,
@@ -1094,7 +1106,7 @@ test("existing invitation codes migrate without expiry and remain reusable by mu
         guests.length,
       );
       assert.equal(
-        (await call("/friends/remove", guests[0], { friendId: "h" })).status,
+        (await call("/friends/remove", host, { friendId: guests[0]![0] })).status,
         200,
       );
       assert.equal(
