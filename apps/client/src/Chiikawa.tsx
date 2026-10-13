@@ -102,6 +102,7 @@ export function Hachiware({ asleep }: { asleep: boolean }) {
 export function Usagi({ asleep }: { asleep: boolean }) {
   return (
     <g
+      transform="translate(100 0) scale(-1 1)"
       fill="#fff0bf"
       stroke="#302c2a"
       strokeWidth="2.5"
@@ -153,6 +154,7 @@ export function Usagi({ asleep }: { asleep: boolean }) {
 export function Momonga({ asleep }: { asleep: boolean }) {
   return (
     <g
+      transform="translate(100 0) scale(-1 1)"
       fill="#fffefd"
       stroke="#242622"
       strokeWidth="2.4"
@@ -387,6 +389,7 @@ export function Kurimanju({ asleep }: { asleep: boolean }) {
 export function Furuhonya({ asleep }: { asleep: boolean }) {
   return (
     <g
+      transform="translate(100 0) scale(-1 1)"
       fill="#fceae4"
       stroke="#292925"
       strokeWidth="2.4"
@@ -503,6 +506,7 @@ export function Furuhonya({ asleep }: { asleep: boolean }) {
 export function Rakko({ asleep }: { asleep: boolean }) {
   return (
     <g
+      transform="translate(100 0) scale(-1 1)"
       fill="#fff2cb"
       stroke="#302c2a"
       strokeWidth="2.3"
