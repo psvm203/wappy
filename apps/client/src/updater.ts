@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
-export const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
+export const UPDATE_CHECK_INTERVAL = 60 * 60 * 1000;
 
 export interface UpdateState {
   status:
