@@ -478,6 +478,9 @@
   border: 0;
   min-width: 0;
 }
+.profile-form fieldset > .field:first-child {
+  margin-top: 0;
+}
 .character-category-title {
   margin: 0 0 10px;
   font-size: 14px;

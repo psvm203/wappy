@@ -131,10 +131,38 @@ export function ProfileForm({
       character: profile.character,
     });
   }
+  const nameField = (
+    <label className="field">
+      이름
+      <input
+        autoComplete="nickname"
+        required
+        maxLength={MAX_NAME_LENGTH}
+        placeholder="친구들이 부를 이름"
+        value={profile.name}
+        onChange={(event) =>
+          changeProfile({ ...draft.current, name: event.target.value }, 300)
+        }
+        onCompositionStart={() => {
+          composing.current = true;
+          window.clearTimeout(timer.current);
+        }}
+        onCompositionEnd={(event) => {
+          composing.current = false;
+          changeProfile(
+            { ...draft.current, name: event.currentTarget.value },
+            300,
+          );
+        }}
+        onBlur={() => void saveChanges()}
+      />
+    </label>
+  );
   return (
     <form onSubmit={submit} className="profile-form">
       <fieldset disabled={busy} aria-label="프로필 설정">
         {beforeProfile}
+        {autoSave && nameField}
         {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
           <section key={category} aria-label={category}>
             <h2 className="character-category-title">{category}</h2>
@@ -161,31 +189,7 @@ export function ProfileForm({
             </div>
           </section>
         ))}
-        <label className="field">
-          이름
-          <input
-            autoComplete="nickname"
-            required
-            maxLength={MAX_NAME_LENGTH}
-            placeholder="친구들이 부를 이름"
-            value={profile.name}
-            onChange={(event) =>
-              changeProfile({ ...draft.current, name: event.target.value }, 300)
-            }
-            onCompositionStart={() => {
-              composing.current = true;
-              window.clearTimeout(timer.current);
-            }}
-            onCompositionEnd={(event) => {
-              composing.current = false;
-              changeProfile(
-                { ...draft.current, name: event.currentTarget.value },
-                300,
-              );
-            }}
-            onBlur={() => void saveChanges()}
-          />
-        </label>
+        {!autoSave && nameField}
         {children}
         {autoSave ? (
           saveError && (
