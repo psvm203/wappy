@@ -1,5 +1,6 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+mod desktop_pointer;
 pub mod startup;
 mod state_sync;
 mod tray;
@@ -192,6 +193,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             updater_enabled,
             set_sidebar_compact,
             desktop_cursor_position,
+            desktop_pointer::desktop_window_at_cursor,
             tray::sync_tray_controls,
             state_sync::start_state_polling,
             state_sync::stop_state_polling,

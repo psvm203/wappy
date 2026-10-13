@@ -26,6 +26,7 @@ import { ChatBubble } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
 import { requestDesktopChat } from "./chat-bridge";
 import { latestChat, movedForDrag } from "./chat";
+import { captureDesktopPointer } from "./desktop-pointer";
 import { requestDesktopAttack } from "./attack-bridge";
 import { collectAttacks, nextAttack, type AttackInbox } from "./online-attacks";
 import {
@@ -356,18 +357,19 @@ export function DesktopCharacters({
     let timer: ReturnType<typeof setTimeout>;
     let interactive = false;
     // Click-through windows do not receive pointermove. Poll the native cursor to
-    // enable input over a character or chat input, and keep capture until a drag ends.
+    // enable character input only when no app is behind it. Chat and an active
+    // drag retain input so passing over another window cannot interrupt them.
     const poll = async () => {
       try {
         const [x, y] = await invoke<[number, number]>(
           "desktop_cursor_position",
         );
         if (disposed) return;
-        let hit = !!drag.current;
+        let overCharacter = false;
+        let overChat = false;
         for (const { element } of entries.current.values()) {
-          if (hit) break;
           for (const target of element.querySelectorAll(
-            "svg, .chat-composer",
+            "svg.character, .chat-composer",
           )) {
             const rect = target.getBoundingClientRect();
             if (
@@ -376,11 +378,19 @@ export function DesktopCharacters({
               y >= rect.top - 6 &&
               y <= rect.bottom + 6
             ) {
-              hit = true;
-              break;
+              if (target.matches(".chat-composer")) overChat = true;
+              else overCharacter = true;
             }
           }
         }
+        let hit =
+          !!drag.current ||
+          (await captureDesktopPointer(overCharacter, overChat, () =>
+            invoke<boolean>("desktop_window_at_cursor"),
+          ));
+        if (disposed) return;
+        // A drag can start while the native window lookup is in flight.
+        hit ||= !!drag.current;
         if (hit !== interactive) {
           await window.setIgnoreCursorEvents(!hit);
           interactive = hit;
