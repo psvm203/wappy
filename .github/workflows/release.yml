@@ -10,6 +10,8 @@ concurrency:
 jobs:
   check:
     uses: ./.github/workflows/check.yml
+    with:
+      skip-preview: true
   build:
     needs: check
     permissions:
@@ -84,6 +86,11 @@ jobs:
           prerelease: false
           generateReleaseNotes: true
           updaterJsonPreferNsis: true
+      - name: Check Windows install, launch, update and removal
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./.github/scripts/check-windows-installer.ps1 -Installer (Get-Item 'apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe').FullName
   publish:
     needs: build
     runs-on: ubuntu-latest

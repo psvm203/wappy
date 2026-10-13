@@ -3,6 +3,11 @@ on:
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      skip-preview:
+        description: Skip preview installers when the caller builds and validates release installers.
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -64,13 +69,15 @@ jobs:
             cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
           fi
       - name: Build preview installer
+        if: ${{ !inputs.skip-preview }}
         run: pnpm --filter client tauri build --ci --target ${{ matrix.target }}
       - name: Check Windows install, launch, update and removal
-        if: runner.os == 'Windows'
+        if: ${{ runner.os == 'Windows' && !inputs.skip-preview }}
         timeout-minutes: 5
         shell: pwsh
         run: ./.github/scripts/check-windows-installer.ps1 -Installer (Get-Item 'apps/client/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe').FullName
       - uses: actions/upload-artifact@v7
+        if: ${{ !inputs.skip-preview }}
         with:
           name: wappy-preview-${{ matrix.artifact }}-${{ github.sha }}
           path: apps/client/src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.installer }}
