@@ -27,11 +27,11 @@ jobs:
             rust-targets: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-targets }}
@@ -89,8 +89,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: Download and validate updater metadata
