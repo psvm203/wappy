@@ -1,8 +1,11 @@
+import type { CharacterPosition } from "./preferences.ts";
+
 export const CHARACTER_SIZE = 42;
 const MARGIN = CHARACTER_SIZE / 2;
 const GRAVITY = 1400;
 
 export interface Body {
+  position: CharacterPosition;
   x: number;
   y: number;
   vx: number;
@@ -36,6 +39,16 @@ function track(width: number, height: number) {
 
 function walkPose(body: Body, width: number, height: number) {
   const { left, top, right, bottom, w, h } = track(width, height);
+  switch (body.position) {
+    case "top":
+      return { x: left + body.phase * w, y: top, angle: Math.PI };
+    case "right":
+      return { x: right, y: top + body.phase * h, angle: -Math.PI / 2 };
+    case "bottom":
+      return { x: right - body.phase * w, y: bottom, angle: 0 };
+    case "left":
+      return { x: left, y: bottom - body.phase * h, angle: Math.PI / 2 };
+  }
   const distance = body.phase * 2 * (w + h);
   if (distance < w) return { x: left + distance, y: top, angle: Math.PI };
   if (distance < w + h)
@@ -45,13 +58,19 @@ function walkPose(body: Body, width: number, height: number) {
   return { x: left, y: bottom - (distance - 2 * w - h), angle: Math.PI / 2 };
 }
 
-export function createBody(id: string, width: number, height: number): Body {
+export function createBody(
+  id: string,
+  width: number,
+  height: number,
+  position: CharacterPosition = "free",
+): Body {
   const seed = Array.from(id).reduce(
     (hash, letter) => (Math.imul(hash, 31) + letter.charCodeAt(0)) >>> 0,
     0,
   );
   const speed = 35 + (seed % 16);
   const body: Body = {
+    position,
     x: 0,
     y: 0,
     vx: 0,
@@ -69,6 +88,37 @@ export function createBody(id: string, width: number, height: number): Body {
   };
   Object.assign(body, walkPose(body, width, height));
   return body;
+}
+
+export function setBodyPosition(
+  body: Body,
+  position: CharacterPosition,
+  width: number,
+  height: number,
+) {
+  const { left, top, right, bottom, w, h } = track(width, height);
+  moveBody(body, body.x, body.y, width, height);
+  const distances = [
+    body.y - top,
+    right - body.x,
+    bottom - body.y,
+    body.x - left,
+  ];
+  const edge =
+    position === "free"
+      ? distances.indexOf(Math.min(...distances))
+      : ["top", "right", "bottom", "left"].indexOf(position);
+  const offset = [body.x - left, body.y - top, right - body.x, bottom - body.y][
+    edge
+  ];
+  body.position = position;
+  body.phase =
+    position === "free"
+      ? ([0, w, w + h, 2 * w + h][edge] + offset) / Math.max(1, 2 * (w + h))
+      : offset / Math.max(1, edge % 2 === 0 ? w : h);
+  body.mode = "walk";
+  body.vx = body.vy = body.dragTilt = 0;
+  Object.assign(body, walkPose(body, width, height));
 }
 
 export function moveBody(
@@ -125,7 +175,12 @@ export function advanceBody(
 ) {
   const { left, top, right, bottom, w, h } = track(width, height);
   const perimeter = Math.max(1, 2 * (w + h));
+  const fixedEdge = ["top", "right", "bottom", "left"].indexOf(body.position);
+  const walkLength =
+    fixedEdge < 0 ? perimeter : Math.max(1, fixedEdge % 2 === 0 ? w : h);
   moveBody(body, body.x, body.y, width, height);
+  if (fixedEdge >= 0 && body.mode === "walk")
+    Object.assign(body, walkPose(body, width, height));
   if (!walking && body.mode === "walk") {
     body.vx = body.vy = 0;
     return;
@@ -163,12 +218,13 @@ export function advanceBody(
               Math.min(0.85, 28 / Math.max(1, body.walkSpeed)),
             );
             body.stepPhase = (body.stepPhase + dt / stepDuration) % 1;
-            body.phase =
-              (((body.phase +
-                (body.direction * body.walkSpeed * dt) / perimeter) %
-                1) +
-                1) %
-              1;
+            const phase =
+              body.phase + (body.direction * body.walkSpeed * dt) / walkLength;
+            if (fixedEdge < 0) body.phase = ((phase % 1) + 1) % 1;
+            else {
+              if (phase < 0 || phase > 1) body.direction *= -1;
+              body.phase = Math.max(0, Math.min(1, phase));
+            }
           }
         }
       }
@@ -184,7 +240,8 @@ export function advanceBody(
       bottom - body.y,
       body.x - left,
     ];
-    const edge = distances.indexOf(Math.min(...distances));
+    const edge =
+      fixedEdge < 0 ? distances.indexOf(Math.min(...distances)) : fixedEdge;
     const nx = [0, 1, 0, -1][edge],
       ny = [-1, 0, 1, 0][edge];
     body.vx = (body.vx + nx * GRAVITY * dt) * Math.exp(-0.25 * dt);
@@ -221,14 +278,19 @@ export function advanceBody(
       body.vx *= -0.42;
       body.vy *= 0.8;
     }
-    if (impact < 110) {
+    if (impact < 110 && (fixedEdge < 0 || hit === fixedEdge)) {
       const distance = [
         body.x - left,
         w + body.y - top,
         w + h + right - body.x,
         2 * w + h + bottom - body.y,
       ][hit];
-      body.phase = distance / perimeter;
+      body.phase =
+        fixedEdge < 0
+          ? distance / perimeter
+          : [body.x - left, body.y - top, right - body.x, bottom - body.y][
+              hit
+            ] / walkLength;
       if (Math.abs(tangent) > 10)
         body.direction = Math.sign(tangent) * (hit < 2 ? 1 : -1);
       body.walkSpeed = Math.max(body.speed, Math.abs(tangent) * 0.8);

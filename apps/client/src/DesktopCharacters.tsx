@@ -8,6 +8,7 @@ import {
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DesktopResident } from "./resident-selection";
+import type { CharacterPosition } from "./preferences";
 import {
   ATTACK_COOLDOWN_MS,
   type AttackEvent,
@@ -35,6 +36,7 @@ import {
   moveBody,
   needsAnimation,
   releaseVelocity,
+  setBodyPosition,
   type Body,
   type DragSample,
 } from "./desktop-physics";
@@ -109,6 +111,7 @@ function draw({ body, element, walking }: Resident, attack: Attack | null) {
 export function DesktopCharacters({
   residents,
   paused,
+  position,
   profileKey,
   messages,
   attacks,
@@ -117,6 +120,7 @@ export function DesktopCharacters({
 }: {
   residents: DesktopResident[];
   paused: boolean;
+  position: CharacterPosition;
   profileKey: string | null;
   messages?: ChatMessage[];
   attacks?: AttackEvent[];
@@ -139,6 +143,22 @@ export function DesktopCharacters({
   const wakeAnimation = useRef(() => {});
 
   useLayoutEffect(() => {
+    stopAttack();
+    const held = drag.current;
+    drag.current = null;
+    if (held) {
+      const element = entries.current.get(held.id)?.element;
+      if (element?.hasPointerCapture(held.pointerId))
+        element.releasePointerCapture(held.pointerId);
+    }
+    for (const resident of entries.current.values()) {
+      setBodyPosition(resident.body, position, innerWidth, innerHeight);
+      draw(resident, null);
+    }
+    wakeAnimation.current();
+  }, [position]);
+
+  useLayoutEffect(() => {
     if (chatTarget) {
       const resident = entries.current.get(chatTarget);
       if (resident) {
@@ -159,7 +179,7 @@ export function DesktopCharacters({
       }
     }
     wakeAnimation.current();
-  }, [chatTarget]);
+  }, [chatTarget, position]);
 
   useEffect(() => {
     if (!composing || !isTauri()) return;
@@ -305,13 +325,7 @@ export function DesktopCharacters({
     };
     const resize = () => {
       for (const resident of entries.current.values()) {
-        moveBody(
-          resident.body,
-          resident.body.x,
-          resident.body.y,
-          innerWidth,
-          innerHeight,
-        );
+        advanceBody(resident.body, 0, innerWidth, innerHeight, false);
         draw(resident, attack.current);
       }
       wake();
@@ -607,7 +621,7 @@ export function DesktopCharacters({
               const entry = {
                 body:
                   entries.current.get(resident.id)?.body ??
-                  createBody(resident.id, innerWidth, innerHeight),
+                  createBody(resident.id, innerWidth, innerHeight, position),
                 element,
                 walking: resident.online,
                 character: resident.character,

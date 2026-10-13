@@ -7,10 +7,88 @@ import {
   moveBody,
   needsAnimation,
   releaseVelocity,
+  setBodyPosition,
 } from "../src/desktop-physics.ts";
 
 const width = 1470,
   height = 923;
+
+test("selected edges constrain walking and reverse direction at their ends", () => {
+  for (const position of ["top", "bottom", "left", "right"] as const) {
+    const body = createBody("edge-walker", width, height, position);
+    body.wanderTime = Infinity;
+    body.speed = body.walkSpeed = 400;
+    const directions = new Set<number>();
+    for (let frame = 0; frame < 600; frame++) {
+      advanceBody(body, 1 / 60, width, height, true);
+      directions.add(body.direction);
+      assert.ok(body.phase >= 0 && body.phase <= 1);
+      assert.equal(
+        position === "top" || position === "bottom" ? body.y : body.x,
+        position === "top" || position === "left"
+          ? CHARACTER_SIZE / 2
+          : (position === "bottom" ? height : width) - CHARACTER_SIZE / 2,
+      );
+    }
+    assert.equal(directions.size, 2);
+    for (const [w, h] of [
+      [640, 480],
+      [1920, 1080],
+      [20, 20],
+    ]) {
+      advanceBody(body, 0, w, h, false);
+      assert.ok(body.x >= 0 && body.x <= w && body.y >= 0 && body.y <= h);
+      assert.equal(
+        position === "top" || position === "bottom" ? body.y : body.x,
+        position === "top"
+          ? Math.min(CHARACTER_SIZE / 2, h / 2)
+          : position === "left"
+            ? Math.min(CHARACTER_SIZE / 2, w / 2)
+            : position === "bottom"
+              ? Math.max(h / 2, h - CHARACTER_SIZE / 2)
+              : Math.max(w / 2, w - CHARACTER_SIZE / 2),
+      );
+    }
+  }
+});
+
+test("thrown and resting characters return to the selected edge", () => {
+  for (const walking of [false, true])
+    for (const position of ["top", "bottom", "left", "right"] as const) {
+      const body = createBody("thrown", width, height, position);
+      Object.assign(body, { mode: "air", x: 100, y: 100, vx: 1400, vy: -800 });
+      for (let frame = 0; frame < 1800 && body.mode !== "walk"; frame++)
+        advanceBody(body, 1 / 60, width, height, walking);
+      assert.equal(body.mode, "walk");
+      advanceBody(body, 0, width, height, false);
+      assert.equal(
+        position === "top" || position === "bottom" ? body.y : body.x,
+        position === "top" || position === "left"
+          ? CHARACTER_SIZE / 2
+          : (position === "bottom" ? height : width) - CHARACTER_SIZE / 2,
+      );
+    }
+});
+
+test("position changes apply immediately and free mode resumes the perimeter", (t) => {
+  t.mock.method(Math, "random", () => 0.5);
+  const body = createBody("switch", width, height);
+  for (const position of ["top", "right", "bottom", "left"] as const) {
+    Object.assign(body, { mode: "drag", vx: 200, vy: 200, dragTilt: 0.3 });
+    setBodyPosition(body, position, width, height);
+    assert.equal(body.position, position);
+    assert.equal(body.mode, "walk");
+    assert.equal(body.vx + body.vy + body.dragTilt, 0);
+  }
+  const previous = { x: body.x, y: body.y };
+  setBodyPosition(body, "free", width, height);
+  assert.deepEqual({ x: body.x, y: body.y }, previous);
+  body.wanderTime = Infinity;
+  body.speed = body.walkSpeed = 400;
+  for (let frame = 0; frame < 300; frame++)
+    advanceBody(body, 1 / 60, width, height, true);
+  assert.notEqual(body.x, CHARACTER_SIZE / 2);
+});
 
 test("offline characters keep falling, rest after landing, and walk when online", () => {
   const body = createBody("idle", width, height);
@@ -213,9 +291,9 @@ test("awake and sleeping characters fall toward each nearest edge and land", () 
       assert.ok(
         nx === 0
           ? body.y ===
-            (ny < 0 ? CHARACTER_SIZE / 2 : height - CHARACTER_SIZE / 2)
+              (ny < 0 ? CHARACTER_SIZE / 2 : height - CHARACTER_SIZE / 2)
           : body.x ===
-            (nx < 0 ? CHARACTER_SIZE / 2 : width - CHARACTER_SIZE / 2),
+              (nx < 0 ? CHARACTER_SIZE / 2 : width - CHARACTER_SIZE / 2),
       );
       if (!walking) {
         assert.equal(needsAnimation(body, walking), false);

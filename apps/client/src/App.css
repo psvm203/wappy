@@ -548,6 +548,7 @@
   margin: 15px 0;
 }
 .field input,
+.field select,
 .field textarea {
   display: block;
   width: 100%;
@@ -579,7 +580,8 @@
 .startup-panel {
   margin-top: 20px;
 }
-.settings-panel > .startup-panel {
+.settings-panel > .startup-panel,
+.settings-panel > .field {
   margin-top: 0;
 }
 .update-panel {

@@ -63,6 +63,7 @@ export function DesktopOverlay() {
       key={snapshot.profileKey ?? "preview"}
       residents={residents}
       paused={snapshot.paused}
+      position={snapshot.position ?? "free"}
       profileKey={snapshot.profileKey}
       messages={snapshot.state.messages}
       attacks={snapshot.state.attacks}

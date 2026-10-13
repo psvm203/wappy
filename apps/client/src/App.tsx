@@ -58,6 +58,7 @@ import {
 } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
+import { CHARACTER_POSITIONS, isCharacterPosition } from "./preferences";
 import "./App.css";
 
 const emptyProfile: ProfileInput = {
@@ -123,6 +124,7 @@ function App() {
     connected: !!session && connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
+    position: preferences.position,
     hiddenIds: selection.hiddenIds,
   });
   const attackError = useDesktopAttackRequests(profileKey, async (friendId) => {
@@ -966,6 +968,21 @@ function App() {
               <section className="settings-panel" aria-label="앱 설정">
                 {desktop ? (
                   <>
+                    <label className="field">
+                      캐릭터 위치
+                      <select
+                        value={preferences.position}
+                        onChange={(event) => {
+                          const position = event.target.value;
+                          if (isCharacterPosition(position))
+                            setPreferences((current) => ({ ...current, position }));
+                        }}
+                      >
+                        {Object.entries(CHARACTER_POSITIONS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
                     <StartupSettings />
                     <UpdateSettings
                       state={updates}
