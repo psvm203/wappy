@@ -819,20 +819,16 @@ function App() {
                           </button>
                         ))}
                       </div>
-                      <div className="friend-results">
-                        <p role="status">
-                          {listedFriends.length}명 표시 · 전체{" "}
-                          {state.friends.length}명
-                        </p>
-                        {friendView !== "all" && (
+                      {friendView !== "all" && (
+                        <div className="friend-results">
                           <button
                             className="text-button"
                             onClick={resetFriendFilters}
                           >
                             필터 초기화
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </section>
                   </>
                 )}

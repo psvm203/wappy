@@ -214,14 +214,8 @@
 .friend-results {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: flex-end;
   min-height: 34px;
-}
-.friend-results p {
-  margin: 0;
-  color: #68745e;
-  font-size: 10px;
 }
 .friend-filter-empty {
   padding: 20px 10px;
