@@ -87,9 +87,9 @@ function App() {
         : serverState,
     [serverState, profileDraft],
   );
-  const [panel, setPanel] = useState<"friends" | "invite" | "profile">(
-    "friends",
-  );
+  const [panel, setPanel] = useState<
+    "friends" | "invite" | "profile" | "settings"
+  >("friends");
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -603,7 +603,7 @@ function App() {
         )}
       </header>
 
-      {desktop && updates.version && (
+      {desktop && updates.version && (!session || panel !== "settings") && (
         <div className="update-banner">
           <UpdateSettings
             state={updates}
@@ -739,6 +739,7 @@ function App() {
                 ["friends", "친구들"],
                 ["invite", "초대하기"],
                 ["profile", "내 모습"],
+                ["settings", "설정"],
               ] as const
             ).map(([id, label]) => (
               <button
@@ -772,23 +773,25 @@ function App() {
               </p>
             )}
             {(!state || panel !== "invite") && errorAlert}
-            {!state && panel !== "profile" && connection !== "unauthorized" && (
-              <div className="empty-state">
-                <span className="loading-orbit" />
-                <h2>친구들을 만나러 가는 중</h2>
-                <p>{session.server}</p>
-              </div>
-            )}
+            {!state &&
+              (panel === "friends" || panel === "invite") &&
+              connection !== "unauthorized" && (
+                <div className="empty-state">
+                  <span className="loading-orbit" />
+                  <h2>친구들을 만나러 가는 중</h2>
+                  <p>{session.server}</p>
+                </div>
+              )}
             {state && panel === "friends" && (
               <>
-                <div className="section-heading">
-                  <h1>
-                    함께 있는 친구들<span>{state.friends.length}</span>
-                  </h1>
-                  <span className="count-badge">{onlineCount} online</span>
-                </div>
                 {state.friends.length > 0 && (
                   <>
+                    <div className="section-heading">
+                      <h1>
+                        함께 있는 친구들<span>{state.friends.length}</span>
+                      </h1>
+                      <span className="count-badge">{onlineCount} online</span>
+                    </div>
                     <section
                       className="friend-filters"
                       aria-label="친구 목록 필터"
@@ -949,23 +952,33 @@ function App() {
                 </form>
               </div>
             )}
-            {panel === "profile" && (
-              <>
-                {state && (
-                  <ProfileForm
-                    key={profileKey}
-                    initial={profileDraft ?? state.self}
-                    busy={busy}
-                    onChange={setProfileDraft}
-                    onSave={updateProfile}
-                    autoSave
-                  />
+            {state && panel === "profile" && (
+              <ProfileForm
+                key={profileKey}
+                initial={profileDraft ?? state.self}
+                busy={busy}
+                onChange={setProfileDraft}
+                onSave={updateProfile}
+                autoSave
+              />
+            )}
+            {panel === "settings" && (
+              <section className="settings-panel" aria-label="앱 설정">
+                {desktop ? (
+                  <>
+                    <StartupSettings />
+                    <UpdateSettings
+                      state={updates}
+                      disabled={busy || profileDraft !== null}
+                    />
+                  </>
+                ) : (
+                  <p className="hint">
+                    자동 실행과 앱 업데이트는 데스크톱 앱에서 설정할 수
+                    있어요.
+                  </p>
                 )}
-                {desktop && <StartupSettings />}
-                {desktop && !updates.version && (
-                  <UpdateSettings state={updates} />
-                )}
-              </>
+              </section>
             )}
           </div>
           {state && (

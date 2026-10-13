@@ -576,6 +576,9 @@
 .startup-panel {
   margin-top: 20px;
 }
+.settings-panel > .startup-panel {
+  margin-top: 0;
+}
 .update-panel {
   margin-top: 12px;
   font-size: 12px;
