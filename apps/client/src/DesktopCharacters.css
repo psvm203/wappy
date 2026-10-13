@@ -223,7 +223,7 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  /* Center above the 42px character, keeping the label inside the viewport. */
+  /* Keep captions inside the viewport; flip below when they do not fit above. */
   transform: translate(
     clamp(
       calc(4px - var(--resident-x)),
@@ -245,7 +245,7 @@
   text-overflow: ellipsis;
   pointer-events: none;
 }
-.desktop-resident[data-ceiling="true"] figcaption {
+.desktop-resident[data-caption-below="true"] figcaption {
   --caption-y: 25px;
 }
 .desktop-resident figcaption:has(.chat-bubble) {
@@ -415,8 +415,6 @@
   width: max-content;
   max-width: calc(100vw - 8px);
   padding: 0;
+  background: transparent;
   overflow: visible;
-}
-.desktop-resident figcaption:has(.chat-composer) .resident-name {
-  padding: 3px 4px;
 }
