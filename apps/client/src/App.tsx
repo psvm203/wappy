@@ -752,7 +752,7 @@ function App() {
             {(
               [
                 ["friends", session ? "친구들" : "시작 화면"],
-                ["invite", "초대하기"],
+                ["invite", "초대"],
                 ["profile", "내 모습"],
                 ["settings", "설정"],
               ] as const
