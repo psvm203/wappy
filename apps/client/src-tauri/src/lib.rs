@@ -149,7 +149,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
                     #[cfg(target_os = "macos")]
                     desktop.with_webview(|webview| unsafe {
                         let window = &*webview.ns_window().cast::<objc2_app_kit::NSWindow>();
-                        // One level above Tauri's floating sidebar, without taking focus.
+                        // Keep characters above floating windows without taking focus.
                         window.setLevel(window.level() + 1);
                         window.orderFrontRegardless();
                     })?;

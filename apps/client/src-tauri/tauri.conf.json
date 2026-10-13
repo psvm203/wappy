@@ -22,7 +22,7 @@
         "shadow": false,
         "resizable": false,
         "maximizable": false,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "backgroundThrottling": "disabled",
         "visibleOnAllWorkspaces": true,
         "visible": false
