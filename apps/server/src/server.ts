@@ -86,6 +86,11 @@ export function createApp(options: {
     FROM room_members m JOIN rooms r ON r.id = m.room_id
     WHERE m.user_id = ?
   `);
+  const selectInviteProfile = db.prepare(`
+    SELECT users.name, users.character
+    FROM invites JOIN users ON users.id = invites.owner_id
+    WHERE invites.code_hash = ?
+  `);
   const selectPresence = db.prepare(
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
@@ -278,11 +283,17 @@ export function createApp(options: {
               CHAT_HISTORY_LIMIT,
             ) as unknown as ChatMessage[]
           ).reverse();
+          const room = selectRoom.get(
+            self!.id,
+          ) as unknown as Output<"GET /state">["room"];
+          // The permanent code keeps the room's owner stable across name changes.
+          if (room?.inviteCode) {
+            const owner = selectInviteProfile.get(hash(room.inviteCode));
+            if (owner) room.name = `${owner.name}의 방`;
+          }
           const state: Output<"GET /state"> = {
             self: self!,
-            room: selectRoom.get(
-              self!.id,
-            ) as unknown as Output<"GET /state">["room"],
+            room,
             attacks: (
               selectAttacks.all(
                 self!.id,
@@ -433,13 +444,7 @@ export function createApp(options: {
           break;
         }
         case "POST /invites/preview": {
-          const invite = db
-            .prepare(
-              `SELECT users.name, users.character
-               FROM invites JOIN users ON users.id = invites.owner_id
-               WHERE invites.code_hash = ?`,
-            )
-            .get(hash(inviteCode(body)));
+          const invite = selectInviteProfile.get(hash(inviteCode(body)));
           if (!invite)
             throw new HttpError(404, "유효하지 않은 초대 코드입니다.");
           reply(res, route, {
