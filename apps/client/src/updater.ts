@@ -20,7 +20,7 @@ export interface UpdateState {
   error: string;
 }
 
-// One operation per sidebar, including React remounts and compact/profile switches.
+// One operation per sidebar, including React remounts and profile switches.
 let state: UpdateState = {
   status: "idle",
   version: null,

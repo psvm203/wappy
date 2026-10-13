@@ -65,13 +65,13 @@ fn place_desktop(sidebar: &WebviewWindow) -> tauri::Result<()> {
     Ok(())
 }
 
-fn place_sidebar(window: &WebviewWindow, compact: bool) -> tauri::Result<()> {
+fn place_sidebar(window: &WebviewWindow) -> tauri::Result<()> {
     let monitor = window.current_monitor()?.or(window.primary_monitor()?);
     if let Some(monitor) = monitor {
         let area = monitor.work_area();
         let scale = monitor.scale_factor();
         let margin = (12.0 * scale).round() as u32;
-        let width = ((if compact { 72.0 } else { 320.0 }) * scale).round() as u32;
+        let width = (320.0 * scale).round() as u32;
         let height = (760.0 * scale).round() as u32;
         let width = width.min(area.size.width.saturating_sub(margin * 2)).max(1);
         let height = height
@@ -84,11 +84,6 @@ fn place_sidebar(window: &WebviewWindow, compact: bool) -> tauri::Result<()> {
         ))?;
     }
     Ok(())
-}
-
-#[tauri::command]
-fn set_sidebar_compact(window: WebviewWindow, compact: bool) -> Result<(), String> {
-    place_sidebar(&window, compact).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -137,7 +132,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         .setup(|app| {
             tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
-                place_sidebar(&window, false)?;
+                place_sidebar(&window)?;
                 if !std::env::args().any(|arg| arg == AUTOSTART_ARGUMENT) {
                     window.show()?;
                 }
@@ -190,7 +185,6 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         })
         .invoke_handler(tauri::generate_handler![
             updater_enabled,
-            set_sidebar_compact,
             desktop_cursor_position,
             tray::sync_tray_controls,
             state_sync::start_state_polling,

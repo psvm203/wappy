@@ -141,9 +141,14 @@
   border-bottom-color: #678b57;
   font-weight: 700;
 }
-.tabs .collapse-button {
+.tabs .quit-button {
   margin-left: auto;
+  align-self: center;
+  padding: 5px 10px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
   white-space: nowrap;
+  color: #b94343;
 }
 .scroll-area {
   overflow-y: auto;
@@ -626,12 +631,6 @@
   height: 16px;
   accent-color: #678b57;
 }
-.compact-presence {
-  display: block;
-  font-size: 9px;
-  margin-top: 5px;
-  color: #68745e;
-}
 .field input::placeholder {
   color: #68745e;
   font-size: 11px;
@@ -768,49 +767,6 @@
 }
 .toast:empty {
   display: none;
-}
-.compact-sidebar {
-  width: 72px;
-  margin-left: auto;
-  align-items: center;
-  border-radius: 20px;
-  padding: 13px 5px;
-  gap: 10px;
-}
-.compact-open {
-  padding: 0;
-  background: transparent;
-  width: 100%;
-}
-.compact-drag-handle {
-  width: 100%;
-  height: 20px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  color: #89967c;
-  cursor: grab;
-  user-select: none;
-}
-.compact-count {
-  font-size: 10px;
-  margin-left: 5px;
-  color: #68745e;
-}
-.compact-friends {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.compact-friends > div {
-  margin: 10px 0;
-  position: relative;
-}
-.compact-sidebar .character {
-  width: 54px;
-  margin: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   *,

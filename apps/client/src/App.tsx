@@ -7,8 +7,9 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
-import { isTauri, invoke } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { exit } from "@tauri-apps/plugin-process";
 import {
   parseSidebarState,
   parseChatMessage,
@@ -105,19 +106,11 @@ function App() {
   >("connecting");
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
-  const [compact, setCompact] = useState(false);
   const [friendView, setFriendView] = useState<FriendView>("all");
   const [chatTarget, setChatTarget] = useState<string | null>(null);
   const openSettings = useCallback(() => {
-    void invoke("set_sidebar_compact", { compact: false })
-      .then(() => {
-        setCompact(false);
-        setPanel("settings");
-        setError("");
-      })
-      .catch(() =>
-        setError("환경설정을 열지 못했어요. 다시 시도해 주세요."),
-      );
+    setPanel("settings");
+    setError("");
   }, []);
   const {
     preferences,
@@ -452,12 +445,6 @@ function App() {
       setError("창 설정을 바꾸지 못했습니다. 다시 시도해 주세요.");
     }
   }
-  function toggleCompact() {
-    void windowAction(async () => {
-      if (desktop) await invoke("set_sidebar_compact", { compact: !compact });
-      setCompact(!compact);
-    });
-  }
   function dragWindow(event: MouseEvent<HTMLElement>) {
     if (
       !desktop ||
@@ -522,63 +509,6 @@ function App() {
     </p>
   );
 
-  if (compact && state)
-    return (
-      <main className="sidebar compact-sidebar">
-        <div
-          className="compact-drag-handle"
-          onMouseDown={dragWindow}
-          title="드래그해서 앱 이동"
-          aria-label="앱 이동 영역"
-        >
-          ⠿
-        </div>
-        <button
-          className="icon-button"
-          onClick={toggleCompact}
-          aria-label="사이드바 펼치기"
-          title="사이드바 펼치기"
-        >
-          ‹
-        </button>
-        <button
-          className="compact-open"
-          onClick={toggleCompact}
-          aria-label="사이드바 펼치기"
-          title="사이드바 펼치기"
-        >
-          <Character kind={state.self.character} />
-          <span
-            className={`online-dot ${connection !== "online" || presenceHidden ? "offline" : ""}`}
-          />
-          <span className="compact-count">{onlineCount}</span>
-          {presenceHidden && (
-            <span className="compact-presence">접속 숨김</span>
-          )}
-        </button>
-        <div className="compact-friends">
-          {state.friends.map((friend) => (
-            <div key={friend.id} title={friend.name}>
-              <Character
-                kind={friend.character}
-                asleep={!friend.online || connection !== "online"}
-              />
-            </div>
-          ))}
-        </div>
-        {desktopError && (
-          <p className="error" role="alert">
-            {desktopError}
-          </p>
-        )}
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-      </main>
-    );
-
   return (
     <main className="sidebar">
       <header
@@ -605,16 +535,6 @@ function App() {
               }
             >
               −
-            </button>
-            <button
-              className="icon-button"
-              aria-label="사이드바 숨기기"
-              title="사이드바 숨기기 — 메뉴 막대·트레이에서 다시 열 수 있어요"
-              onClick={() =>
-                void windowAction(() => getCurrentWindow().close())
-              }
-            >
-              ×
             </button>
           </div>
         )}
@@ -772,14 +692,20 @@ function App() {
                   {label}
                 </button>
               ))}
-            {state && (
+            {desktop && (
               <button
-                className="text-button collapse-button"
-                onClick={toggleCompact}
-                disabled={busy}
-                title="캐릭터만 보기"
+                type="button"
+                className="quit-button"
+                onClick={() =>
+                  void exit(0).catch(() =>
+                    setError("앱을 종료하지 못했어요. 다시 시도해 주세요."),
+                  )
+                }
+                disabled={busy || profileDraft !== null}
+                aria-label="Wappy 종료"
+                title="Wappy 종료"
               >
-                접기 ⇥
+                종료
               </button>
             )}
           </nav>

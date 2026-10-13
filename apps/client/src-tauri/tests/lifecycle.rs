@@ -302,7 +302,7 @@ fn main() -> Result<(), String> {
     let completed = Arc::new(AtomicBool::new(false));
     let completed_by_worker = completed.clone();
     thread::spawn(move || {
-        let check = || -> Result<(), String> {
+        let check = || -> Result<tauri::WebviewWindow, String> {
             // Ready follows creation of both WebViews and the native setup hook.
             // A cold WebView2 start must not consume the state delivery deadline.
             native_ready
@@ -328,7 +328,7 @@ fn main() -> Result<(), String> {
                 true,
             )?;
             desktop.eval(r#"(async () => {
-                const results = await Promise.all(['plugin:updater|check', 'plugin:process|restart'].map(command =>
+                const results = await Promise.all(['plugin:updater|check', 'plugin:process|restart', 'plugin:process|exit'].map(command =>
                     window.__TAURI_INTERNALS__.invoke(command)
                         .then(() => false, error => /not allowed/i.test(String(error)))
                 ));
@@ -483,10 +483,8 @@ fn main() -> Result<(), String> {
             )?;
             click_button(&sidebar, "Friend 캐릭터 표시")?;
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
-            println!("CHECK: tray settings expands the collapsed window");
+            println!("CHECK: tray settings restores the minimized window");
             client_lib::show_sidebar(&handle).map_err(|error| error.to_string())?;
-            click_button(&sidebar, "접기 ⇥")?;
-            text_rendered(&sidebar, ".compact-sidebar", "", true)?;
             sidebar.minimize().map_err(|error| error.to_string())?;
             until(|| sidebar.is_minimized().unwrap_or(false))?;
             client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
@@ -494,7 +492,6 @@ fn main() -> Result<(), String> {
                 sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
             })?;
             text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
-            text_rendered(&sidebar, ".compact-sidebar", "", false)?;
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             println!("CHECK: session cleanup");
@@ -525,26 +522,38 @@ fn main() -> Result<(), String> {
             until(|| {
                 sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
             })?;
-            Ok(())
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            text_rendered(&sidebar, ".quit-button:not(:disabled)", "종료", true)?;
+            Ok(sidebar)
         };
         let outcome = check();
-        let exit_code = i32::from(outcome.is_err());
+        completed_by_worker.store(true, Ordering::SeqCst);
         match outcome {
-            Ok(()) => println!("PASS: restricted browser permissions, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, character selection, session cleanup, normal relaunch and minimized restore; requesting full exit"),
+            Ok(sidebar) => {
+                println!("CHECK: quit button exits the app");
+                if let Err(error) = click_button(&sidebar, "Wappy 종료") {
+                    eprintln!("FAIL: could not click the quit button: {error}");
+                } else {
+                    thread::sleep(Duration::from_secs(5));
+                    eprintln!("FAIL: the quit button did not exit the app within 5 seconds");
+                }
+            }
             Err(error) => eprintln!("FAIL: {error}"),
         }
-        completed_by_worker.store(true, Ordering::SeqCst);
-        handle.exit(exit_code);
+        handle.exit(1);
     });
     app.run(move |_, event| {
         if matches!(event, tauri::RunEvent::Ready) {
             let _ = ready.send(());
         }
-        if matches!(event, tauri::RunEvent::ExitRequested { .. })
-            && !completed.load(Ordering::SeqCst)
-        {
-            eprintln!("FAIL: the app exited before the check finished");
-            std::process::exit(1);
+        if let tauri::RunEvent::ExitRequested { code, .. } = event {
+            if !completed.load(Ordering::SeqCst) {
+                eprintln!("FAIL: the app exited before the check finished");
+                std::process::exit(1);
+            }
+            if code == Some(0) {
+                println!("PASS: restricted browser permissions, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, character selection, session cleanup, normal relaunch, minimized restore and full app exit from the quit button");
+            }
         }
     });
     Ok(())
