@@ -127,6 +127,7 @@ function App() {
     connected: !!session && connection === "online",
     paused: motionPaused,
     visible: charactersVisible,
+    hideSleeping: preferences.hideSleeping,
     position: preferences.position,
     size: preferences.size,
     activity: preferences.activity,
@@ -1042,6 +1043,20 @@ function App() {
                           ),
                         )}
                       </select>
+                    </label>
+                    <label className="setting-toggle">
+                      <input
+                        type="checkbox"
+                        checked={preferences.hideSleeping}
+                        onChange={(event) => {
+                          const hideSleeping = event.target.checked;
+                          setPreferences((current) => ({
+                            ...current,
+                            hideSleeping,
+                          }));
+                        }}
+                      />
+                      자고 있는 캐릭터 숨기기
                     </label>
                     <StartupSettings />
                     <UpdateSettings

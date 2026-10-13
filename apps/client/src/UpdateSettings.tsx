@@ -41,8 +41,8 @@ export function UpdateSettings({
     idle: "앱 업데이트",
     disabled: "이 빌드는 자동 업데이트를 지원하지 않습니다.",
     checking: "새 버전을 확인하는 중…",
-    current: "최신 버전을 사용하고 있어요",
-    available: `새 버전 ${state.version}이 있어요`,
+    current: "최신 버전을 사용하고 있어요.",
+    available: `새 버전 ${state.version}가 있어요.`,
     downloading: `업데이트 다운로드 중${state.progress === null ? "…" : ` · ${state.progress}%`}`,
     installing: "업데이트 확인·설치 중…",
     ready: "업데이트 설치 완료",
@@ -62,13 +62,10 @@ export function UpdateSettings({
           value={state.progress ?? undefined}
         />
       )}
-      {state.version && (
-        <p className="hint">설치하면 앱이 종료되고 다시 시작됩니다.</p>
-      )}
       {state.status !== "disabled" && (
         <button
           type="button"
-          className={state.version ? "secondary" : "text-button"}
+          className={state.version ? "secondary update-install" : "secondary"}
           disabled={busy || disabled}
           onClick={() =>
             void (state.version ? installUpdate() : checkForUpdates(true))
@@ -77,7 +74,7 @@ export function UpdateSettings({
           {state.status === "ready"
             ? "지금 재시작"
             : state.version
-              ? "업데이트하고 재시작"
+              ? "업데이트"
               : "업데이트 확인"}
         </button>
       )}

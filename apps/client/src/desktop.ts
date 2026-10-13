@@ -151,6 +151,7 @@ export interface DesktopSnapshot {
   connected: boolean;
   paused: boolean;
   visible: boolean;
+  hideSleeping: boolean;
   position: CharacterPosition;
   size: CharacterSize;
   activity: CharacterActivity;
@@ -165,6 +166,7 @@ export function useDesktopSync({
   connected,
   paused,
   visible,
+  hideSleeping,
   position,
   size,
   activity,
@@ -191,6 +193,7 @@ export function useDesktopSync({
           connected,
           paused,
           visible,
+          hideSleeping,
           position,
           size,
           activity,
@@ -222,6 +225,7 @@ export function useDesktopSync({
     connected,
     paused,
     visible,
+    hideSleeping,
     position,
     size,
     activity,

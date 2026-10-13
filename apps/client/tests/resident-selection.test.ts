@@ -111,6 +111,27 @@ test("character selections isolate profiles and servers without changing friends
     visibleResidents(state, false, []).map(({ online }) => online),
     [true, false, false],
   );
+  assert.deepEqual(visibleResidents(state, true, [], false), everyone);
+  assert.deepEqual(
+    visibleResidents(state, true, [], true).map(({ id }) => id),
+    ["alice", "bob"],
+    "sleeping friends are hidden when enabled",
+  );
+  assert.deepEqual(
+    visibleResidents(state, false, [], true).map(({ id }) => id),
+    ["alice"],
+    "disconnected friends are sleeping, but self stays awake",
+  );
+  assert.deepEqual(visibleResidents(state, true, ["alice", "bob"], true), []);
+  const awake = {
+    ...state,
+    friends: state.friends.map((friend) => ({ ...friend, online: true })),
+  };
+  assert.deepEqual(
+    visibleResidents(awake, true, ["bob"], true).map(({ id }) => id),
+    ["alice", "carol"],
+    "waking friends reappear while manually hidden friends stay hidden",
+  );
   assert.equal(visibleResidents(state, true, ["removed-friend"]).length, 3);
   assert.deepEqual(
     state,

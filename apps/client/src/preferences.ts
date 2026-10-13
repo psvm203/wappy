@@ -52,6 +52,7 @@ export function isCharacterPosition(
 interface CharacterPreferences {
   paused: boolean;
   visible: boolean;
+  hideSleeping: boolean;
   position: CharacterPosition;
   size: CharacterSize;
   activity: CharacterActivity;
@@ -63,6 +64,7 @@ export function loadCharacterPreferences(
   const defaults: CharacterPreferences = {
     paused: reducedMotion,
     visible: true,
+    hideSleeping: false,
     position: "free",
     size: "normal",
     activity: "normal",
@@ -80,6 +82,7 @@ export function loadCharacterPreferences(
         "visible" in value && typeof value.visible === "boolean"
           ? value.visible
           : true,
+      hideSleeping: "hideSleeping" in value && value.hideSleeping === true,
       position:
         "position" in value && isCharacterPosition(value.position)
           ? value.position

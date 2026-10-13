@@ -588,17 +588,32 @@
   width: 100px;
   margin-top: 0;
 }
-.update-panel {
+.settings-panel > .setting-toggle {
+  margin: 0 0 15px;
+}
+.invite-card.update-panel {
   margin-top: 12px;
+  padding-top: 12px;
   font-size: 12px;
 }
 .update-panel p {
   margin: 0 0 8px;
   overflow-wrap: anywhere;
 }
+.invite-card.update-panel > p[role="status"] {
+  margin-top: 0;
+  color: #000;
+}
 .update-panel progress {
   width: 100%;
   accent-color: #678b57;
+}
+.update-panel .update-install {
+  background: #4f783e;
+  color: #fff;
+}
+.update-panel .update-install:hover {
+  background: #426533;
 }
 .update-banner {
   flex-shrink: 0;

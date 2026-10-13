@@ -55,6 +55,7 @@ export function visibleResidents(
   state: SidebarState,
   connected: boolean,
   hiddenIds: readonly string[],
+  hideSleeping = false,
 ): DesktopResident[] {
   const hidden = new Set(hiddenIds);
   return [
@@ -64,5 +65,8 @@ export function visibleResidents(
       online: connected && friend.online,
       isSelf: false,
     })),
-  ].filter((profile) => !hidden.has(profile.id));
+  ].filter(
+    (profile) =>
+      !hidden.has(profile.id) && (!hideSleeping || profile.online),
+  );
 }

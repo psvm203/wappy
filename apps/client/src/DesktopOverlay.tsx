@@ -18,7 +18,12 @@ export function DesktopOverlay() {
     [snapshot?.profileKey, snapshot?.state?.self.id],
   );
   const residents = snapshot?.state
-    ? visibleResidents(snapshot.state, snapshot.connected, snapshot.hiddenIds)
+    ? visibleResidents(
+        snapshot.state,
+        snapshot.connected,
+        snapshot.hiddenIds,
+        snapshot.hideSleeping,
+      )
     : [];
   useLayoutEffect(() => {
     if (
