@@ -39,7 +39,7 @@
 }
 .window-controls {
   display: flex;
-  gap: 2px;
+  gap: 6px;
   cursor: default;
 }
 .icon-button {
@@ -56,6 +56,33 @@
 .icon-button:hover {
   background: #e8eade;
   color: #343c31;
+}
+.window-controls .icon-button {
+  border: 1px solid currentColor;
+}
+.window-controls .quit-button {
+  color: #b94343;
+}
+.quit-dialog {
+  width: calc(100% - 40px);
+  max-width: 320px;
+  padding: 20px;
+  border: 1px solid #e2e4db;
+  border-radius: 14px;
+  background: #fbfbf7;
+  color: inherit;
+  font-size: 14px;
+}
+.quit-dialog::backdrop {
+  background: #1c241b66;
+}
+.quit-dialog-actions {
+  display: flex;
+  gap: 8px;
+}
+.quit-dialog .confirm-quit {
+  background: #b94343;
+  color: #fff;
 }
 .connection-line {
   padding: 0 22px 19px;
@@ -140,15 +167,6 @@
   color: #374936;
   border-bottom-color: #678b57;
   font-weight: 700;
-}
-.tabs .quit-button {
-  margin-left: auto;
-  align-self: center;
-  padding: 5px 10px;
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  white-space: nowrap;
-  color: #b94343;
 }
 .scroll-area {
   overflow-y: auto;

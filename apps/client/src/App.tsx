@@ -75,6 +75,7 @@ function App() {
   const [session, setSession] = useState(loadSession);
   const currentSession = useRef(session);
   const profileSave = useRef<Promise<void>>(Promise.resolve());
+  const quitDialog = useRef<HTMLDialogElement>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join">("create");
@@ -536,6 +537,28 @@ function App() {
             >
               −
             </button>
+            <button
+              type="button"
+              className="icon-button quit-button"
+              onClick={() => quitDialog.current?.showModal()}
+              disabled={busy || profileDraft !== null}
+              aria-label="Wappy 종료"
+              title="Wappy 종료"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10" />
+              </svg>
+            </button>
           </div>
         )}
       </header>
@@ -692,22 +715,6 @@ function App() {
                   {label}
                 </button>
               ))}
-            {desktop && (
-              <button
-                type="button"
-                className="quit-button"
-                onClick={() =>
-                  void exit(0).catch(() =>
-                    setError("앱을 종료하지 못했어요. 다시 시도해 주세요."),
-                  )
-                }
-                disabled={busy || profileDraft !== null}
-                aria-label="Wappy 종료"
-                title="Wappy 종료"
-              >
-                종료
-              </button>
-            )}
           </nav>
           <div className="scroll-area content">
             {desktopError && (
@@ -1042,6 +1049,35 @@ function App() {
             </footer>
           )}
         </>
+      )}
+      {desktop && (
+        <dialog
+          ref={quitDialog}
+          className="quit-dialog"
+          aria-labelledby="quit-dialog-title"
+        >
+          <form method="dialog">
+            <p id="quit-dialog-title">Wappy를 종료하시겠습니까?</p>
+            <div className="quit-dialog-actions">
+              <button type="submit" className="secondary" autoFocus>
+                취소
+              </button>
+              <button
+                type="button"
+                className="secondary confirm-quit"
+                disabled={busy || profileDraft !== null}
+                onClick={() =>
+                  void exit(0).catch(() => {
+                    quitDialog.current?.close();
+                    setError("앱을 종료하지 못했어요. 다시 시도해 주세요.");
+                  })
+                }
+              >
+                종료
+              </button>
+            </div>
+          </form>
+        </dialog>
       )}
       <div className="toast" role="status" aria-live="polite">
         {notice}

@@ -523,15 +523,38 @@ fn main() -> Result<(), String> {
                 sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
             })?;
             client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
-            text_rendered(&sidebar, ".quit-button:not(:disabled)", "종료", true)?;
+            println!("CHECK: power button placement and quit cancellation");
+            text_rendered(
+                &sidebar,
+                ".window-controls .quit-button:not(:disabled) svg",
+                "",
+                true,
+            )?;
+            text_rendered(&sidebar, ".tabs .quit-button", "", false)?;
+            click_button(&sidebar, "Wappy 종료")?;
+            text_rendered(
+                &sidebar,
+                ".quit-dialog[open]",
+                "Wappy를 종료하시겠습니까?",
+                true,
+            )?;
+            click_button(&sidebar, "취소")?;
+            text_rendered(&sidebar, ".quit-dialog[open]", "", false)?;
+            click_button(&sidebar, "Wappy 종료")?;
+            text_rendered(
+                &sidebar,
+                ".quit-dialog[open]",
+                "Wappy를 종료하시겠습니까?",
+                true,
+            )?;
             Ok(sidebar)
         };
         let outcome = check();
         completed_by_worker.store(true, Ordering::SeqCst);
         match outcome {
             Ok(sidebar) => {
-                println!("CHECK: quit button exits the app");
-                if let Err(error) = click_button(&sidebar, "Wappy 종료") {
+                println!("CHECK: confirming quit exits the app");
+                if let Err(error) = click_button(&sidebar, "종료") {
                     eprintln!("FAIL: could not click the quit button: {error}");
                 } else {
                     thread::sleep(Duration::from_secs(5));
@@ -552,7 +575,7 @@ fn main() -> Result<(), String> {
                 std::process::exit(1);
             }
             if code == Some(0) {
-                println!("PASS: restricted browser permissions, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, character selection, session cleanup, normal relaunch, minimized restore and full app exit from the quit button");
+                println!("PASS: restricted browser permissions, login startup opt-in/readback/removal, launch visibility, duplicate login stays hidden, native tray, paused animation idle/resume, hidden presence with WebView timers disabled, reconnect, character selection, session cleanup, normal relaunch, minimized restore, quit cancellation and confirmed full app exit");
             }
         }
     });
