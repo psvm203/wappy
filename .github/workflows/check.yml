@@ -54,9 +54,9 @@ jobs:
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
-            caffeinate -du cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked
+            caffeinate -du cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
           else
-            cargo run --manifest-path apps/client/src-tauri/Cargo.toml --example lifecycle --features tauri/custom-protocol --locked
+            cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
           fi
       - name: Build preview installer
         run: pnpm --filter client tauri build --ci --target ${{ matrix.target }}

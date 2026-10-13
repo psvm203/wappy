@@ -109,6 +109,13 @@ cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
 cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked
 ```
 
+창·트레이·자동 실행을 검증하는 네이티브 통합 테스트는 프런트엔드를 빌드한 뒤 데스크톱 환경에서 명시적으로 실행합니다.
+
+```sh
+pnpm build
+cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
+```
+
 ## Docker로 서버 실행
 
 ```sh
@@ -152,6 +159,7 @@ GitHub 저장소에 다음 값을 설정해야 합니다.
 apps/
   client/                  React·Vite 클라이언트
     src-tauri/             Tauri·Rust 데스크톱 기능
+      tests/               네이티브 통합 테스트와 Windows 매니페스트
     tests/                 클라이언트 테스트
   server/                  Node.js HTTP API와 SQLite 저장소
     scripts/               성능 검사

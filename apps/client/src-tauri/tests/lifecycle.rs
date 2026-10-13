@@ -1,5 +1,5 @@
 //! Run on a desktop after building the frontend:
-//! cargo run --example lifecycle --features tauri/custom-protocol
+//! cargo test --test lifecycle --features tauri/custom-protocol
 //! Uses private browsing so the check cannot read or change a real profile.
 use client_lib::startup::Startup;
 use std::{
@@ -241,7 +241,7 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
 
 fn main() -> Result<(), String> {
     let mut context = tauri::generate_context!();
-    // Cargo examples do not inherit the main executable's Windows icon resource.
+    // Integration tests do not inherit the main executable's Windows icon resource.
     context.set_default_window_icon(Some(tauri::include_image!("icons/32x32.png")));
     context.config_mut().identifier = std::env::var("WAPPY_LIFECYCLE_ID")
         .ok()
