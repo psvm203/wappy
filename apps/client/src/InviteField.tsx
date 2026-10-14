@@ -95,7 +95,7 @@ export function InviteField({
           autoCapitalize="none"
           autoComplete="off"
           spellCheck={false}
-          placeholder="5자리 코드 (예: A7K3M)"
+          placeholder="5자리 코드 (예: F58EN)"
           value={value}
           disabled={busy}
           onChange={(event) => onChange(event.target.value)}
