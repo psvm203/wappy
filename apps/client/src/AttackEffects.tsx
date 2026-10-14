@@ -75,18 +75,18 @@ export function AttackEffects({
     <svg
       ref={effectRef}
       className="
-        desktop-attack-effect absolute inset-0 z-3 overflow-visible pointer-events-none [&_>_g]:hidden
-        [&[data-kind='repulsor']_.repulsor-effect]:inline
-        [&[data-kind='lightning']_.lightning-effect]:inline
+        desktop-attack-effect pointer-events-none absolute inset-0 z-3 overflow-visible motion-reduce:[&_.flying-shield]:[transform:none]
+        [&_>_g]:hidden
         [&:is(_[data-kind='repulsor'],_[data-kind='lightning'],_[data-kind='bullet']_)_.attack-muzzle]:inline
-        [&:is([data-kind='repulsor'],_[data-kind='lightning'])_.energy-muzzle]:inline
-        [&[data-kind='bullet']_.bullet-muzzle]:inline
         [&:is(_[data-kind='shield'],_[data-kind='bullet'],_[data-kind='arrow']_)_.attack-projectile]:inline
-        [&[data-kind='shield']_.shield-effect]:inline
-        [&[data-kind='bullet'][data-phase='dash']_.bullet-effect]:inline
+        [&:is([data-kind='repulsor'],_[data-kind='lightning'])_.energy-muzzle]:inline
         [&[data-kind='arrow'][data-phase='dash']_.arrow-effect]:inline
+        [&[data-kind='bullet']_.bullet-muzzle]:inline
+        [&[data-kind='bullet'][data-phase='dash']_.bullet-effect]:inline
+        [&[data-kind='lightning']_.lightning-effect]:inline
+        [&[data-kind='repulsor']_.repulsor-effect]:inline
+        [&[data-kind='shield']_.shield-effect]:inline
         [&[data-kind='smash'][data-phase='impact']_.smash-effect]:inline
-        motion-reduce:[&_.flying-shield]:[transform:none]
       "
       aria-hidden="true"
       width="100%"

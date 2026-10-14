@@ -30,6 +30,7 @@ test("conditional state remains fresh across writes, presence/TTL transitions an
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+      // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- This write helper defaults to POST; callers may override it with PATCH.
       body: JSON.stringify(body),
     });
     assert.ok(response.ok, `${path}: ${response.status}`);

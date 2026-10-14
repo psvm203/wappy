@@ -13,10 +13,12 @@ import {
 
 export function DesktopOverlay() {
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
+  // oxlint-disable react-hooks/exhaustive-deps -- A server/profile switch must reset attack deduplication even when the profile ID is unchanged.
   const attackInbox = useMemo(
     () => createAttackInbox(snapshot?.state?.self.id ?? null),
     [snapshot?.profileKey, snapshot?.state?.self.id],
   );
+  // oxlint-enable react-hooks/exhaustive-deps
   const residents = snapshot?.state
     ? visibleResidents(
         snapshot.state,

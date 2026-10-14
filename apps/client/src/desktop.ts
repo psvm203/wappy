@@ -22,6 +22,7 @@ export function useResidentSelection(key: string | null) {
   const [error, setError] = useState("");
   useEffect(() => {
     if (!key) {
+      // oxlint-disable-next-line react/set-state-in-effect -- Clear the selection when the external profile key disappears.
       setSelection({ key: null, hiddenIds: [], changed: false });
       setError("");
       return;
@@ -42,6 +43,7 @@ export function useResidentSelection(key: string | null) {
     if (!key || selection.key !== key || !selection.changed) return;
     try {
       saveHiddenResidents(key, selection.hiddenIds);
+      // oxlint-disable-next-line react/set-state-in-effect -- Report the result of persisting selection to localStorage.
       setError("");
     } catch {
       setError(
@@ -77,6 +79,7 @@ export function useCharacterPreferences(onOpenSettings: () => void) {
   useEffect(() => {
     try {
       localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+      // oxlint-disable-next-line react/set-state-in-effect -- Clear errors after synchronizing preferences with localStorage.
       setStorageError("");
     } catch {
       setStorageError(

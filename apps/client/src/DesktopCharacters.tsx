@@ -226,6 +226,7 @@ export function DesktopCharacters({
       stopAttack();
   }, [residents]);
 
+  // oxlint-disable react-hooks/exhaustive-deps -- startNextAttack reads mutable scene refs plus paused, connected and attackInbox, all covered below.
   useLayoutEffect(() => {
     const visiblePresence = new Map(
       residents.map((resident) => [resident.id, resident.online]),
@@ -249,7 +250,9 @@ export function DesktopCharacters({
     startNextAttack();
     wakeAnimation.current();
   }, [attacks, residents, connected, paused, attackInbox]);
+  // oxlint-enable react-hooks/exhaustive-deps
 
+  // oxlint-disable react-hooks/exhaustive-deps -- Restart the frame clock only when simulation inputs change; startNextAttack reads the same inputs and mutable refs.
   useEffect(() => {
     let frame: number | null = null;
     let previous = performance.now();
@@ -340,6 +343,7 @@ export function DesktopCharacters({
       wakeAnimation.current = () => {};
     };
   }, [paused, activity, connected, attackInbox]);
+  // oxlint-enable react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Presence changes can wake an idle scene without resetting a running frame clock.
@@ -596,15 +600,15 @@ export function DesktopCharacters({
 
   return (
     <section
-      className={`desktop-characters fixed inset-0 pointer-events-none overflow-hidden ${paused ? "is-paused" : ""}`}
+      className={`desktop-characters pointer-events-none fixed inset-0 overflow-hidden ${paused ? "is-paused" : ""}`}
       aria-label="바탕화면 캐릭터"
     >
       <AttackEffects effectRef={attackEffect} />
       {attackNotice && (
         <p
           className="
-            attack-notice absolute left-[50%] bottom-[22px] [transform:translateX(-50%)] m-0 p-[9px_14px]
-            rounded-[18px] bg-[#fbfbf7ef] text-[#536447] text-[12px] pointer-events-none
+            attack-notice pointer-events-none absolute bottom-[22px] left-[50%] m-0 [transform:translateX(-50%)]
+            rounded-[18px] bg-[#fbfbf7ef] p-[9px_14px] text-[12px] text-[#536447]
           "
           role="status"
         >
@@ -618,13 +622,13 @@ export function DesktopCharacters({
           <figure
             key={resident.id}
             className="
-              desktop-resident absolute top-0 left-0 w-[var(--character-size)] h-[var(--character-size)]
-              [--caption-offset:calc(var(--character-size)_/_2_+_4px)] m-0 pointer-events-auto touch-none
-              select-none cursor-grab [&[data-motion='drag']]:cursor-grabbing
-              [&_.character]:w-[calc(var(--character-size)_*_38_/_42)]
-              [&_.character]:h-[var(--character-size)] [&_.character]:m-auto
+              desktop-resident pointer-events-auto resident-motion absolute top-0 left-0
+              m-0 h-[var(--character-size)] w-[var(--character-size)] cursor-grab
+              touch-none select-none [--caption-offset:calc(var(--character-size)_/_2_+_4px)]
+              [&_.character]:m-auto
+              [&_.character]:h-[var(--character-size)] [&_.character]:w-[calc(var(--character-size)_*_38_/_42)]
               [&_.character]:[filter:drop-shadow(0_2px_3px_#0002)] [&_.chat-bubble]:m-[0_0_4px]
-              [&_.chat-bubble]:text-[11px] resident-motion
+              [&_.chat-bubble]:text-[11px] [&[data-motion='drag']]:cursor-grabbing
             "
             data-composing={chatTarget === resident.id}
             ref={(element) => {
@@ -668,7 +672,7 @@ export function DesktopCharacters({
             <div
               className="
                 resident-rotation [transform:rotate(var(--angle))]
-                focus-visible:[outline:2px_solid_#73985c] focus-visible:rounded-[12px]
+                focus-visible:rounded-[12px] focus-visible:[outline:2px_solid_#73985c]
               "
               role={!resident.isSelf || profileKey ? "button" : undefined}
               tabIndex={!resident.isSelf || profileKey ? 0 : undefined}
@@ -695,12 +699,12 @@ export function DesktopCharacters({
             </div>
             <span
               className="
-                resident-impact hidden absolute z-2 left-[calc(3.5px_*_var(--character-scale))]
-                top-[calc(-6.5px_*_var(--character-scale))] w-[calc(35px_*_var(--character-scale))]
-                h-[calc(35px_*_var(--character-scale))] items-center justify-center text-[#754925]
-                text-[calc(8.5px_*_var(--character-scale))] font-black pointer-events-none
-                before:content-['✹'] before:absolute before:-z-1 before:text-[#ffe294]
-                before:text-[calc(38px_*_var(--character-scale))] before:[transform:translateY(-0.06em)]
+                resident-impact pointer-events-none absolute top-[calc(-6.5px_*_var(--character-scale))] left-[calc(3.5px_*_var(--character-scale))]
+                z-2 hidden
+                h-[calc(35px_*_var(--character-scale))] w-[calc(35px_*_var(--character-scale))] items-center justify-center
+                text-[calc(8.5px_*_var(--character-scale))] font-black text-[#754925]
+                before:absolute before:-z-1 before:[transform:translateY(-0.06em)] before:text-[calc(38px_*_var(--character-scale))]
+                before:text-[#ffe294] before:content-['✹']
                 before:[text-shadow:1px_1px_#bd7c3f,_-1px_-1px_#bd7c3f]
               "
               aria-hidden="true"
@@ -709,13 +713,13 @@ export function DesktopCharacters({
             </span>
             <figcaption
               className="
-              resident-caption absolute left-[50%] top-[50%] w-max max-w-[84px] p-[3px_4px] rounded-[6px]
-              bg-[#fbfbf7e8] text-[#536447] text-[9px] text-center whitespace-nowrap overflow-hidden
-              text-ellipsis pointer-events-none has-[.chat-bubble]:w-[184px]
-              has-[.chat-bubble]:max-w-[184px] has-[.chat-bubble]:whitespace-normal
-              has-[.chat-bubble]:overflow-visible has-[.chat-composer]:w-max
-              has-[.chat-composer]:max-w-[calc(100vw_-_8px)] has-[.chat-composer]:p-0
-              has-[.chat-composer]:bg-transparent has-[.chat-composer]:overflow-visible
+              pointer-events-none absolute top-[50%] left-[50%] w-max max-w-[84px] resident-caption overflow-hidden
+              rounded-[6px] bg-[#fbfbf7e8] p-[3px_4px] text-center text-[9px] text-ellipsis
+              whitespace-nowrap text-[#536447] has-[.chat-bubble]:w-[184px]
+              has-[.chat-bubble]:max-w-[184px] has-[.chat-bubble]:overflow-visible
+              has-[.chat-bubble]:whitespace-normal has-[.chat-composer]:w-max
+              has-[.chat-composer]:max-w-[calc(100vw_-_8px)] has-[.chat-composer]:overflow-visible
+              has-[.chat-composer]:bg-transparent has-[.chat-composer]:p-0
               [.desktop-resident[data-caption-below='true']_&]:[--caption-y:var(--caption-offset)]
             "
             >

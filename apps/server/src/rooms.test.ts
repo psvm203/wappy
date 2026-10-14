@@ -51,6 +51,7 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(etag ? { "If-None-Match": etag } : {}),
       },
+      // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- The method is supplied by the caller; GET requests have no body.
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return {

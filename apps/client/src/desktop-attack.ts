@@ -2,7 +2,13 @@ import type { Character } from "@wappy/api";
 import { CHARACTER_SIZE, moveBody, type Body } from "./desktop-physics.ts";
 
 type AttackKind =
-  "dash" | "repulsor" | "shield" | "lightning" | "smash" | "bullet" | "arrow";
+  | "dash"
+  | "repulsor"
+  | "shield"
+  | "lightning"
+  | "smash"
+  | "bullet"
+  | "arrow";
 
 const heroAttacks: Partial<Record<Character, AttackKind>> = {
   ironman: "repulsor",

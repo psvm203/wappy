@@ -46,6 +46,7 @@ export function StartupSettings() {
     refresh();
     window.addEventListener("focus", refresh);
     return () => {
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- This is a request generation counter, not a DOM ref; invalidate the latest in-flight request.
       ++requestId.current;
       window.removeEventListener("focus", refresh);
     };
@@ -58,8 +59,8 @@ export function StartupSettings() {
     >
       <label
         className="
-          setting-toggle flex items-center gap-[9px] text-[12px] leading-[1.7] mt-[15px] cursor-pointer
-          [&_input]:shrink-0 [&_input]:w-[16px] [&_input]:h-[16px] [&_input]:accent-[#678b57]
+          setting-toggle mt-[15px] flex cursor-pointer items-center gap-[9px] text-[12px] leading-[1.7]
+          [&_input]:h-[16px] [&_input]:w-[16px] [&_input]:shrink-0 [&_input]:accent-[#678b57]
         "
       >
         <input
@@ -73,9 +74,9 @@ export function StartupSettings() {
       {error && (
         <p
           className="
-            error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
-            wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit
-            [&_button]:ml-auto [&_button]:p-[0_2px]
+            error flex items-start gap-[5px] rounded-[9px] bg-[#f6e9df] p-[11px]
+            text-[11px] leading-[1.65] wrap-anywhere text-[#9b6556] [&_button]:ml-auto [&_button]:bg-transparent
+            [&_button]:p-[0_2px] [&_button]:text-inherit
           "
           role="alert"
         >

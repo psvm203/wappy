@@ -76,6 +76,7 @@ async function call(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
+    // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- The method is supplied by the caller; GET requests have no body.
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(5000),
   });

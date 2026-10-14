@@ -189,6 +189,7 @@ export function parseChatText(value: unknown): string {
   if (
     !text ||
     text.length > MAX_CHAT_LENGTH ||
+    // oxlint-disable-next-line no-control-regex -- Reject control characters in untrusted display text.
     /[\u0000-\u0009\u000b-\u001f\u007f]/.test(text)
   )
     throw new Error(`채팅은 1–${MAX_CHAT_LENGTH}자 이내로 입력해 주세요.`);
@@ -244,6 +245,7 @@ export function parseProfile(value: unknown): ProfileInput {
   if (
     !name ||
     name.length > MAX_NAME_LENGTH ||
+    // oxlint-disable-next-line no-control-regex -- Reject control characters in untrusted display text.
     /[\u0000-\u001f\u007f]/.test(name)
   ) {
     throw new Error(`이름은 1–${MAX_NAME_LENGTH}자로 입력해 주세요.`);
@@ -304,6 +306,7 @@ export function parseSidebarState(value: unknown): SidebarState {
       typeof input.name !== "string" ||
       !input.name.trim() ||
       input.name.length > MAX_NAME_LENGTH + 3 ||
+      // oxlint-disable-next-line no-control-regex -- Reject control characters in untrusted display text.
       /[\u0000-\u001f\u007f]/.test(input.name)
     )
       throw new Error("잘못된 방 응답입니다.");

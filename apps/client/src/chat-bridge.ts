@@ -18,6 +18,7 @@ export function useDesktopChatRequests(
   send: (text: string) => Promise<ChatMessage>,
 ) {
   const current = useRef({ profileKey, send });
+  // oxlint-disable-next-line react/refs -- The long-lived native listener must use the latest profile and callback.
   current.current = { profileKey, send };
   const [error, setError] = useState("");
   useEffect(() => {

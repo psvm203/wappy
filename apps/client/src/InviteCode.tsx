@@ -19,6 +19,7 @@ export function InviteCode({
   useEffect(() => {
     if (code) return;
     const controller = new AbortController();
+    // oxlint-disable-next-line react/set-state-in-effect -- Invalidate the previous request result before fetching a new invitation.
     setLoadedCode(undefined);
     setError("");
     void request(session, "POST /invites", {}, controller.signal)
@@ -49,15 +50,15 @@ export function InviteCode({
         <>
           <div
             className="
-              field block text-[11px] text-[#68725d] m-[15px_0] [&_:is(input,select,textarea)]:block
-              [&_:is(input,select,textarea)]:w-full [&_:is(input,select,textarea)]:mt-[8px]
-              [&_:is(input,select,textarea)]:p-[12px] [&_:is(input,select,textarea)]:bg-[#f4f5ef]
-              [&_:is(input,select,textarea)]:border [&_:is(input,select,textarea)]:border-solid
-              [&_:is(input,select,textarea)]:border-[#e0e5d8]
-              [&_:is(input,select,textarea)]:rounded-[9px] [&_:is(input,select,textarea)]:text-[12px]
-              [&_:is(input,select,textarea)]:text-[#3e4935] [&_textarea]:resize-y
-              [&_textarea]:leading-[1.6] [&_textarea]:wrap-anywhere [&_input::placeholder]:text-[#68745e]
-              [&_input::placeholder]:text-[11px]
+              field m-[15px_0] block text-[11px] text-[#68725d] [&_:is(input,select,textarea)]:mt-[8px]
+              [&_:is(input,select,textarea)]:block [&_:is(input,select,textarea)]:w-full
+              [&_:is(input,select,textarea)]:rounded-[9px] [&_:is(input,select,textarea)]:border
+              [&_:is(input,select,textarea)]:border-solid [&_:is(input,select,textarea)]:border-[#e0e5d8]
+              [&_:is(input,select,textarea)]:bg-[#f4f5ef]
+              [&_:is(input,select,textarea)]:p-[12px] [&_:is(input,select,textarea)]:text-[12px]
+              [&_:is(input,select,textarea)]:text-[#3e4935] [&_input::placeholder]:text-[11px]
+              [&_input::placeholder]:text-[#68745e] [&_textarea]:resize-y [&_textarea]:leading-[1.6]
+              [&_textarea]:wrap-anywhere
             "
           >
             <input
@@ -70,9 +71,9 @@ export function InviteCode({
           </div>
           <button
             className="
-              primary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold flex items-center
-              justify-between bg-[#d3e8af] text-[#425335] [&:hover]:bg-[#c7dda1] [&_span]:text-[18px]
-              [&_span]:font-normal [&_span]:leading-[1]
+              primary flex w-full items-center justify-between rounded-[10px] bg-[#d3e8af] p-[13px_14px]
+              text-[12px] font-semibold text-[#425335] [&_span]:text-[18px] [&_span]:leading-[1]
+              [&_span]:font-normal [&:hover]:bg-[#c7dda1]
             "
             onClick={async () => {
               setError("");
@@ -91,7 +92,7 @@ export function InviteCode({
         </>
       ) : !error ? (
         <p
-          className="hint text-[10px] text-[#68745e] leading-[1.7]"
+          className="hint text-[10px] leading-[1.7] text-[#68745e]"
           role="status"
         >
           초대 코드를 불러오는 중…
@@ -100,9 +101,9 @@ export function InviteCode({
       {error && (
         <p
           className="
-            error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
-            wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit
-            [&_button]:ml-auto [&_button]:p-[0_2px]
+            error flex items-start gap-[5px] rounded-[9px] bg-[#f6e9df] p-[11px]
+            text-[11px] leading-[1.65] wrap-anywhere text-[#9b6556] [&_button]:ml-auto [&_button]:bg-transparent
+            [&_button]:p-[0_2px] [&_button]:text-inherit
           "
           role="alert"
         >
@@ -112,9 +113,9 @@ export function InviteCode({
       {!inviteCode && error && (
         <button
           className="
-            primary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold flex items-center
-            justify-between bg-[#d3e8af] text-[#425335] [&:hover]:bg-[#c7dda1] [&_span]:text-[18px]
-            [&_span]:font-normal [&_span]:leading-[1]
+            primary flex w-full items-center justify-between rounded-[10px] bg-[#d3e8af] p-[13px_14px]
+            text-[12px] font-semibold text-[#425335] [&_span]:text-[18px] [&_span]:leading-[1]
+            [&_span]:font-normal [&:hover]:bg-[#c7dda1]
           "
           onClick={() => setAttempt(attempt + 1)}
         >

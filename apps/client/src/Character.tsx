@@ -75,7 +75,7 @@ export function Character({
       viewBox="0 0 100 110"
       role="img"
       aria-label={`${CHARACTER_NAMES[kind]} 캐릭터${asleep ? ", 오프라인" : ""}`}
-      className={`character block w-full overflow-visible ${asleep ? "asleep [filter:saturate(0.45)] opacity-70" : "awake"}`}
+      className={`character block w-full overflow-visible ${asleep ? "asleep opacity-70 [filter:saturate(0.45)]" : "awake"}`}
     >
       <ellipse
         className="character-shadow"

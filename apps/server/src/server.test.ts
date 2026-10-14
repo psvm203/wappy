@@ -165,6 +165,7 @@ test("public invitation previews are read-only, bounded and reveal only invitati
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+      // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- The method is supplied by the caller; GET requests have no body.
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return { status: response.status, body: await response.json() };
