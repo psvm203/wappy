@@ -88,6 +88,12 @@ pnpm dev
 
 Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 Origin에 포함됩니다. 로컬 실행 시 데이터는 기본적으로 `apps/server/data/wappy.sqlite`에 저장되며 별도 DB 설치는 필요하지 않습니다. `TRUST_PROXY=1`은 API 포트에 직접 접근할 수 없도록 구성한 프록시 환경에서 사용합니다.
 
+### 스타일
+
+클라이언트는 Tailwind CSS v4와 `@tailwindcss/vite`를 사용합니다. `apps/client/src/base.css`에서 공통 스타일과 유틸리티를 불러오며, 컴포넌트의 `className`에 유틸리티 클래스를 작성하면 개발 서버와 빌드에 반영됩니다. `ChatComposer.tsx`에 적용 예시가 있습니다.
+
+기존 화면을 유지하기 위해 Preflight는 사용하지 않고 기존 기본 스타일을 `base` 레이어에 둡니다. 기존 컴포넌트 CSS는 함께 사용하며, 유틸리티로 옮긴 선언은 해당 CSS에서 제거합니다.
+
 ## 개발 명령
 
 | 명령                               | 설명                                             |
