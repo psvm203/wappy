@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./base.css";
+import "./tailwind.css";
 import App from "./App";
 import { DesktopOverlay } from "./DesktopOverlay";
 

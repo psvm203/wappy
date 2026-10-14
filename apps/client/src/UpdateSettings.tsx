@@ -50,7 +50,16 @@ export function UpdateSettings({
   }[state.status];
   return (
     <section
-      className="invite-card update-panel"
+      className="
+        invite-card update-panel [&.update-panel]:mt-[12px] [&.update-panel]:pt-[12px]
+        [&.update-panel]:text-[12px] [&_p]:m-[0_0_8px] [&_p]:wrap-anywhere
+        [&.update-panel_>_p[role='status']]:mt-0 [&.update-panel_>_p[role='status']]:text-[#000]
+        [&_progress]:w-full [&_progress]:accent-[#678b57] [&_.update-install]:bg-[#4f783e]
+        [&_.update-install]:text-[#fff] [&_.update-install:hover]:bg-[#426533] bg-[#f0f3e8] border
+        border-solid border-[#e5e9db] rounded-[15px] p-[20px_16px_13px] [&_h2]:text-[13px]
+        [&_>_p:not(.hint)]:text-[11px] [&_>_p:not(.hint)]:text-[#68745e] [&_>_p:not(.hint)]:leading-[1.8]
+        [&_>_p:not(.hint)]:m-[10px_0_17px]
+      "
       aria-label="앱 업데이트"
       aria-busy={busy}
     >
@@ -65,7 +74,10 @@ export function UpdateSettings({
       {state.status !== "disabled" && (
         <button
           type="button"
-          className={state.version ? "secondary update-install" : "secondary"}
+          className={`
+            secondary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold text-[#526a3d]
+            bg-[#e8eede] [&:hover]:bg-[#dee7ce]
+          ${state.version ? "update-install" : ""}`}
           disabled={busy || disabled}
           onClick={() =>
             void (state.version ? installUpdate() : checkForUpdates(true))
@@ -79,7 +91,14 @@ export function UpdateSettings({
         </button>
       )}
       {state.error && (
-        <p className="error" role="alert">
+        <p
+          className="
+            error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
+            wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit
+            [&_button]:ml-auto [&_button]:p-[0_2px]
+          "
+          role="alert"
+        >
           {state.error}
         </p>
       )}

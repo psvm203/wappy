@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { MAX_CHAT_LENGTH, parseChatText } from "@wappy/api";
-import "./ChatComposer.css";
 
 export function ChatComposer({
   connected,
@@ -78,7 +77,10 @@ export function ChatComposer({
       }}
     >
       <textarea
-        className="m-0 block w-full resize-none rounded-[12px] border border-solid border-[#d5dfcc] bg-[#fbfbf7] p-[10px] text-[12px] leading-[1.5] text-[#35462d] shadow-[0_4px_16px_#23311a26] select-text"
+        className="
+          m-0 block w-full resize-none rounded-[12px] border border-solid border-[#d5dfcc] bg-[#fbfbf7]
+          p-[10px] text-[12px] leading-[1.5] text-[#35462d] shadow-[0_4px_16px_#23311a26] select-text
+        "
         ref={input}
         autoFocus
         aria-label="친구 모두에게 메시지"

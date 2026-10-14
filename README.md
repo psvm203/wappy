@@ -90,9 +90,9 @@ Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 O
 
 ### 스타일
 
-클라이언트는 Tailwind CSS v4와 `@tailwindcss/vite`를 사용합니다. `apps/client/src/base.css`에서 공통 스타일과 유틸리티를 불러오며, 컴포넌트의 `className`에 유틸리티 클래스를 작성하면 개발 서버와 빌드에 반영됩니다. `ChatComposer.tsx`에 적용 예시가 있습니다.
+클라이언트는 Tailwind CSS v4와 `@tailwindcss/vite`를 사용합니다. 컴포넌트 스타일은 TSX의 `className`에 유틸리티 클래스로 작성합니다. CSS 진입점은 `apps/client/src/tailwind.css` 하나이며, `main.tsx`에서 불러옵니다.
 
-기존 화면을 유지하기 위해 Preflight는 사용하지 않고 기존 기본 스타일을 `base` 레이어에 둡니다. 기존 컴포넌트 CSS는 함께 사용하며, 유틸리티로 옮긴 선언은 해당 CSS에서 제거합니다.
+`tailwind.css`에는 전역 기본 스타일, `@theme` 애니메이션, 물리 엔진과 연동하는 `resident-motion`·`resident-caption` 유틸리티만 둡니다. 모션 유틸리티는 이동·공격·피격 상태의 우선순위와 모션 감소 설정을 보존합니다. 기존 화면을 유지하기 위해 Preflight는 사용하지 않습니다.
 
 ## 개발 명령
 

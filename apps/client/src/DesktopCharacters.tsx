@@ -45,7 +45,6 @@ import {
   type Body,
   type DragSample,
 } from "./desktop-physics";
-import "./DesktopCharacters.css";
 
 type Resident = {
   body: Body;
@@ -597,12 +596,18 @@ export function DesktopCharacters({
 
   return (
     <section
-      className={`desktop-characters ${paused ? "is-paused" : ""}`}
+      className={`desktop-characters fixed inset-0 pointer-events-none overflow-hidden ${paused ? "is-paused" : ""}`}
       aria-label="바탕화면 캐릭터"
     >
       <AttackEffects effectRef={attackEffect} />
       {attackNotice && (
-        <p className="attack-notice" role="status">
+        <p
+          className="
+            attack-notice absolute left-[50%] bottom-[22px] [transform:translateX(-50%)] m-0 p-[9px_14px]
+            rounded-[18px] bg-[#fbfbf7ef] text-[#536447] text-[12px] pointer-events-none
+          "
+          role="status"
+        >
           {attackNotice}
         </p>
       )}
@@ -612,7 +617,15 @@ export function DesktopCharacters({
         return (
           <figure
             key={resident.id}
-            className="desktop-resident"
+            className="
+              desktop-resident absolute top-0 left-0 w-[var(--character-size)] h-[var(--character-size)]
+              [--caption-offset:calc(var(--character-size)_/_2_+_4px)] m-0 pointer-events-auto touch-none
+              select-none cursor-grab [&[data-motion='drag']]:cursor-grabbing
+              [&_.character]:w-[calc(var(--character-size)_*_38_/_42)]
+              [&_.character]:h-[var(--character-size)] [&_.character]:m-auto
+              [&_.character]:[filter:drop-shadow(0_2px_3px_#0002)] [&_.chat-bubble]:m-[0_0_4px]
+              [&_.chat-bubble]:text-[11px] resident-motion
+            "
             data-composing={chatTarget === resident.id}
             ref={(element) => {
               if (!element) return;
@@ -653,7 +666,10 @@ export function DesktopCharacters({
             }}
           >
             <div
-              className="resident-rotation"
+              className="
+                resident-rotation [transform:rotate(var(--angle))]
+                focus-visible:[outline:2px_solid_#73985c] focus-visible:rounded-[12px]
+              "
               role={!resident.isSelf || profileKey ? "button" : undefined}
               tabIndex={!resident.isSelf || profileKey ? 0 : undefined}
               aria-label={
@@ -670,17 +686,39 @@ export function DesktopCharacters({
                 }
               }}
             >
-              <div className="resident-facing">
+              <div className="resident-facing [transform:scaleX(var(--facing))]">
                 <Character
                   kind={resident.character}
                   asleep={!resident.online}
                 />
               </div>
             </div>
-            <span className="resident-impact" aria-hidden="true">
+            <span
+              className="
+                resident-impact hidden absolute z-2 left-[calc(3.5px_*_var(--character-scale))]
+                top-[calc(-6.5px_*_var(--character-scale))] w-[calc(35px_*_var(--character-scale))]
+                h-[calc(35px_*_var(--character-scale))] items-center justify-center text-[#754925]
+                text-[calc(8.5px_*_var(--character-scale))] font-black pointer-events-none
+                before:content-['✹'] before:absolute before:-z-1 before:text-[#ffe294]
+                before:text-[calc(38px_*_var(--character-scale))] before:[transform:translateY(-0.06em)]
+                before:[text-shadow:1px_1px_#bd7c3f,_-1px_-1px_#bd7c3f]
+              "
+              aria-hidden="true"
+            >
               팡!
             </span>
-            <figcaption>
+            <figcaption
+              className="
+              resident-caption absolute left-[50%] top-[50%] w-max max-w-[84px] p-[3px_4px] rounded-[6px]
+              bg-[#fbfbf7e8] text-[#536447] text-[9px] text-center whitespace-nowrap overflow-hidden
+              text-ellipsis pointer-events-none has-[.chat-bubble]:w-[184px]
+              has-[.chat-bubble]:max-w-[184px] has-[.chat-bubble]:whitespace-normal
+              has-[.chat-bubble]:overflow-visible has-[.chat-composer]:w-max
+              has-[.chat-composer]:max-w-[calc(100vw_-_8px)] has-[.chat-composer]:p-0
+              has-[.chat-composer]:bg-transparent has-[.chat-composer]:overflow-visible
+              [.desktop-resident[data-caption-below='true']_&]:[--caption-y:var(--caption-offset)]
+            "
+            >
               {chatTarget === resident.id && self && profileKey ? (
                 <ChatComposer
                   connected={connected && messages !== undefined}
@@ -690,7 +728,9 @@ export function DesktopCharacters({
               ) : (
                 <>
                   <ChatBubble message={chat} />
-                  <span className="resident-name">{name}</span>
+                  <span className="resident-name block overflow-hidden text-ellipsis">
+                    {name}
+                  </span>
                 </>
               )}
             </figcaption>

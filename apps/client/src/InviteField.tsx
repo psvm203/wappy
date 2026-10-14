@@ -75,7 +75,18 @@ export function InviteField({
   }
   return (
     <>
-      <label className="field">
+      <label
+        className="
+          field block text-[11px] text-[#68725d] m-[15px_0] [&_:is(input,select,textarea)]:block
+          [&_:is(input,select,textarea)]:w-full [&_:is(input,select,textarea)]:mt-[8px]
+          [&_:is(input,select,textarea)]:p-[12px] [&_:is(input,select,textarea)]:bg-[#f4f5ef]
+          [&_:is(input,select,textarea)]:border [&_:is(input,select,textarea)]:border-solid
+          [&_:is(input,select,textarea)]:border-[#e0e5d8] [&_:is(input,select,textarea)]:rounded-[9px]
+          [&_:is(input,select,textarea)]:text-[12px] [&_:is(input,select,textarea)]:text-[#3e4935]
+          [&_textarea]:resize-y [&_textarea]:leading-[1.6] [&_textarea]:wrap-anywhere
+          [&_input::placeholder]:text-[#68745e] [&_input::placeholder]:text-[11px]
+        "
+      >
         방 초대 코드
         <textarea
           required
@@ -91,14 +102,20 @@ export function InviteField({
         />
       </label>
       {destination && destination !== WAPPY_SERVER && (
-        <p className="hint invitation-destination" role="status">
+        <p
+          className="hint invitation-destination text-[10px] text-[#68745e] leading-[1.7] wrap-anywhere"
+          role="status"
+        >
           초대받은 서버: <strong>{destination}</strong>
         </p>
       )}
       {onVerified && (
         <button
           type="button"
-          className="secondary"
+          className="
+            secondary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold text-[#526a3d]
+            bg-[#e8eede] [&:hover]:bg-[#dee7ce]
+          "
           disabled={busy || current?.loading || !value.trim()}
           onClick={() => void check()}
         >
@@ -106,25 +123,43 @@ export function InviteField({
         </button>
       )}
       {current?.error && (
-        <p className="error" role="alert">
+        <p
+          className="
+            error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
+            wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit
+            [&_button]:ml-auto [&_button]:p-[0_2px]
+          "
+          role="alert"
+        >
           {current.error}
         </p>
       )}
       {current?.preview && (
-        <div className="invitation-preview" role="status">
+        <div
+          className="
+            invitation-preview flex items-center gap-[10px] m-[16px_0] p-[12px] border border-solid
+            border-[#d6dfc9] rounded-[12px] bg-[#edf2e6] text-[12px] wrap-anywhere
+            [&_.character]:w-[48px] [&_.character]:shrink-0 [&_.hint]:m-[5px_0_0]
+          "
+          role="status"
+        >
           <Character kind={current.preview.character} />
           <div>
             <strong>{current.preview.name} 님이 보낸 방 초대예요.</strong>
-            <p className="hint">인원과 기간 제한 없이 사용할 수 있어요.</p>
-            <p className="hint">
+            <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
+              인원과 기간 제한 없이 사용할 수 있어요.
+            </p>
+            <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
               참여하면 같은 방의 친구들을 모두 만날 수 있어요.
             </p>
-            <p className="hint">아직 방에 참여하지 않았어요.</p>
+            <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
+              아직 방에 참여하지 않았어요.
+            </p>
           </div>
         </div>
       )}
       {onVerified && !current?.preview && (
-        <p className="hint">
+        <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
           초대장을 먼저 확인한 뒤 내 이름과 캐릭터로 시작해 주세요.
         </p>
       )}

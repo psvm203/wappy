@@ -52,8 +52,16 @@ export function StartupSettings() {
   }, [sync]);
 
   return (
-    <section className="startup-panel" aria-label="앱 시작 설정">
-      <label className="setting-toggle">
+    <section
+      className="startup-panel mt-[20px] [&_.setting-toggle]:mt-0"
+      aria-label="앱 시작 설정"
+    >
+      <label
+        className="
+          setting-toggle flex items-center gap-[9px] text-[12px] leading-[1.7] mt-[15px] cursor-pointer
+          [&_input]:shrink-0 [&_input]:w-[16px] [&_input]:h-[16px] [&_input]:accent-[#678b57]
+        "
+      >
         <input
           type="checkbox"
           checked={enabled === true}
@@ -63,7 +71,14 @@ export function StartupSettings() {
         컴퓨터 로그인 시 Wappy 실행
       </label>
       {error && (
-        <p className="error" role="alert">
+        <p
+          className="
+            error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
+            wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit
+            [&_button]:ml-auto [&_button]:p-[0_2px]
+          "
+          role="alert"
+        >
           {error}
         </p>
       )}

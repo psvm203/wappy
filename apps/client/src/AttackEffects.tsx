@@ -74,7 +74,20 @@ export function AttackEffects({
   return (
     <svg
       ref={effectRef}
-      className="desktop-attack-effect"
+      className="
+        desktop-attack-effect absolute inset-0 z-3 overflow-visible pointer-events-none [&_>_g]:hidden
+        [&[data-kind='repulsor']_.repulsor-effect]:inline
+        [&[data-kind='lightning']_.lightning-effect]:inline
+        [&:is(_[data-kind='repulsor'],_[data-kind='lightning'],_[data-kind='bullet']_)_.attack-muzzle]:inline
+        [&:is([data-kind='repulsor'],_[data-kind='lightning'])_.energy-muzzle]:inline
+        [&[data-kind='bullet']_.bullet-muzzle]:inline
+        [&:is(_[data-kind='shield'],_[data-kind='bullet'],_[data-kind='arrow']_)_.attack-projectile]:inline
+        [&[data-kind='shield']_.shield-effect]:inline
+        [&[data-kind='bullet'][data-phase='dash']_.bullet-effect]:inline
+        [&[data-kind='arrow'][data-phase='dash']_.arrow-effect]:inline
+        [&[data-kind='smash'][data-phase='impact']_.smash-effect]:inline
+        motion-reduce:[&_.flying-shield]:[transform:none]
+      "
       aria-hidden="true"
       width="100%"
       height="100%"
@@ -104,7 +117,7 @@ export function AttackEffects({
         <path className="energy-path" stroke="#95d6ff" strokeWidth="6" />
         <path className="energy-path" stroke="#f5fcff" strokeWidth="2.5" />
       </g>
-      <g className="attack-muzzle">
+      <g className="attack-muzzle [&_>_*]:hidden">
         <circle className="energy-muzzle" r="10" fill="#b6f1ff" opacity=".55" />
         <circle className="energy-muzzle" r="4" fill="#fff" />
         <path
@@ -114,7 +127,7 @@ export function AttackEffects({
           stroke="#e6b45f"
         />
       </g>
-      <g className="attack-projectile">
+      <g className="attack-projectile [&_>_g]:hidden">
         <g className="shield-effect">
           <g className="flying-shield">
             <Shield />

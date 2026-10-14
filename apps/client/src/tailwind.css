@@ -1,0 +1,356 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source("../");
+
+/* Preserve the app defaults; utilities provide all component styling. */
+@layer base {
+  :root {
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    color: #3d4536;
+    background: transparent;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    font-weight: 400;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+  h1,
+  h2,
+  p {
+    margin-top: 0;
+  }
+  h1 {
+    font-size: 21px;
+    margin-bottom: 0;
+    letter-spacing: -0.9px;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button {
+    border: 0;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid #73985c;
+    outline-offset: 3px;
+  }
+  button,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@theme {
+  --animate-sleeping-breathe: sleeping-breathe 3s ease-in-out infinite;
+  --animate-sleeping-marks: sleeping-marks 3s ease-in-out infinite;
+  --animate-breathe: breathe 3.6s ease-in-out infinite;
+  --animate-character-waddle: character-waddle 1s linear infinite paused;
+  --animate-step-shadow: step-shadow 1s linear infinite paused;
+  --animate-character-dangle: character-dangle 1.25s ease-in-out infinite;
+  --animate-character-fly: character-fly 0.32s ease-in-out infinite alternate;
+  --animate-flight-trail: flight-trail 0.24s linear infinite;
+  --animate-attack-dash: attack-dash 0.18s ease-in-out infinite alternate;
+  --animate-attack-strike: attack-strike 0.38s ease-out both;
+  --animate-bow-release: bow-release 0.18s ease-out both;
+  --animate-attack-pop: attack-pop 0.38s ease-out both;
+  --animate-attack-shake: attack-shake 0.1s ease-in-out 3;
+  @keyframes sleeping-breathe {
+    50% {
+      transform: scaleY(0.97);
+    }
+  }
+  @keyframes sleeping-marks {
+    50% {
+      opacity: 0.4;
+    }
+  }
+  @keyframes breathe {
+    50% {
+      transform: translateY(-2px) rotate(1deg);
+    }
+  }
+  @keyframes bow-release {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0.05);
+    }
+  }
+  @keyframes attack-dash {
+    from {
+      transform: scale(0.92, 1.08) rotate(-4deg);
+    }
+    to {
+      transform: scale(0.88, 1.16) rotate(4deg);
+    }
+  }
+  @keyframes attack-strike {
+    25% {
+      transform: translateY(-10px) scale(1.13, 0.9);
+    }
+    70% {
+      transform: translateY(3px) scale(0.97, 1.04);
+    }
+    100% {
+      transform: none;
+    }
+  }
+  @keyframes attack-shake {
+    25% {
+      transform: translateX(-5px) rotate(-7deg);
+    }
+    75% {
+      transform: translateX(5px) rotate(7deg);
+    }
+  }
+  @keyframes attack-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.45) rotate(-12deg);
+    }
+    25% {
+      opacity: 1;
+      transform: scale(1.1) rotate(5deg);
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-12px) scale(1);
+    }
+  }
+  @keyframes character-waddle {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-6deg) scale(1.03, 0.97);
+    }
+    25%,
+    75% {
+      transform: translateY(-4px) rotate(0deg) scale(0.98, 1.03);
+    }
+    50% {
+      transform: translateY(0) rotate(6deg) scale(1.03, 0.97);
+    }
+  }
+  @keyframes step-shadow {
+    25%,
+    75% {
+      transform: scaleX(0.8);
+      opacity: 0.06;
+    }
+  }
+  @keyframes character-dangle {
+    0%,
+    100% {
+      transform: rotate(-9deg) scale(0.96, 1.05);
+    }
+    50% {
+      transform: rotate(9deg) scale(0.98, 1.03);
+    }
+  }
+  @keyframes character-fly {
+    from {
+      transform: rotate(-3deg) scale(var(--flight-x, 1), var(--flight-y, 1));
+    }
+    to {
+      transform: rotate(3deg) scale(var(--flight-x, 1), var(--flight-y, 1));
+    }
+  }
+  @keyframes flight-trail {
+    to {
+      transform: translateY(7px);
+    }
+  }
+}
+
+/* Keep captions within the viewport and flip below near the top edge. */
+@utility resident-caption {
+  transform: translate(
+    clamp(
+      calc(4px - var(--resident-x)),
+      -50%,
+      calc(100vw - 4px - var(--resident-x) - 100%)
+    ),
+    var(
+      --caption-y,
+      max(calc(4px - var(--resident-y)), calc(-100% - var(--caption-offset)))
+    )
+  );
+}
+
+/* Physics samples walking animations at --step-delay. Keep motion priorities together. */
+@utility resident-motion {
+  &[data-motion="drag"],
+  &[data-attack="dash"],
+  &[data-attack="impact"],
+  &[data-attack="return"] {
+    @apply z-1;
+  }
+  &[data-hit="true"] {
+    @apply z-2;
+  }
+  &[data-composing="true"] {
+    @apply z-4;
+  }
+  & .character .character-body {
+    transform-origin: 50px 96px;
+    @apply animate-none;
+  }
+  & .character-pose {
+    transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
+  }
+  &[data-motion="walk"] .character .character-body {
+    @apply animate-character-waddle;
+    animation-delay: var(--step-delay, 0s);
+  }
+  &[data-motion="walk"] .character-shadow {
+    transform-origin: 50px 101px;
+    @apply animate-step-shadow;
+    animation-delay: var(--step-delay, 0s);
+  }
+  &[data-motion="drag"] .character-pose {
+    transform: rotate(var(--drag-tilt, 0rad));
+  }
+  &[data-motion="drag"] .character .character-body {
+    transform-origin: var(--grip-x, 50px) var(--grip-y, 24px);
+    @apply animate-character-dangle;
+  }
+  &[data-motion="air"] .character .character-body {
+    transform-origin: 50px 55px;
+    @apply animate-character-fly;
+  }
+  &[data-motion="air"] .character-flight-trail {
+    opacity: var(--trail-opacity, 0);
+    @apply animate-flight-trail;
+  }
+  &[data-motion="air"] .character-shadow,
+  &[data-motion="drag"] .character-shadow {
+    opacity: 0;
+  }
+  &[data-attack="dash"] .character .character-body {
+    transform-origin: 50px 55px;
+    @apply animate-attack-dash;
+  }
+  &[data-attack="dash"] .character-flight-trail {
+    opacity: 0.7;
+  }
+  &[data-attack="impact"] .character .character-body {
+    transform-origin: 50px 55px;
+    @apply animate-attack-strike;
+  }
+  &:is(
+      [data-attack-style="repulsor"],
+      [data-attack-style="shield"],
+      [data-attack-style="lightning"],
+      [data-attack-style="smash"],
+      [data-attack-style="bullet"],
+      [data-attack-style="arrow"]
+    )
+    .character
+    .character-body {
+    @apply animate-none;
+    transform: none;
+  }
+  &[data-attack-style]:not([data-attack-style=""]):not(
+      [data-attack-style="dash"]
+    )
+    .hero-rest-pose {
+    visibility: hidden;
+  }
+  &[data-attack-style]:not([data-attack-style=""]):not(
+      [data-attack-style="dash"]
+    )
+    .hero-attack-pose {
+    visibility: visible;
+  }
+  &[data-attack-style]:not([data-attack-style=""]):not(
+      [data-attack-style="dash"]
+    )
+    .character-flight-trail {
+    opacity: 0;
+  }
+  &[data-attack-style="smash"][data-attack="impact"] .hulk-raised-fists {
+    visibility: hidden;
+  }
+  &[data-attack-style="smash"][data-attack="impact"] .hulk-slam-fists {
+    visibility: visible;
+  }
+  &[data-attack-style="arrow"] .hawkeye-bowstring {
+    transform-origin: 85px 55px;
+    @apply animate-bow-release;
+  }
+  &[data-hit="true"] .resident-impact {
+    display: flex;
+    @apply animate-attack-pop;
+  }
+  &[data-motion="sleep"] .character .character-body {
+    transform-origin: 50px 96px;
+    @apply animate-sleeping-breathe;
+  }
+  &[data-hit="true"] .character .character-body {
+    @apply animate-attack-shake;
+  }
+  & .sleep-marks {
+    @apply animate-sleeping-marks;
+  }
+  .is-paused & .character *,
+  .is-paused & .resident-impact {
+    animation-play-state: paused;
+  }
+  &[data-composing="true"] .character * {
+    animation-play-state: paused;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &[data-motion] .character .character-body,
+    &[data-motion] .character .character-shadow,
+    &[data-motion] .character .character-flight-trail,
+    &[data-motion] .character .sleep-marks {
+      @apply animate-none;
+    }
+    & .character .character-pose {
+      transform: none;
+    }
+    & .character-flight-trail {
+      display: none;
+    }
+    & .resident-impact {
+      @apply animate-none;
+    }
+    & .hawkeye-bowstring {
+      @apply animate-none;
+      transform: scaleX(0.05);
+    }
+  }
+}
+
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}

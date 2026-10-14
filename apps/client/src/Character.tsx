@@ -75,7 +75,7 @@ export function Character({
       viewBox="0 0 100 110"
       role="img"
       aria-label={`${CHARACTER_NAMES[kind]} 캐릭터${asleep ? ", 오프라인" : ""}`}
-      className={`character ${asleep ? "asleep" : "awake"}`}
+      className={`character block w-full overflow-visible ${asleep ? "asleep [filter:saturate(0.45)] opacity-70" : "awake"}`}
     >
       <ellipse
         className="character-shadow"
@@ -98,13 +98,15 @@ export function Character({
         <path d="M31 101v12M50 105v17M69 101v12" />
       </g>
       <g className="character-pose">
-        <g className="character-body">
+        <g
+          className={`character-body ${asleep ? "origin-[50px_96px] animate-sleeping-breathe" : "origin-[50px_100px] animate-breathe"}`}
+        >
           <Artwork asleep={asleep} />
         </g>
       </g>
       {asleep && (
         <g
-          className="sleep-marks"
+          className="sleep-marks animate-sleeping-marks"
           fill="#65745d"
           aria-hidden="true"
           fontFamily="sans-serif"

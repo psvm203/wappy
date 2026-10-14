@@ -63,7 +63,6 @@ import {
   isCharacterPosition,
   isCharacterSize,
 } from "./preferences";
-import "./App.css";
 
 const emptyProfile: ProfileInput = {
   name: "",
@@ -467,7 +466,13 @@ function App() {
     return (
       <button
         type="button"
-        className="character-visibility"
+        className="
+          character-visibility flex items-center justify-center gap-[5px] shrink-0 min-w-[55px]
+          min-h-[30px] p-[6px_8px] rounded-[16px] bg-[#e2e5db] text-[#68745e] text-[10px] font-bold
+          before:content-[''] before:w-[10px] before:h-[10px] before:shrink-0 before:rounded-[50%]
+          before:bg-[currentColor] [&[aria-checked='true']]:bg-[#526c49]
+          [&[aria-checked='true']]:text-[#fff] disabled:cursor-wait disabled:opacity-50
+        "
         role="switch"
         aria-label={`${profile.name} 캐릭터 표시`}
         aria-checked={selection.ready && visible}
@@ -493,7 +498,14 @@ function App() {
   const presenceHidden =
     connection === "online" && state?.presence?.sharing === false;
   const errorAlert = error && (
-    <p className="error" role="alert">
+    <p
+      className="
+        error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556] wrap-anywhere
+        flex items-start gap-[5px] [&_button]:bg-transparent [&_button]:text-inherit [&_button]:ml-auto
+        [&_button]:p-[0_2px]
+      "
+      role="alert"
+    >
       {error}
       <button type="button" aria-label="오류 닫기" onClick={() => setError("")}>
         ×
@@ -502,24 +514,44 @@ function App() {
   );
 
   return (
-    <main className="sidebar">
+    <main
+      className="
+        sidebar w-full h-dvh overflow-hidden flex flex-col bg-[#fbfbf7] border border-solid
+        border-[#e2e4db] rounded-[22px] relative
+      "
+    >
       <header
-        className="app-header"
+        className="
+          app-header flex items-center justify-between p-[22px_20px_14px] shrink-0 select-none
+          cursor-grab
+        "
         onMouseDown={dragWindow}
         title="드래그해서 앱 이동"
       >
-        <div className="brand">
-          <span className="brand-icon" aria-hidden="true">
+        <div className="brand flex items-center gap-[8px] text-[27px] tracking-[-1.5px] font-[850] cursor-grab">
+          <span
+            className="brand-icon text-[#638766] text-[31px] leading-[1]"
+            aria-hidden="true"
+          >
             ✳
           </span>
           <span>
-            wappy<span className="brand-period">.</span>
+            wappy<span className="brand-period text-[#8aaa70]">.</span>
           </span>
         </div>
         {desktop && (
-          <div className="window-controls">
+          <div
+            className="
+              window-controls flex gap-[6px] cursor-default [&_.icon-button]:border
+              [&_.icon-button]:border-solid [&_.icon-button]:border-[currentColor]
+              [&_.quit-button]:text-[#b94343]
+            "
+          >
             <button
-              className="icon-button"
+              className="
+                icon-button grid place-items-center w-[27px] h-[28px] rounded-[8px] p-0 bg-transparent
+                text-[#68745e] text-[19px] [&:hover]:bg-[#e8eade] [&:hover]:text-[#343c31]
+              "
               aria-label="최소화"
               title="최소화"
               onClick={() =>
@@ -530,7 +562,10 @@ function App() {
             </button>
             <button
               type="button"
-              className="icon-button quit-button"
+              className="
+                icon-button quit-button grid place-items-center w-[27px] h-[28px] rounded-[8px] p-0
+                bg-transparent text-[#68745e] text-[19px] [&:hover]:bg-[#e8eade] [&:hover]:text-[#343c31]
+              "
               onClick={() => quitDialog.current?.showModal()}
               disabled={busy || profileDraft !== null}
               aria-label="Wappy 종료"
@@ -555,7 +590,7 @@ function App() {
       </header>
 
       {desktop && updates.version && panel !== "settings" && (
-        <div className="update-banner">
+        <div className="update-banner shrink-0 m-[0_20px_12px]">
           <UpdateSettings
             state={updates}
             disabled={busy || profileDraft !== null}
@@ -564,15 +599,40 @@ function App() {
       )}
 
       {!session && panel !== "settings" ? (
-        <div className="onboarding scroll-area">
-          <div className="intro-art">
+        <div
+          className="
+            onboarding scroll-area overflow-y-auto min-h-0 [scrollbar-width:thin]
+            [scrollbar-color:#d8ddd0_transparent] p-[0_22px_24px]
+          "
+        >
+          <div
+            className="
+              intro-art relative flex justify-center p-[18px_0_20px] [&_.character]:w-[92px]
+              [&_.character_+_.character]:ml-[-8px]
+              [&_.character_+_.character]:[transform:rotate(8deg)_translateY(4px)]
+              [@media(max-height:650px)]:p-[4px_0_14px]
+              [@media(max-height:650px)]:[&_.character]:w-[65px]
+            "
+          >
             <Character kind="chiikawa" />
             <Character kind="hachiware" />
-            <span className="sparkle" aria-hidden="true">
+            <span
+              className="sparkle absolute right-[40px] top-[6px] text-[35px] text-[#9bab73]"
+              aria-hidden="true"
+            >
               ✧
             </span>
           </div>
-          <nav className="onboarding-tabs" aria-label="시작 방법">
+          <nav
+            className="
+              onboarding-tabs flex justify-center gap-[15px] mb-[24px]
+              [&_[aria-current='page']]:text-[#374936] [&_[aria-current='page']]:border-b-[2px]
+              [&_[aria-current='page']]:[border-bottom-style:solid]
+              [&_[aria-current='page']]:border-b-[#678b57] [&_[aria-current='page']]:rounded-0
+              [&_[aria-current='page']]:font-bold
+            "
+            aria-label="시작 방법"
+          >
             {(
               [
                 ["create", "처음이에요"],
@@ -581,7 +641,10 @@ function App() {
             ).map(([id, label]) => (
               <button
                 key={id}
-                className="text-button"
+                className="
+                  text-button bg-transparent text-[11px] p-[3px_0] text-[#68745e]
+                  [&:hover]:text-[#41562e]
+                "
                 aria-current={onboarding === id ? "page" : undefined}
                 disabled={busy}
                 onClick={() => {
@@ -624,7 +687,14 @@ function App() {
             }
           />
           {error && (
-            <p className="error" role="alert">
+            <p
+              className="
+                error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
+                wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent
+                [&_button]:text-inherit [&_button]:ml-auto [&_button]:p-[0_2px]
+              "
+              role="alert"
+            >
               {error}
             </p>
           )}
@@ -634,8 +704,13 @@ function App() {
       ) : (
         <>
           {session && (connection !== "online" || presenceHidden) && (
-            <div className="connection-line">
-              <span className="online-dot offline" />
+            <div className="connection-line p-[0_22px_19px] flex items-center gap-[7px] text-[11px] text-[#68745e]">
+              <span
+                className="
+                  online-dot offline inline-block w-[6px] h-[6px] rounded-[50%] bg-[#71a46b] shrink-0
+                  [&.offline]:bg-[#b6b9b0]
+                "
+              />
               {connection === "online"
                 ? "접속 숨김 · 친구에게 오프라인으로 표시"
                 : connection === "connecting"
@@ -646,12 +721,24 @@ function App() {
             </div>
           )}
           {session && connection === "offline" && (
-            <div className="connection-warning" role="status">
+            <div
+              className="
+                connection-warning text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df]
+                text-[#9b6556] wrap-anywhere m-[0_20px_12px] shrink-0 [&_p:not(.chat-bubble)]:m-[0_0_8px]
+              "
+              role="status"
+            >
               <p>서버와 연결이 끊겼어요. 자동으로 다시 연결합니다.</p>
             </div>
           )}
           {session && connection === "unauthorized" && (
-            <div className="connection-warning" role="alert">
+            <div
+              className="
+                connection-warning text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df]
+                text-[#9b6556] wrap-anywhere m-[0_20px_12px] shrink-0 [&_p:not(.chat-bubble)]:m-[0_0_8px]
+              "
+              role="alert"
+            >
               <p>
                 프로필 인증에 실패했어요. 연결할 서버 주소가 맞는지 확인해
                 주세요.
@@ -663,7 +750,10 @@ function App() {
                   프로필로 돌아올 수 없어요.
                 </p>
                 <button
-                  className="text-button danger"
+                  className="
+                    text-button danger bg-transparent text-[11px] p-[3px_0] [&:hover]:text-[#41562e]
+                    text-[#ab5555]
+                  "
                   disabled={busy}
                   onClick={() => {
                     try {
@@ -682,7 +772,17 @@ function App() {
               </details>
             </div>
           )}
-          <nav className="tabs" aria-label="사이드바 메뉴">
+          <nav
+            className="
+              tabs m-[0_20px_12px] border-b [border-bottom-style:solid] border-b-[#e6e8df] flex
+              gap-[18px] shrink-0 [&_button]:p-[11px_0] [&_button]:rounded-0 [&_button]:bg-transparent
+              [&_button]:text-[#68745e] [&_button]:text-[12px] [&_button]:border-b-[2px]
+              [&_button]:[border-bottom-style:solid] [&_button]:border-b-[transparent]
+              [&_button.selected]:text-[#374936] [&_button.selected]:border-b-[#678b57]
+              [&_button.selected]:font-bold
+            "
+            aria-label="사이드바 메뉴"
+          >
             {(
               [
                 ["friends", session ? "친구들" : "시작 화면"],
@@ -691,7 +791,9 @@ function App() {
                 ["settings", "설정"],
               ] as const
             )
-              .filter(([id]) => session || id === "friends" || id === "settings")
+              .filter(
+                ([id]) => session || id === "friends" || id === "settings",
+              )
               .map(([id, label]) => (
                 <button
                   key={id}
@@ -707,9 +809,21 @@ function App() {
                 </button>
               ))}
           </nav>
-          <div className="scroll-area content">
+          <div
+            className="
+              scroll-area content overflow-y-auto min-h-0 [scrollbar-width:thin]
+              [scrollbar-color:#d8ddd0_transparent] flex-1 p-[14px_20px_20px]
+            "
+          >
             {desktopError && (
-              <p className="error" role="alert">
+              <p
+                className="
+                  error text-[11px] leading-[1.65] rounded-[9px] p-[11px] bg-[#f6e9df] text-[#9b6556]
+                  wrap-anywhere flex items-start gap-[5px] [&_button]:bg-transparent
+                  [&_button]:text-inherit [&_button]:ml-auto [&_button]:p-[0_2px]
+                "
+                role="alert"
+              >
                 {desktopError}
               </p>
             )}
@@ -717,8 +831,20 @@ function App() {
             {!state &&
               (panel === "friends" || panel === "invite") &&
               connection !== "unauthorized" && (
-                <div className="empty-state">
-                  <span className="loading-orbit" />
+                <div
+                  className="
+                    empty-state p-[35px_2px_20px] text-center [&_h2]:text-[17px] [&_h2]:m-[21px_0_10px]
+                    [&_h2]:tracking-[-0.7px] [&_p:not(.chat-bubble)]:text-[#68745e]
+                    [&_p:not(.chat-bubble)]:text-[12px] [&_p:not(.chat-bubble)]:leading-[1.9]
+                    [&_p:not(.chat-bubble)]:wrap-anywhere [&_.primary]:mt-[24px]
+                  "
+                >
+                  <span
+                    className="
+                      loading-orbit inline-block w-[24px] h-[24px] border-[2px] border-solid
+                      border-[#e0e6d6] [border-top-color:#819c65] rounded-[50%] animate-spin
+                    "
+                  />
                   <h2>친구들을 만나러 가는 중</h2>
                 </div>
               )}
@@ -726,11 +852,18 @@ function App() {
               <>
                 {state.friends.length > 0 && (
                   <section
-                    className="friend-filters"
+                    className="friend-filters mb-[16px]"
                     aria-label="친구 목록 필터"
                   >
                     <div
-                      className="friend-views"
+                      className="
+                        friend-views flex gap-[5px] [&_button]:flex-1 [&_button]:p-[9px_5px]
+                        [&_button]:rounded-[8px] [&_button]:bg-[#f0f1e9] [&_button]:text-[#68745e]
+                        [&_button]:text-[11px] [&_button]:whitespace-nowrap
+                        [&_button[aria-pressed='true']]:bg-[#e3edd3]
+                        [&_button[aria-pressed='true']]:text-[#374936]
+                        [&_button[aria-pressed='true']]:font-bold [&_span]:text-[10px]
+                      "
                       role="group"
                       aria-label="친구 목록 보기"
                     >
@@ -751,9 +884,12 @@ function App() {
                       ))}
                     </div>
                     {friendView !== "all" && (
-                      <div className="friend-results">
+                      <div className="friend-results flex items-center justify-end min-h-[34px]">
                         <button
-                          className="text-button"
+                          className="
+                            text-button bg-transparent text-[11px] p-[3px_0] text-[#68745e]
+                            [&:hover]:text-[#41562e]
+                          "
                           onClick={resetFriendFilters}
                         >
                           필터 초기화
@@ -763,7 +899,15 @@ function App() {
                   </section>
                 )}
                 {state.friends.length === 0 ? (
-                  <div className="empty-state invitation-empty">
+                  <div
+                    className="
+                      empty-state invitation-empty p-[35px_2px_20px] text-center [&_h2]:text-[17px]
+                      [&_h2]:m-[21px_0_10px] [&_h2]:tracking-[-0.7px]
+                      [&_p:not(.chat-bubble)]:text-[#68745e] [&_p:not(.chat-bubble)]:text-[12px]
+                      [&_p:not(.chat-bubble)]:leading-[1.9] [&_p:not(.chat-bubble)]:wrap-anywhere
+                      [&_.primary]:mt-[24px] pt-0 [&_h2]:mt-[12px]
+                    "
+                  >
                     <h2>옆자리를 비워뒀어요.</h2>
                     <p>
                       친구를 초대하면 이곳에서
@@ -771,14 +915,26 @@ function App() {
                       서로의 캐릭터를 만날 수 있어요.
                     </p>
                     <button
-                      className="primary"
+                      className="
+                        primary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold flex
+                        items-center justify-between bg-[#d3e8af] text-[#425335] [&:hover]:bg-[#c7dda1]
+                        [&_span]:text-[18px] [&_span]:font-normal [&_span]:leading-[1]
+                      "
                       onClick={() => setPanel("invite")}
                     >
                       친구 초대하기 <span aria-hidden="true">+</span>
                     </button>
                   </div>
                 ) : listedFriends.length === 0 ? (
-                  <div className="empty-state friend-filter-empty">
+                  <div
+                    className="
+                      empty-state friend-filter-empty p-[35px_2px_20px] text-center [&_h2]:text-[17px]
+                      [&_h2]:m-[21px_0_10px] [&_h2]:tracking-[-0.7px]
+                      [&_p:not(.chat-bubble)]:text-[#68745e] [&_p:not(.chat-bubble)]:text-[12px]
+                      [&_p:not(.chat-bubble)]:leading-[1.9] [&_p:not(.chat-bubble)]:wrap-anywhere
+                      [&_.primary]:mt-[24px]
+                    "
+                  >
                     <h2>
                       {friendView === "online" && connection !== "online"
                         ? "접속 상태를 확인할 수 없어요."
@@ -791,7 +947,7 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <ul className="friend-list">
+                  <ul className="friend-list list-none m-0 p-0 flex flex-col gap-[11px]">
                     {listedFriends.map((friend) => (
                       <FriendCard
                         key={friend.id}
@@ -823,7 +979,16 @@ function App() {
             )}
             {session && state && panel === "invite" && (
               <div>
-                <section className="invite-card">
+                <section
+                  className="
+                    invite-card [&.update-panel]:mt-[12px] [&.update-panel]:pt-[12px]
+                    [&.update-panel]:text-[12px] [&.update-panel_>_p[role='status']]:mt-0
+                    [&.update-panel_>_p[role='status']]:text-[#000] bg-[#f0f3e8] border border-solid
+                    border-[#e5e9db] rounded-[15px] p-[20px_16px_13px] [&_h2]:text-[13px]
+                    [&_>_p:not(.hint)]:text-[11px] [&_>_p:not(.hint)]:text-[#68745e]
+                    [&_>_p:not(.hint)]:leading-[1.8] [&_>_p:not(.hint)]:m-[10px_0_17px]
+                  "
+                >
                   <h2>방 초대 코드</h2>
                   <p>
                     {state.room && (
@@ -841,21 +1006,30 @@ function App() {
                     onCopied={() => setNotice("초대 코드를 복사했어요.")}
                   />
                   {session.server !== WAPPY_SERVER && (
-                    <p className="hint server-address">
+                    <p
+                      className="
+                        hint server-address text-[10px] text-[#68745e] leading-[1.7] border-t
+                        [border-top-style:dashed] border-t-[#d8dfcb] pt-[14px] mt-[17px] wrap-anywhere
+                        [&_strong]:font-medium
+                      "
+                    >
                       친구도 같은 서버에 연결해야 해요.
                       <br />
                       <strong>{session.server}</strong>
                     </p>
                   )}
                   {isLocalServer(session.server) && (
-                    <p className="hint">
+                    <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
                       현재 주소는 이 컴퓨터 안에서만 사용할 수 있어요. 다른
                       기기의 친구와 함께하려면 둘 다 접속할 수 있는 서버에서
                       시작해 주세요.
                     </p>
                   )}
                 </section>
-                <form onSubmit={acceptInvite} className="accept-form">
+                <form
+                  onSubmit={acceptInvite}
+                  className="accept-form [&_h2]:text-[13px] mt-[28px] [&_.field]:mt-[19px] [&_>_.error]:mt-[12px]"
+                >
                   <h2>초대를 받았나요?</h2>
                   <InviteField
                     value={code}
@@ -865,7 +1039,10 @@ function App() {
                     sameServer
                   />
                   <button
-                    className="secondary"
+                    className="
+                      secondary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold
+                      text-[#526a3d] bg-[#e8eede] [&:hover]:bg-[#dee7ce]
+                    "
                     disabled={busy || !code.trim()}
                     type="submit"
                   >
@@ -873,7 +1050,7 @@ function App() {
                   </button>
                   {errorAlert}
                   {state.room && (
-                    <p className="hint">
+                    <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
                       다른 방의 초대를 수락하면 현재 방에서 나가고 새 방의
                       친구들과 함께하게 돼요.
                     </p>
@@ -892,10 +1069,32 @@ function App() {
               />
             )}
             {panel === "settings" && (
-              <section className="settings-panel" aria-label="앱 설정">
+              <section
+                className="
+                  settings-panel [&_>_.startup-panel]:mt-0 [&_>_.field]:mt-0 [&_>_.field]:flex
+                  [&_>_.field]:items-center [&_>_.field]:justify-between [&_>_.field]:gap-[12px]
+                  [&_>_.field_select]:w-[100px] [&_>_.field_select]:mt-0
+                  [&_>_.setting-toggle]:m-[0_0_15px]
+                "
+                aria-label="앱 설정"
+              >
                 {desktop ? (
                   <>
-                    <label className="field">
+                    <label
+                      className="
+                        field block text-[11px] text-[#68725d] m-[15px_0]
+                        [&_:is(input,select,textarea)]:block [&_:is(input,select,textarea)]:w-full
+                        [&_:is(input,select,textarea)]:mt-[8px] [&_:is(input,select,textarea)]:p-[12px]
+                        [&_:is(input,select,textarea)]:bg-[#f4f5ef] [&_:is(input,select,textarea)]:border
+                        [&_:is(input,select,textarea)]:border-solid
+                        [&_:is(input,select,textarea)]:border-[#e0e5d8]
+                        [&_:is(input,select,textarea)]:rounded-[9px]
+                        [&_:is(input,select,textarea)]:text-[12px]
+                        [&_:is(input,select,textarea)]:text-[#3e4935] [&_textarea]:resize-y
+                        [&_textarea]:leading-[1.6] [&_textarea]:wrap-anywhere
+                        [&_input::placeholder]:text-[#68745e] [&_input::placeholder]:text-[11px]
+                      "
+                    >
                       캐릭터 위치
                       <select
                         value={preferences.position}
@@ -917,7 +1116,21 @@ function App() {
                         )}
                       </select>
                     </label>
-                    <label className="field">
+                    <label
+                      className="
+                        field block text-[11px] text-[#68725d] m-[15px_0]
+                        [&_:is(input,select,textarea)]:block [&_:is(input,select,textarea)]:w-full
+                        [&_:is(input,select,textarea)]:mt-[8px] [&_:is(input,select,textarea)]:p-[12px]
+                        [&_:is(input,select,textarea)]:bg-[#f4f5ef] [&_:is(input,select,textarea)]:border
+                        [&_:is(input,select,textarea)]:border-solid
+                        [&_:is(input,select,textarea)]:border-[#e0e5d8]
+                        [&_:is(input,select,textarea)]:rounded-[9px]
+                        [&_:is(input,select,textarea)]:text-[12px]
+                        [&_:is(input,select,textarea)]:text-[#3e4935] [&_textarea]:resize-y
+                        [&_textarea]:leading-[1.6] [&_textarea]:wrap-anywhere
+                        [&_input::placeholder]:text-[#68745e] [&_input::placeholder]:text-[11px]
+                      "
+                    >
                       캐릭터 크기
                       <select
                         value={preferences.size}
@@ -939,7 +1152,21 @@ function App() {
                         )}
                       </select>
                     </label>
-                    <label className="field">
+                    <label
+                      className="
+                        field block text-[11px] text-[#68725d] m-[15px_0]
+                        [&_:is(input,select,textarea)]:block [&_:is(input,select,textarea)]:w-full
+                        [&_:is(input,select,textarea)]:mt-[8px] [&_:is(input,select,textarea)]:p-[12px]
+                        [&_:is(input,select,textarea)]:bg-[#f4f5ef] [&_:is(input,select,textarea)]:border
+                        [&_:is(input,select,textarea)]:border-solid
+                        [&_:is(input,select,textarea)]:border-[#e0e5d8]
+                        [&_:is(input,select,textarea)]:rounded-[9px]
+                        [&_:is(input,select,textarea)]:text-[12px]
+                        [&_:is(input,select,textarea)]:text-[#3e4935] [&_textarea]:resize-y
+                        [&_textarea]:leading-[1.6] [&_textarea]:wrap-anywhere
+                        [&_input::placeholder]:text-[#68745e] [&_input::placeholder]:text-[11px]
+                      "
+                    >
                       캐릭터 활동
                       <select
                         value={
@@ -971,7 +1198,13 @@ function App() {
                         )}
                       </select>
                     </label>
-                    <label className="setting-toggle">
+                    <label
+                      className="
+                        setting-toggle flex items-center gap-[9px] text-[12px] leading-[1.7] mt-[15px]
+                        cursor-pointer [&_input]:shrink-0 [&_input]:w-[16px] [&_input]:h-[16px]
+                        [&_input]:accent-[#678b57]
+                      "
+                    >
                       <input
                         type="checkbox"
                         checked={preferences.hideSleeping}
@@ -992,7 +1225,7 @@ function App() {
                     />
                   </>
                 ) : (
-                  <p className="hint">
+                  <p className="hint text-[10px] text-[#68745e] leading-[1.7]">
                     자동 실행과 앱 업데이트는 데스크톱 앱에서 설정할 수 있어요.
                   </p>
                 )}
@@ -1000,12 +1233,31 @@ function App() {
             )}
           </div>
           {state && (
-            <footer className="self-card">
-              <div className="character-chat-anchor">
+            <footer
+              className="
+                self-card m-[0_12px_12px] p-[10px_12px_9px_4px] flex items-center gap-[8px]
+                rounded-[14px] bg-[#e8eddc] shrink-0 [&_.character]:w-[54px] [&_.character]:shrink-0
+                [&_>_div:not(.character-chat-anchor)]:flex-1
+                [&_>_div:not(.character-chat-anchor)]:min-w-0 [&_strong]:text-[12px]
+                [&_strong]:wrap-anywhere [&_>_div_>_p:not(.chat-bubble)]:m-[6px_0_0]
+                [&_>_div_>_p:not(.chat-bubble)]:text-[10px]
+                [&_>_div_>_p:not(.chat-bubble)]:text-[#68745e]
+                [&_>_div_>_p:not(.chat-bubble)]:overflow-hidden
+                [&_>_div_>_p:not(.chat-bubble)]:text-ellipsis
+                [&_>_div_>_p:not(.chat-bubble)]:whitespace-nowrap
+              "
+            >
+              <div
+                className="
+                  character-chat-anchor relative shrink-0 [&_>_.chat-composer]:absolute
+                  [&_>_.chat-composer]:bottom-[calc(100%_+_4px)] [&_>_.chat-composer]:left-0
+                  [&_>_.chat-composer]:z-5
+                "
+              >
                 {chatComposer(state.self.id)}
                 <button
                   type="button"
-                  className="character-chat"
+                  className="character-chat p-0 bg-transparent shrink-0"
                   aria-label="내 캐릭터 위에 채팅 입력창 열기"
                   onClick={() => setChatTarget(state.self.id)}
                 >
@@ -1015,7 +1267,9 @@ function App() {
               <div>
                 <strong>
                   {state.self.name}
-                  <span className="me-badge">나</span>
+                  <span className="me-badge text-[8px] ml-[7px] p-[2px_4px] bg-[#d6dec8] text-[#71815e] rounded-[4px]">
+                    나
+                  </span>
                 </strong>
                 <ChatBubble
                   message={latestChat(state.messages, state.self.id)}
@@ -1023,7 +1277,10 @@ function App() {
               </div>
               {characterVisibility(state.self)}
               <button
-                className="icon-button"
+                className="
+                  icon-button grid place-items-center w-[27px] h-[28px] rounded-[8px] p-0 bg-transparent
+                  text-[#68745e] text-[19px] [&:hover]:bg-[#e8eade] [&:hover]:text-[#343c31]
+                "
                 aria-label="내 프로필 수정"
                 onClick={() => setPanel("profile")}
               >
@@ -1036,18 +1293,32 @@ function App() {
       {desktop && (
         <dialog
           ref={quitDialog}
-          className="quit-dialog"
+          className="
+            quit-dialog w-[calc(100%_-_40px)] max-w-[320px] p-[20px] border border-solid border-[#e2e4db]
+            rounded-[14px] bg-[#fbfbf7] text-inherit text-[14px] backdrop:bg-[#1c241b66]
+            [&_.confirm-quit]:bg-[#b94343] [&_.confirm-quit]:text-[#fff]
+          "
           aria-labelledby="quit-dialog-title"
         >
           <form method="dialog">
             <p id="quit-dialog-title">Wappy를 종료하시겠습니까?</p>
-            <div className="quit-dialog-actions">
-              <button type="submit" className="secondary" autoFocus>
+            <div className="quit-dialog-actions flex gap-[8px]">
+              <button
+                type="submit"
+                className="
+                  secondary w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold text-[#526a3d]
+                  bg-[#e8eede] [&:hover]:bg-[#dee7ce]
+                "
+                autoFocus
+              >
                 취소
               </button>
               <button
                 type="button"
-                className="secondary confirm-quit"
+                className="
+                  secondary confirm-quit w-full rounded-[10px] text-[12px] p-[13px_14px] font-semibold
+                  text-[#526a3d] bg-[#e8eede] [&:hover]:bg-[#dee7ce]
+                "
                 disabled={busy || profileDraft !== null}
                 onClick={() =>
                   void exit(0).catch(() => {
@@ -1062,7 +1333,15 @@ function App() {
           </form>
         </dialog>
       )}
-      <div className="toast" role="status" aria-live="polite">
+      <div
+        className="
+          toast absolute bottom-[100px] left-[20px] right-[20px] pointer-events-none bg-[#405137]
+          text-[#f5f7ed] text-[11px] leading-[1.6] rounded-[10px] text-center p-[12px]
+          [box-shadow:0_5px_15px_#1c241b15] empty:hidden
+        "
+        role="status"
+        aria-live="polite"
+      >
         {notice}
       </div>
     </main>
