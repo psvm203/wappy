@@ -48,6 +48,7 @@ const CHARACTER_CATEGORIES = {
     "stone-spirit",
     "yeti",
   ],
+  "짱구는 못말려": ["shinchan", "kazama", "nene", "masao", "bochan"],
 } satisfies Record<string, ProfileInput["character"][]>;
 
 export function ProfileForm({

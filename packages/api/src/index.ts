@@ -33,6 +33,11 @@ export const CHARACTERS = [
   "pink-bean",
   "stone-spirit",
   "yeti",
+  "shinchan",
+  "kazama",
+  "nene",
+  "masao",
+  "bochan",
 ] as const;
 export type Character = (typeof CHARACTERS)[number];
 export const CHARACTER_NAMES: Record<Character, string> = {
@@ -61,6 +66,11 @@ export const CHARACTER_NAMES: Record<Character, string> = {
   "pink-bean": "핑크빈",
   "stone-spirit": "돌의 정령",
   yeti: "예티",
+  shinchan: "짱구",
+  kazama: "철수",
+  nene: "유리",
+  masao: "훈이",
+  bochan: "맹구",
 };
 export const POLL_INTERVAL_MS = 5_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
