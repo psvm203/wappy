@@ -36,6 +36,16 @@ pub fn setup(app: &App) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let settings = MenuItem::with_id(app, "wappy-settings", "환경설정", false, None::<&str>)?;
+    #[cfg(target_os = "macos")]
+    {
+        settings.set_accelerator(Some("Cmd+,"))?;
+        let app_menu = Menu::default(app.handle())?;
+        if let Some(tauri::menu::MenuItemKind::Submenu(menu)) = app_menu.items()?.first() {
+            // Share the item so readiness and actions match the tray menu.
+            menu.insert_items(&[&settings, &PredefinedMenuItem::separator(app)?], 2)?;
+        }
+        app.set_menu(app_menu)?;
+    }
     let quit = MenuItem::with_id(app, "wappy-quit", "Wappy 종료", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&show, &visibility, &settings, &separator, &quit])?;

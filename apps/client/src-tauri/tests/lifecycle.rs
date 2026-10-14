@@ -97,6 +97,44 @@ fn click_button(sidebar: &tauri::WebviewWindow, label: &str) -> Result<(), Strin
         .map_err(|error| error.to_string())
 }
 
+#[cfg(target_os = "macos")]
+fn settings_shortcut(sidebar: &tauri::WebviewWindow) -> Result<(), String> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType, NSWindow};
+    use objc2_foundation::NSString;
+
+    let (sent, received) = mpsc::channel();
+    sidebar
+        .with_webview(move |webview| {
+            // Exercise AppKit's accelerator dispatch, without global input or Accessibility access.
+            let window = unsafe { &*webview.ns_window().cast::<NSWindow>() };
+            let app = NSApplication::sharedApplication(MainThreadMarker::new().unwrap());
+            let characters = NSString::from_str(",");
+            let event = NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
+                NSEventType::KeyDown,
+                Default::default(),
+                NSEventModifierFlags::Command,
+                0.0,
+                window.windowNumber(),
+                None,
+                &characters,
+                &characters,
+                false,
+                43,
+            ).expect("Could not create Command-comma event");
+            let handled = app.mainMenu().is_some_and(|menu| menu.performKeyEquivalent(&event));
+            let _ = sent.send(handled);
+        })
+        .map_err(|error| error.to_string())?;
+    if !received
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|error| error.to_string())?
+    {
+        return Err("Command-comma did not activate the settings menu".into());
+    }
+    Ok(())
+}
+
 fn text_rendered(
     window: &tauri::WebviewWindow,
     selector: &str,
@@ -365,8 +403,29 @@ fn main() -> Result<(), String> {
             text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
             click_button(&sidebar, "시작 화면")?;
             text_rendered(&sidebar, ".onboarding", "처음이에요", true)?;
+            #[cfg(target_os = "macos")]
+            {
+                println!("CHECK: Command-comma opens settings before creating a profile");
+                settings_shortcut(&sidebar)?;
+                text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+                sidebar.close().map_err(|error| error.to_string())?;
+                until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
+                settings_shortcut(&sidebar)?;
+                until(|| sidebar.is_visible().unwrap_or(false))?;
+            }
             client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
             text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+            #[cfg(target_os = "macos")]
+            {
+                println!("CHECK: Command-comma restores the minimized settings window");
+                sidebar.minimize().map_err(|error| error.to_string())?;
+                until(|| sidebar.is_minimized().unwrap_or(false))?;
+                settings_shortcut(&sidebar)?;
+                until(|| {
+                    sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
+                })?;
+                text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
+            }
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
 
