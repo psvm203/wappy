@@ -46,7 +46,7 @@ test("legacy status and blocking data are discarded from server snapshots and sa
 });
 
 test("unsupported characters fall back to chiikawa in snapshots and saved sessions but new writes stay strict", () => {
-  assert.equal(CHARACTERS.length, 25);
+  assert.equal(CHARACTERS.length, 30);
   for (const character of [
     ...REMOVED_CHARACTERS,
     "future-character",

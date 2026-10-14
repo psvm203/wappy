@@ -33,6 +33,7 @@ import {
   StoneSpirit,
   Yeti,
 } from "./MapleStory";
+import { Shinchan, Kazama, Nene, Masao, Bochan } from "./Shinchan";
 
 const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   chiikawa: Chiikawa,
@@ -60,6 +61,11 @@ const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   "pink-bean": PinkBean,
   "stone-spirit": StoneSpirit,
   yeti: Yeti,
+  shinchan: Shinchan,
+  kazama: Kazama,
+  nene: Nene,
+  masao: Masao,
+  bochan: Bochan,
 };
 
 export function Character({
