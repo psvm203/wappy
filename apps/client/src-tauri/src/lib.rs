@@ -130,6 +130,8 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             }
         })
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window)?;
