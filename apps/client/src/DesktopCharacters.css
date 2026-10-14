@@ -196,6 +196,8 @@
   z-index: -1;
   color: #ffe294;
   font-size: calc(38px * var(--character-scale));
+  /* Align the star glyph's visual center with the impact text. */
+  transform: translateY(-0.06em);
   text-shadow:
     1px 1px #bd7c3f,
     -1px -1px #bd7c3f;
