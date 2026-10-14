@@ -104,9 +104,14 @@ Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 O
 | `pnpm test`                        | 클라이언트·서버의 Node.js 테스트 실행            |
 | `pnpm check-types`                 | 워크스페이스 타입 검사                           |
 | `pnpm performance`                 | 서버 상태 조회의 응답 크기·지연·메모리 성능 검사 |
-| `pnpm format`                      | TypeScript·TSX·Markdown 파일 포맷                |
+| `pnpm format`                      | oxfmt로 소스·설정·문서 포맷 및 Tailwind 클래스 정렬 |
+| `pnpm format:check`                | 파일 수정 없이 포맷 검사                         |
+| `pnpm lint`                        | oxlint로 JavaScript·TypeScript·React 코드 검사     |
+| `pnpm lint:fix`                    | 자동 수정 가능한 린트 오류 수정                   |
 | `pnpm --filter server start`       | 빌드된 API 서버 실행                             |
 | `pnpm --filter client tauri build` | 현재 플랫폼의 데스크톱 배포 파일 빌드            |
+
+포맷·린트 설정은 루트의 `.oxfmtrc.json`, `.oxlintrc.json`에서 관리합니다. Git에서 제외한 빌드 산출물은 자동으로 제외하며, CI에서도 `format:check`와 `lint`를 실행합니다. TypeScript 타입 검사는 `pnpm check-types`로 별도 실행합니다.
 
 Rust 코드 검사는 별도로 실행합니다.
 

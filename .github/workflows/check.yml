@@ -57,6 +57,8 @@ jobs:
           workspaces: apps/client/src-tauri -> target
           shared-key: ${{ matrix.target }}
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
       - run: pnpm exec turbo run build check-types test
       - run: cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
       - run: cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked

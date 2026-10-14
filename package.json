@@ -7,11 +7,15 @@
     "desktop": "turbo run desktop --filter=client",
     "test": "turbo run test",
     "performance": "pnpm --filter @wappy/api build && node apps/server/scripts/performance.mjs",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint --fix --deny-warnings .",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "3.9.6",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "turbo": "^2.11.7"
   },
   "packageManager": "pnpm@11.25.0",
