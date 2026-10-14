@@ -25,7 +25,12 @@ export function Shinchan({ asleep }: { asleep: boolean }) {
   if (asleep)
     return (
       <Ink transform="translate(-20 -51) scale(.2)">
-        <g fill="#f3c5af" stroke="#1c1c1a" strokeWidth="4">
+        <g
+          className="shinchan-sleep shinchan-sleep-spread"
+          fill="#f3c5af"
+          stroke="#1c1c1a"
+          strokeWidth="4"
+        >
           <path d="m162 623-9 9-26-3q-7-1 1 7l2 5 27 3 14 10q7 5 6-4l-2-10 11-10m73 94-22-3q-13-1-5 7l7 7-1 22q0 5 6 7l6 3q4 1 3-7l1-24 19-6" />
           <path
             d="M222 551Q187 543 174 565L153 614q-5 8 5 13l35 22q15 7 29-1l20-12 24 33-17 21q-9 10 1 24l29 34q9 13 24 6l33-15q25-18 36-43l9-12-50-54-58-59Z"
@@ -34,31 +39,36 @@ export function Shinchan({ asleep }: { asleep: boolean }) {
           <path d="M170 581q11-31 30-29l20 3-8 45-30-9Z" fill="#ffe333" />
           <path d="m282 685 51-3-19 45q-3 6-6-1Z" fill="#ed171b" />
           <path d="M220 624q27 10 46 45m-14-31 17 26" fill="none" />
-          <path d="m220 478-8-2 1-10q-2-8-6-1l-3 9-9-10q-9-5-5 3l8 8-14-3q-8 0-4 4l13 4-13 4q-6 4 1 5l13-1-10 6q-4 6 4 4l16-6 9 5Z" />
-          <path d="m533 545 13-3 1-10q3-8 6 0l1 10 15-6q9-2 4 4l-12 8 16 1q10 4 2 7l-17-1 10 10q3 8-4 4l-12-9 5 11q-1 7-6 0l-9-13-11 2Z" />
-          <path
-            d="M227 470q14-5 32 3l74 39 132 23 64-2 12 51q-37 15-111 23l-32 58-22 33q-19-22-66-38l-29-12q-14-8-16-27-5-16-24-20l-18-5q-9-14-2-42h20l2-13-32-19q-10-6-6-16Z"
-            fill="#ffffff"
-          />
-          <path d="m245 471 18 2 7 14-20 5Z" fill="#ffe333" />
-          <ellipse
-            cx="276"
-            cy="539"
-            rx="22"
-            ry="27"
-            transform="rotate(40 276 539)"
-            fill="#6daf46"
-          />
-          <path d="M446 538q-1 23 16 29 11 3 21-3l-18-24Z" fill="#6daf46" />
-          <path d="m339 566 54-24 5 56Z" fill="#ed171b" />
-          <path
-            d="m312 573 48 18q5 2 2 8l-24 36q-3 5-10 1l-40-18Z"
-            fill="#ffe333"
-          />
-          <path
-            d="m252 524 3 15m16 42q26 23 69 15m-102-39 16-19m176 63-6 10m-60 77 11 9"
-            fill="none"
-          />
+          <g
+            className="sleeping-torso"
+            style={{ transformOrigin: "365px 610px" }}
+          >
+            <path d="m220 478-8-2 1-10q-2-8-6-1l-3 9-9-10q-9-5-5 3l8 8-14-3q-8 0-4 4l13 4-13 4q-6 4 1 5l13-1-10 6q-4 6 4 4l16-6 9 5Z" />
+            <path d="m533 545 13-3 1-10q3-8 6 0l1 10 15-6q9-2 4 4l-12 8 16 1q10 4 2 7l-17-1 10 10q3 8-4 4l-12-9 5 11q-1 7-6 0l-9-13-11 2Z" />
+            <path
+              d="M227 470q14-5 32 3l74 39 132 23 64-2 12 51q-37 15-111 23l-32 58-22 33q-19-22-66-38l-29-12q-14-8-16-27-5-16-24-20l-18-5q-9-14-2-42h20l2-13-32-19q-10-6-6-16Z"
+              fill="#ffffff"
+            />
+            <path d="m245 471 18 2 7 14-20 5Z" fill="#ffe333" />
+            <ellipse
+              cx="276"
+              cy="539"
+              rx="22"
+              ry="27"
+              transform="rotate(40 276 539)"
+              fill="#6daf46"
+            />
+            <path d="M446 538q-1 23 16 29 11 3 21-3l-18-24Z" fill="#6daf46" />
+            <path d="m339 566 54-24 5 56Z" fill="#ed171b" />
+            <path
+              d="m312 573 48 18q5 2 2 8l-24 36q-3 5-10 1l-40-18Z"
+              fill="#ffe333"
+            />
+            <path
+              d="m252 524 3 15m16 42q26 23 69 15m-102-39 16-19m176 63-6 10m-60 77 11 9"
+              fill="none"
+            />
+          </g>
           <path
             d="M338 380q9-30 37-36 21-7 25 10 22-6 44 10 23-8 35 19l10 22q26 43 32 88l-39 19-63-112-65-8Z"
             fill="#191a18"
@@ -155,6 +165,56 @@ export function Shinchan({ asleep }: { asleep: boolean }) {
 }
 
 export function Kazama({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <Ink transform="translate(0 0)">
+        <g
+          className="shinchan-sleep"
+          fill="#f4c4a9"
+          stroke="#211e22"
+          strokeWidth="1.2"
+        >
+          <path d="M77 92q8-2 11 2 3 4-3 5l-9-1m-7-3q8 1 8 5l-11 1" />
+          <g className="sleeping-torso">
+            <path
+              d="M47 74q14-6 23 2 10 6 10 15l-8 7-24-3-7-12Z"
+              fill="#79bad0"
+            />
+            <path d="m48 74 5 12 7-7 3 9 6-7" fill="#d1e8e8" />
+            <circle cx="64" cy="88" r="1.2" fill="#d1e8e8" />
+            <circle cx="68" cy="93" r="1.2" fill="#d1e8e8" />
+            <path d="M69 86q9-6 14 1l2 8-11 4-14-1q-5-4-1-8Z" fill="#79bad0" />
+            <path d="m77 90 3 6m-18-2 10 1" fill="none" />
+            <path d="M47 81q7 1 7 9l-11 7-9-6 5-8Z" fill="#79bad0" />
+            <path d="m41 89 7 5" fill="none" />
+          </g>
+          <path d="M41 92q-5-3-10-1l-6 5q2 4 9 3l11-3m-16-1 6 1" />
+          <g
+            transform="translate(33 75) rotate(-30) scale(.38) translate(-505 -491)"
+            strokeWidth="2.8"
+          >
+            <path d="M474 477q-10-5-15 9-10-4-12 9-2 13 14 14l17 9 20 6 22 9q19 6 27-5 10-15-5-31l-7-23-41-13Z" />
+            <path
+              d="M462 488q-5-14-2-22 0-7 13-5l13 1 27-19q8-6 13 4l20 31 11-5-2 10 14-6q-1 16-12 17l-23-10-17-5-18-8-13 13-8-5-8 12Z"
+              fill="#202039"
+            />
+            <path
+              d="M483 479q11-10 22 1m13 5q8-5 15 3"
+              fill="none"
+              strokeWidth="3"
+            />
+            <path
+              d="M483 491q10 9 21 0m14 6q8 7 17 0"
+              fill="none"
+              strokeWidth="3.6"
+            />
+            <path d="m518 507 6 6-6-1Z" fill="#211e22" strokeWidth="2" />
+            <path d="M518 519q5 4 10 0" fill="none" strokeWidth="2.4" />
+          </g>
+        </g>
+      </Ink>
+    );
+
   return (
     <Ink transform="translate(7 1) scale(.25)">
       <path d="m98 331 4 45 19 1 15-42m51 1 5 40 21 1 12-43" />
@@ -188,48 +248,98 @@ export function Kazama({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="2.4"
       />
-      {asleep ? (
+      <>
         <path
-          d="M113 151q20 16 42-3m24 1q19 15 40-3"
+          d="M98 142q16-27 35-25 14 3 23 17m22 2q10-20 25-22 16-2 22 17"
           fill="none"
-          strokeWidth="4"
+          strokeWidth="2.5"
         />
-      ) : (
-        <>
-          <path
-            d="M98 142q16-27 35-25 14 3 23 17m22 2q10-20 25-22 16-2 22 17"
-            fill="none"
-            strokeWidth="2.5"
+        <g fill="#261e1b" stroke="none">
+          <ellipse
+            cx="135"
+            cy="151"
+            rx="24"
+            ry="20"
+            transform="rotate(-20 135 151)"
           />
-          <g fill="#261e1b" stroke="none">
-            <ellipse
-              cx="135"
-              cy="151"
-              rx="24"
-              ry="20"
-              transform="rotate(-20 135 151)"
-            />
-            <ellipse
-              cx="200"
-              cy="149"
-              rx="22"
-              ry="19"
-              transform="rotate(-22 200 149)"
-            />
-          </g>
-        </>
-      )}
+          <ellipse
+            cx="200"
+            cy="149"
+            rx="22"
+            ry="19"
+            transform="rotate(-22 200 149)"
+          />
+        </g>
+      </>
       <path d="m187 175 6 10-1-7Z" fill="#342723" strokeWidth="2" />
-      {asleep ? (
-        <path d="M178 207q12 8 24-3" fill="none" />
-      ) : (
-        <path d="M180 202q12-14 23-4 10 13-12 21-21 4-11-17Z" fill="#b86d73" />
-      )}
+      <path d="M180 202q12-14 23-4 10 13-12 21-21 4-11-17Z" fill="#b86d73" />
     </Ink>
   );
 }
 
 export function Nene({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <Ink transform="translate(0 0)">
+        <g
+          className="shinchan-sleep"
+          fill="#f4c4a9"
+          stroke="#211e22"
+          strokeWidth="1.2"
+        >
+          <path d="M79 92q9 0 10 4-1 4-10 3l-7-3m-5 1q8 0 9 3l-9 1" />
+          <g className="sleeping-torso">
+            <path d="M47 76q12-5 22 2l13 11-6 9-25-3-10-10Z" fill="#f4b8d9" />
+            <path d="M68 86q10-6 15 2l2 7-13 5-14-4Z" fill="#f4b8d9" />
+            <path
+              d="M70 80q8 3 12 9 5 0 5 4-1 4-6 3-3 6-7 2-3 5-8 1-5 3-8-2l-2-4q10 2 14-13Z"
+              fill="#f9d7e7"
+            />
+            <path d="m51 77 2 11 7-5 3 8 4-10" fill="#fff1f5" />
+            <path d="m58 85 3 7m-2-6 7 4" fill="none" />
+            <circle cx="62" cy="94" r="1.1" fill="#fff1f5" />
+            <circle cx="68" cy="91" r="1.1" fill="#fff1f5" />
+            <path d="M47 82q8 0 8 8l-12 8-10-6q2-10 14-10Z" fill="#f4b8d9" />
+            <path d="m40 90 8 5" fill="none" />
+          </g>
+          <path d="M42 92q-5-4-11-1l-6 5q2 4 9 3l12-3m-17-1 7 1" />
+          <g
+            transform="translate(34 76) rotate(-22) scale(.36) translate(-615 -514)"
+            strokeWidth="2.8"
+          >
+            <path
+              d="M582 500q-16-9-23 1l-8 12 17 9-19 5 7 16 23-12m76-40 24-6 6 17-10 12 7 3-22 10"
+              fill="#ae3e3b"
+            />
+            <path
+              d="m558 513 17 3m-18 17 16-10m92-24 14 3m-19 7 14 4"
+              fill="none"
+            />
+            <path
+              d="M584 505q0-26 28-31 27-6 47 10l13 18-11 30-63 4Z"
+              fill="#ae3e3b"
+            />
+            <path d="M593 505q-5-10-13-3-9 7-7 18l11 14 18 5 27 9q30 10 41-3 12-16-9-31l-2-15-11-8-47-3Z" />
+            <path
+              d="m590 508 8-15 10-2-2 10 9-12 8 14 2-12 10 13 1-12 9 12 1-7 12 9m-55-22-4 9m18-10-2 10m17-7 1 10m13-5 3 8"
+              fill="none"
+            />
+            <path
+              d="M602 501q10-7 20 1m14 6q7-5 15 2"
+              fill="none"
+              strokeWidth="3.4"
+            />
+            <path
+              d="M600 512q10 10 22 0m11 6q9 8 20 0m-51-4-3 3m40 4-1 3"
+              fill="none"
+              strokeWidth="3.4"
+            />
+            <path d="M632 536q5 4 10 0" fill="none" strokeWidth="2.4" />
+          </g>
+        </g>
+      </Ink>
+    );
+
   return (
     <Ink transform="translate(2 -6) scale(.285)">
       <path d="m108 291-21 15 27 32q9-4 23-28m47 1 10 40 18-2 2-31" />
@@ -282,59 +392,107 @@ export function Nene({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="2.4"
       />
-      {asleep ? (
-        <path
-          d="M143 146q18 15 38-1m18 0q16 15 36 0"
-          fill="none"
-          strokeWidth="4"
+      <g stroke="none">
+        <ellipse
+          cx="163"
+          cy="145"
+          rx="23"
+          ry="19"
+          transform="rotate(-23 163 145)"
+          fill="#261e1b"
         />
-      ) : (
-        <g stroke="none">
-          <ellipse
-            cx="163"
-            cy="145"
-            rx="23"
-            ry="19"
-            transform="rotate(-23 163 145)"
-            fill="#261e1b"
-          />
-          <ellipse
-            cx="217"
-            cy="146"
-            rx="20"
-            ry="19"
-            transform="rotate(-20 217 146)"
-            fill="#261e1b"
-          />
-          <ellipse
-            cx="164"
-            cy="145"
-            rx="8.5"
-            ry="7.5"
-            transform="rotate(-25 164 145)"
-            fill="#fffefa"
-          />
-          <ellipse
-            cx="216"
-            cy="146"
-            rx="7.5"
-            ry="7"
-            transform="rotate(-25 216 146)"
-            fill="#fffefa"
-          />
-        </g>
-      )}
-      {asleep ? (
-        <path d="M231 200q8 6 16-2" fill="none" />
-      ) : (
-        <path d="M233 190q10-6 15 2 5 13-10 20-15-2-5-22Z" fill="#b76c74" />
-      )}
+        <ellipse
+          cx="217"
+          cy="146"
+          rx="20"
+          ry="19"
+          transform="rotate(-20 217 146)"
+          fill="#261e1b"
+        />
+        <ellipse
+          cx="164"
+          cy="145"
+          rx="8.5"
+          ry="7.5"
+          transform="rotate(-25 164 145)"
+          fill="#fffefa"
+        />
+        <ellipse
+          cx="216"
+          cy="146"
+          rx="7.5"
+          ry="7"
+          transform="rotate(-25 216 146)"
+          fill="#fffefa"
+        />
+      </g>
+      <path d="M233 190q10-6 15 2 5 13-10 20-15-2-5-22Z" fill="#b76c74" />
       <path d="m261 214 5-10 4-4 7-10q5-3 4 3l-6 10 7-5q5 0 1 5l-12 10-1 6Z" />
     </Ink>
   );
 }
 
 export function Masao({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <Ink transform="translate(0 0)">
+        <g
+          className="shinchan-sleep"
+          fill="#f4c4a9"
+          stroke="#211e22"
+          strokeWidth="1.2"
+        >
+          <path d="M77 92q10-1 11 3 2 4-6 4l-7-1m-8-3q9 1 9 5l-12 1" />
+          <g className="sleeping-torso">
+            <path
+              d="M46 74q13-5 24 2 11 6 11 16l-10 6-23-3-8-11Z"
+              fill="#b2d394"
+            />
+            <path d="m48 76 5 11 7-6 5 8 6-8" fill="none" />
+            <path
+              d="m64 82-3 10m9-7-3 9m8-6-3 7"
+              fill="none"
+              stroke="#528d68"
+            />
+            <path d="M68 86q11-6 15 2l2 7-13 4-13-2q-5-5 0-9Z" fill="#b2d394" />
+            <path d="m78 90 2 6m-18-3 9 2" fill="none" />
+            <path d="M47 81q7 0 8 9l-11 8-11-6q2-9 14-11Z" fill="#b2d394" />
+            <path d="m40 89 8 6" fill="none" stroke="#528d68" />
+          </g>
+          <path d="M42 92q-6-3-11 0l-6 4q2 4 10 3l11-3m-16-1 6 1" />
+          <g
+            transform="translate(33 75) rotate(-18) scale(.4) translate(-243 -495)"
+            strokeWidth="2.8"
+          >
+            <path d="M195 491q-10-10-17 4-7 14 4 18l15-4m93-20q8-13 16-2 6 11-2 20l-12 3" />
+            <path d="M193 496q2-25 27-34 21-10 43-3 24 5 34 24l5 22q-5 23-40 29-33 5-55-8-17-10-14-30Z" />
+            <path
+              d="M207 474q13-18 37-18 28-1 44 19l-12-7-12-1-13 4-12-3-12 3-11-1Z"
+              fill="#9ec9bd"
+            />
+            <path
+              d="m234 461 2 2m9-4 1 2m9 0 1 2m-15 2 2 1m22-1 2 2"
+              fill="none"
+              stroke="#4f8078"
+              strokeWidth="2"
+            />
+            <path d="M228 477q7-3 14 0m10 1q7-3 13 1" fill="none" />
+            <path
+              d="M233 488q5 5 10 0m8 0q5 5 10 0"
+              fill="none"
+              strokeWidth="2.7"
+            />
+            <path
+              d="m242 496 3 2 3-1m-9 4q6 4 12 0"
+              fill="none"
+              strokeWidth="2"
+            />
+            <path d="M240 516q5 4 10 0" fill="none" strokeWidth="2.4" />
+          </g>
+        </g>
+      </Ink>
+    );
+
   return (
     <Ink transform="translate(-1 -10) scale(.3)">
       <path d="m117 305-5 29 4 13 14-1 17-37m58-2 16 36 18-4 1-37" />
@@ -376,26 +534,22 @@ export function Masao({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="2.5"
       />
-      {asleep ? (
-        <path d="M133 111q6 5 12 0m18 2q6 5 12 0" fill="none" strokeWidth="3" />
-      ) : (
-        <g fill="#342723" stroke="none">
-          <ellipse
-            cx="141"
-            cy="109"
-            rx="3.4"
-            ry="4.8"
-            transform="rotate(20 141 109)"
-          />
-          <ellipse
-            cx="168"
-            cy="113"
-            rx="3.4"
-            ry="4.8"
-            transform="rotate(20 168 113)"
-          />
-        </g>
-      )}
+      <g fill="#342723" stroke="none">
+        <ellipse
+          cx="141"
+          cy="109"
+          rx="3.4"
+          ry="4.8"
+          transform="rotate(20 141 109)"
+        />
+        <ellipse
+          cx="168"
+          cy="113"
+          rx="3.4"
+          ry="4.8"
+          transform="rotate(20 168 113)"
+        />
+      </g>
       <path
         d="m119 130 3 3m2-5 3 3m61-6 3 3m3-2 3 3m2-3 3 3"
         fill="none"
@@ -407,19 +561,67 @@ export function Masao({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="2.4"
       />
-      {asleep ? (
-        <path d="M121 162q21 14 48 0" fill="none" />
-      ) : (
-        <path
-          d="M94 154q15-19 35-2 11 10 24 1 17-15 31-5 18 14 11 29-8 19-53 17-36 0-47-14-9-12-1-26Z"
-          fill="#b4696f"
-        />
-      )}
+      <path
+        d="M94 154q15-19 35-2 11 10 24 1 17-15 31-5 18 14 11 29-8 19-53 17-36 0-47-14-9-12-1-26Z"
+        fill="#b4696f"
+      />
     </Ink>
   );
 }
 
 export function Bochan({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <Ink transform="translate(0 0)">
+        <g
+          className="shinchan-sleep"
+          fill="#f4c4a9"
+          stroke="#211e22"
+          strokeWidth="1.2"
+        >
+          <path d="M78 91q10 0 11 4 2 4-5 4l-8-1m-8-3q9 1 9 5l-12 1" />
+          <g className="sleeping-torso">
+            <path
+              d="M48 74q13-5 24 3 9 7 9 15l-10 6-23-3-7-12Z"
+              fill="#f4a35d"
+            />
+            <path d="m56 77 5 10 8 7" fill="none" />
+            <g fill="#866b40">
+              <circle cx="62" cy="84" r="1.2" />
+              <circle cx="66" cy="89" r="1.2" />
+              <circle cx="71" cy="94" r="1.2" />
+            </g>
+            <path d="M69 86q10-6 14 2l2 7-13 4-13-2q-4-5 1-9Z" fill="#f4a35d" />
+            <path d="m78 90 2 6m-18-3 9 2" fill="none" />
+            <path d="M48 82q8 1 7 8l-11 8-11-6q3-9 15-10Z" fill="#f4a35d" />
+            <path d="m40 89 8 6" fill="none" />
+          </g>
+          <path d="M43 92q-6-3-11-1l-6 5q2 4 10 3l11-3m-17-1 6 1" />
+          <g
+            transform="translate(34 74) rotate(-60) scale(.38) translate(-121 -483)"
+            strokeWidth="2.8"
+          >
+            <path d="M80 444q17-23 37-18 26 3 41 38 11-11 15 1 5 15-10 22-1 27-20 40-22 18-46 6-24-13-29-39-8-28 12-50Z" />
+            <path
+              d="M81 445q17-25 38-18 22 5 39 36l-6 2-18-25-1 7-10-9-7 8-5-9-10 7-6-2 3-8Z"
+              fill="#242021"
+            />
+            <path
+              d="M103 458q4 5 8 0m6-1q4 5 8 0"
+              fill="none"
+              strokeWidth="2.8"
+            />
+            <path
+              d="M119 479q-1 10-4 15-3 6 2 7 6 0 5-6l-3-16Z"
+              fill="#fffdf5"
+              stroke="none"
+            />
+            <path d="M115 514q4 3 8 0" fill="none" strokeWidth="2.4" />
+          </g>
+        </g>
+      </Ink>
+    );
+
   return (
     <Ink transform="translate(2 -6) scale(.28)">
       <path d="m139 316 3 38 18 2 8-35m47 1 3 32 20 2 5-34" />
@@ -446,14 +648,10 @@ export function Bochan({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="2.5"
       />
-      {asleep ? (
-        <path d="M177 99q6 6 12 0m10 1q6 6 12 0" fill="none" strokeWidth="3" />
-      ) : (
-        <g fill="#342723" stroke="none">
-          <ellipse cx="184" cy="98" rx="3" ry="4.7" />
-          <ellipse cx="205" cy="100" rx="3" ry="4.7" />
-        </g>
-      )}
+      <g fill="#342723" stroke="none">
+        <ellipse cx="184" cy="98" rx="3" ry="4.7" />
+        <ellipse cx="205" cy="100" rx="3" ry="4.7" />
+      </g>
       <path
         d="m151 123 5-9m4 10 5-9m6 12 5-10m34 12 5-10m5 9 4-9m4 9 4-9"
         fill="none"
