@@ -223,7 +223,8 @@ export function advanceBody(
           if (body.restTime === 0) {
             body.walkSpeed +=
               (body.speed - body.walkSpeed) * Math.min(1, dt * 3);
-            const walkSpeed = body.walkSpeed * (activity === "active" ? 1 : 0.5);
+            const walkSpeed =
+              body.walkSpeed * (activity === "active" ? 1 : 0.5);
             // Accumulate the gait so speed changes never retime earlier steps.
             const stepDuration = Math.max(
               0.32,

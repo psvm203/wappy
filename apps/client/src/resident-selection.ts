@@ -44,7 +44,8 @@ export function toggleResidentVisibility(
 ): string[] {
   const hidden = new Set(hiddenIds);
   if (!visible) {
-    for (const profile of [state.self, ...state.friends]) hidden.add(profile.id);
+    for (const profile of [state.self, ...state.friends])
+      hidden.add(profile.id);
   }
   if (hidden.has(profileId)) hidden.delete(profileId);
   else hidden.add(profileId);
@@ -66,7 +67,6 @@ export function visibleResidents(
       isSelf: false,
     })),
   ].filter(
-    (profile) =>
-      !hidden.has(profile.id) && (!hideSleeping || profile.online),
+    (profile) => !hidden.has(profile.id) && (!hideSleeping || profile.online),
   );
 }

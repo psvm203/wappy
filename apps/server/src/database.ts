@@ -166,9 +166,11 @@ export function openDatabase(databasePath: string) {
   // Retire blocking without leaving members of the same room disconnected.
   transaction(db, () => {
     if (
-      db.prepare(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_blocks'",
-      ).get()
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'profile_blocks'",
+        )
+        .get()
     )
       db.exec(`
         INSERT OR IGNORE INTO friendships

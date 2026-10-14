@@ -171,7 +171,10 @@ test(
     now += ATTACK_TTL_MS;
     for (const [index, token] of [b.token, c.token].entries()) {
       const expired = await call(
-        "/state", token, undefined, cached[index]!.etag,
+        "/state",
+        token,
+        undefined,
+        cached[index]!.etag,
       );
       assert.equal(expired.status, 200);
       assert.deepEqual(parseSidebarState(expired.body).attacks, []);

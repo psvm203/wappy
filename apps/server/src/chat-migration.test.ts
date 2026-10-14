@@ -150,7 +150,10 @@ test("removed social features reject requests and legacy data stays hidden", asy
       ),
     );
     for (const field of [
-      "directChat", "chatReporting", "unreadChatIds", "blocking",
+      "directChat",
+      "chatReporting",
+      "unreadChatIds",
+      "blocking",
     ])
       assert.equal(field in snapshot, false);
   }

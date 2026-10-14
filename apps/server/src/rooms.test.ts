@@ -256,10 +256,12 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
     [a, "missing", 404],
   ] as const) {
     assert.equal(
-      (await call("/friends/remove", caller.token, {
-        friendId: target,
-        ownerId: caller.profile.id,
-      })).status,
+      (
+        await call("/friends/remove", caller.token, {
+          friendId: target,
+          ownerId: caller.profile.id,
+        })
+      ).status,
       status,
     );
   }
@@ -277,12 +279,16 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
   });
   assert.equal(kickAttack.status, 201);
   const beforeKick = await call("/state", c.token);
-  assert.ok(beforeKick.body.messages.some(
-    (message: { id: number }) => message.id === kickMessage.body.id,
-  ));
-  assert.ok(beforeKick.body.attacks.some(
-    (attack: { id: number }) => attack.id === kickAttack.body.id,
-  ));
+  assert.ok(
+    beforeKick.body.messages.some(
+      (message: { id: number }) => message.id === kickMessage.body.id,
+    ),
+  );
+  assert.ok(
+    beforeKick.body.attacks.some(
+      (attack: { id: number }) => attack.id === kickAttack.body.id,
+    ),
+  );
   inspection.exec(
     "CREATE TRIGGER fail_kick BEFORE INSERT ON rooms BEGIN SELECT RAISE(ABORT, 'test rollback'); END",
   );
@@ -311,8 +317,10 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
       remaining.messages?.every((message) => message.senderId !== b.profile.id),
     );
     assert.ok(
-      remaining.attacks?.every((attack) =>
-        attack.attackerId !== b.profile.id && attack.targetId !== b.profile.id,
+      remaining.attacks?.every(
+        (attack) =>
+          attack.attackerId !== b.profile.id &&
+          attack.targetId !== b.profile.id,
       ),
     );
     assert.equal(remaining.room?.id, originalRoom?.id);

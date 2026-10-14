@@ -104,7 +104,8 @@ test("short invitation collisions retry without replacing existing codes", async
     );
     for (const table of ["users", "rooms", "room_members", "invites"])
       assert.equal(
-        inspection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count,
+        inspection.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!
+          .count,
         1,
       );
     assert.deepEqual(await call("/invites", {}, alice.token), first);
@@ -185,8 +186,10 @@ test("public invitation previews are read-only, bounded and reveal only invitati
       code: "aZ_".repeat(14) + "A",
     };
     inspection
-      .prepare(`INSERT INTO invites (code_hash, owner_id, room_id)
-        SELECT ?, user_id, room_id FROM room_members WHERE user_id = ?`)
+      .prepare(
+        `INSERT INTO invites (code_hash, owner_id, room_id)
+        SELECT ?, user_id, room_id FROM room_members WHERE user_id = ?`,
+      )
       .run(
         createHash("sha256").update(invite.code).digest("hex"),
         alice.profile.id,
@@ -487,9 +490,11 @@ test("profiles, invitations, presence and friendship persist safely end to end",
     );
     // Only the room owner can remove a member, including through older clients.
     assert.equal(
-      (await call("POST", "/friends/remove", carol.token, {
-        friendId: bob.profile.id,
-      })).status,
+      (
+        await call("POST", "/friends/remove", carol.token, {
+          friendId: bob.profile.id,
+        })
+      ).status,
       403,
     );
     assert.equal(
@@ -498,15 +503,19 @@ test("profiles, invitations, presence and friendship persist safely end to end",
       2,
     );
     assert.equal(
-      (await call("POST", "/friends/remove", bob.token, {
-        friendId: alice.profile.id,
-      })).status,
+      (
+        await call("POST", "/friends/remove", bob.token, {
+          friendId: alice.profile.id,
+        })
+      ).status,
       403,
     );
     assert.equal(
-      (await call("POST", "/friends/remove", alice.token, {
-        friendId: bob.profile.id,
-      })).status,
+      (
+        await call("POST", "/friends/remove", alice.token, {
+          friendId: bob.profile.id,
+        })
+      ).status,
       200,
     );
     assert.equal(
@@ -1106,7 +1115,8 @@ test("existing invitation codes migrate without expiry and remain reusable by mu
         guests.length,
       );
       assert.equal(
-        (await call("/friends/remove", host, { friendId: guests[0]![0] })).status,
+        (await call("/friends/remove", host, { friendId: guests[0]![0] }))
+          .status,
         200,
       );
       assert.equal(

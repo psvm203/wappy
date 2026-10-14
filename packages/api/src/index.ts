@@ -324,7 +324,9 @@ export function parseSidebarState(value: unknown): SidebarState {
       id: input.id,
       name: input.name,
       ...(input.ownerId === undefined ? {} : { ownerId: input.ownerId }),
-      ...(input.inviteCode === undefined ? {} : { inviteCode: input.inviteCode }),
+      ...(input.inviteCode === undefined
+        ? {}
+        : { inviteCode: input.inviteCode }),
     };
   }
   let messages: ChatMessage[] | undefined;
