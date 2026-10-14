@@ -822,7 +822,7 @@ function App() {
               </>
             )}
             {session && state && panel === "invite" && (
-              <div className="invite-panel">
+              <div>
                 <section className="invite-card">
                   <h2>방 초대 코드</h2>
                   <p>

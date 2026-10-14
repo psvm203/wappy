@@ -612,7 +612,7 @@ export function DesktopCharacters({
         return (
           <figure
             key={resident.id}
-            className={`desktop-resident ${resident.online ? "" : "is-resting"}`}
+            className="desktop-resident"
             data-composing={chatTarget === resident.id}
             ref={(element) => {
               if (!element) return;
