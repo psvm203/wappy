@@ -32,6 +32,7 @@ export function DesktopOverlay() {
       !snapshot?.visible ||
       !snapshot.connected ||
       snapshot.paused ||
+      snapshot.showAttacks === false ||
       residents.length === 0
     )
       collectAttacks(
@@ -81,6 +82,7 @@ export function DesktopOverlay() {
       attacks={snapshot.state.attacks}
       attackInbox={attackInbox}
       connected={snapshot.connected}
+      showAttacks={snapshot.showAttacks !== false}
     />
   );
 }

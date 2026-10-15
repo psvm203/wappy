@@ -154,6 +154,7 @@ function App() {
     paused: motionPaused,
     visible: charactersVisible,
     hideSleeping: preferences.hideSleeping,
+    showAttacks: preferences.showAttacks,
     position: preferences.position,
     size: preferences.size,
     activity: preferences.activity,
@@ -1276,6 +1277,33 @@ function App() {
                             </option>
                           ),
                         )}
+                      </select>
+                    </label>
+                    <label
+                      className="
+                        field m-[15px_0] block text-[11px] text-[#68725d]
+                        [&_:is(input,select,textarea)]:mt-[8px] [&_:is(input,select,textarea)]:block
+                        [&_:is(input,select,textarea)]:w-full [&_:is(input,select,textarea)]:rounded-[9px]
+                        [&_:is(input,select,textarea)]:border [&_:is(input,select,textarea)]:border-solid
+                        [&_:is(input,select,textarea)]:border-[#e0e5d8]
+                        [&_:is(input,select,textarea)]:bg-[#f4f5ef]
+                        [&_:is(input,select,textarea)]:p-[12px]
+                        [&_:is(input,select,textarea)]:text-[12px]
+                        [&_:is(input,select,textarea)]:text-[#3e4935]
+                      "
+                    >
+                      캐릭터 공격
+                      <select
+                        value={preferences.showAttacks ? "show" : "hide"}
+                        onChange={(event) =>
+                          setPreferences((current) => ({
+                            ...current,
+                            showAttacks: event.target.value === "show",
+                          }))
+                        }
+                      >
+                        <option value="show">보기</option>
+                        <option value="hide">숨기기</option>
                       </select>
                     </label>
                     <label

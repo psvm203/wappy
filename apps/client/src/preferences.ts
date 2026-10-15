@@ -53,6 +53,7 @@ interface CharacterPreferences {
   paused: boolean;
   visible: boolean;
   hideSleeping: boolean;
+  showAttacks: boolean;
   position: CharacterPosition;
   size: CharacterSize;
   activity: CharacterActivity;
@@ -65,6 +66,7 @@ export function loadCharacterPreferences(
     paused: reducedMotion,
     visible: true,
     hideSleeping: false,
+    showAttacks: true,
     position: "free",
     size: "normal",
     activity: "normal",
@@ -83,6 +85,7 @@ export function loadCharacterPreferences(
           ? value.visible
           : true,
       hideSleeping: "hideSleeping" in value && value.hideSleeping === true,
+      showAttacks: !("showAttacks" in value) || value.showAttacks !== false,
       position:
         "position" in value && isCharacterPosition(value.position)
           ? value.position

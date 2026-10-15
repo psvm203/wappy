@@ -28,6 +28,7 @@ test("character preferences survive restarts while respecting reduced motion and
       size: "normal",
       activity: "normal",
       hideSleeping: false,
+      showAttacks: true,
     });
     stored = JSON.stringify({ paused: true, visible: false });
     assert.deepEqual(loadCharacterPreferences(false), {
@@ -37,6 +38,7 @@ test("character preferences survive restarts while respecting reduced motion and
       size: "normal",
       activity: "normal",
       hideSleeping: false,
+      showAttacks: true,
     });
     stored = JSON.stringify({ paused: false, visible: false });
     assert.deepEqual(loadCharacterPreferences(true), {
@@ -46,6 +48,7 @@ test("character preferences survive restarts while respecting reduced motion and
       size: "normal",
       activity: "normal",
       hideSleeping: false,
+      showAttacks: true,
     });
     for (const position of Object.keys(CHARACTER_POSITIONS)) {
       stored = JSON.stringify({ paused: false, visible: true, position });
@@ -57,6 +60,7 @@ test("character preferences survive restarts while respecting reduced motion and
         size: "normal",
         activity: "normal",
         hideSleeping: false,
+        showAttacks: true,
       });
     }
     for (const size of Object.keys(CHARACTER_SIZES)) {
@@ -74,6 +78,7 @@ test("character preferences survive restarts while respecting reduced motion and
         size,
         activity: "normal",
         hideSleeping: false,
+        showAttacks: true,
       });
     }
     for (const activity of Object.keys(CHARACTER_ACTIVITIES)) {
@@ -86,6 +91,7 @@ test("character preferences survive restarts while respecting reduced motion and
           size: "normal",
           activity,
           hideSleeping: false,
+          showAttacks: true,
         });
         assert.deepEqual(loadCharacterPreferences(true), {
           paused: true,
@@ -94,6 +100,7 @@ test("character preferences survive restarts while respecting reduced motion and
           size: "normal",
           activity,
           hideSleeping: false,
+          showAttacks: true,
         });
       }
     }
@@ -101,6 +108,11 @@ test("character preferences survive restarts while respecting reduced motion and
       stored = JSON.stringify({ hideSleeping });
       assert.equal(loadCharacterPreferences(false).hideSleeping, hideSleeping);
       assert.equal(loadCharacterPreferences(true).hideSleeping, hideSleeping);
+    }
+    for (const showAttacks of [false, true]) {
+      stored = JSON.stringify({ showAttacks });
+      assert.equal(loadCharacterPreferences(false).showAttacks, showAttacks);
+      assert.equal(loadCharacterPreferences(true).showAttacks, showAttacks);
     }
     for (const invalid of [
       "{",
@@ -131,6 +143,7 @@ test("character preferences survive restarts while respecting reduced motion and
         size: "normal",
         activity: "normal",
         hideSleeping: false,
+        showAttacks: true,
       });
       assert.deepEqual(loadCharacterPreferences(true), {
         paused: true,
@@ -139,6 +152,7 @@ test("character preferences survive restarts while respecting reduced motion and
         size: "normal",
         activity: "normal",
         hideSleeping: false,
+        showAttacks: true,
       });
     }
     Object.defineProperty(globalThis, "localStorage", {
@@ -154,6 +168,7 @@ test("character preferences survive restarts while respecting reduced motion and
       size: "normal",
       activity: "normal",
       hideSleeping: false,
+      showAttacks: true,
     });
   } finally {
     if (original) Object.defineProperty(globalThis, "localStorage", original);

@@ -138,6 +138,7 @@ export function DesktopCharacters({
   attacks,
   attackInbox,
   connected,
+  showAttacks,
 }: {
   residents: DesktopResident[];
   paused: boolean;
@@ -149,6 +150,7 @@ export function DesktopCharacters({
   attacks?: AttackEvent[];
   attackInbox: AttackInbox;
   connected: boolean;
+  showAttacks: boolean;
 }) {
   const characterSize = CHARACTER_SIZES[size].pixels;
   const self = residents.find((resident) => resident.isSelf);
@@ -245,7 +247,7 @@ export function DesktopCharacters({
       attackInbox,
       attacks ?? [],
       visiblePresence,
-      connected && !paused,
+      connected && !paused && showAttacks,
       performance.now(),
     );
     const active = attack.current;
@@ -253,13 +255,14 @@ export function DesktopCharacters({
       active &&
       (!connected ||
         paused ||
+        !showAttacks ||
         !visiblePresence.get(active.attackerId) ||
         !visiblePresence.has(active.targetId))
     )
       stopAttack();
     startNextAttack();
     wakeAnimation.current();
-  }, [attacks, residents, connected, paused, attackInbox]);
+  }, [attacks, residents, connected, paused, showAttacks, attackInbox]);
   // oxlint-enable react-hooks/exhaustive-deps
 
   // oxlint-disable react-hooks/exhaustive-deps -- Restart the frame clock only when simulation inputs change; startNextAttack reads the same inputs and mutable refs.
@@ -549,6 +552,7 @@ export function DesktopCharacters({
       drag.current ||
       chatTargetRef.current ||
       paused ||
+      !showAttacks ||
       !connected
     )
       return;
@@ -559,7 +563,7 @@ export function DesktopCharacters({
 
   function activateResident(id: string) {
     if (!residents.find((resident) => resident.id === id)?.isSelf) {
-      void attackResident(id);
+      if (showAttacks) void attackResident(id);
       return;
     }
     if (!profileKey || !self) return;
@@ -627,6 +631,7 @@ export function DesktopCharacters({
       )}
       {residents.map((resident) => {
         const name = `${resident.name}${resident.isSelf ? " (나)" : ""}`;
+        const canActivate = resident.isSelf ? !!profileKey : showAttacks;
         const chat = resident.isSelf
           ? chatComposer.message
           : latestChat(messages, resident.id);
@@ -670,7 +675,7 @@ export function DesktopCharacters({
               observer.observe(caption);
               return () => observer.disconnect();
             }}
-            title={`${name} · ${resident.isSelf ? "클릭해서 채팅" : "클릭해서 공격"} · 드래그해서 이동`}
+            title={`${name} · ${canActivate ? (resident.isSelf ? "클릭해서 채팅 · " : "클릭해서 공격 · ") : ""}드래그해서 이동`}
             onPointerDown={(event) => startDrag(event, resident.id)}
             onPointerMove={moveDrag}
             onPointerUp={(event) => endDrag(event)}
@@ -686,14 +691,16 @@ export function DesktopCharacters({
                 resident-rotation [transform:rotate(var(--angle))]
                 focus-visible:rounded-[12px] focus-visible:[outline:2px_solid_#73985c]
               "
-              role={!resident.isSelf || profileKey ? "button" : undefined}
-              tabIndex={!resident.isSelf || profileKey ? 0 : undefined}
+              role={canActivate ? "button" : undefined}
+              tabIndex={canActivate ? 0 : undefined}
               aria-label={
                 resident.isSelf
                   ? profileKey
                     ? `${name} 캐릭터 채팅 입력창 열기`
                     : undefined
-                  : `내 캐릭터로 ${name} 공격하기`
+                  : showAttacks
+                    ? `내 캐릭터로 ${name} 공격하기`
+                    : undefined
               }
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
