@@ -507,10 +507,13 @@ fn main() -> Result<(), String> {
             }
             set_activity(&sidebar, "stopped")?;
             text_rendered(&desktop, ".desktop-characters.is-paused", "", true)?;
+            // Hidden presence is now shown by the profile's sleep toggle.
+            text_rendered(&sidebar, ".connection-line", "", false)?;
+            click_button(&sidebar, "내 모습")?;
             text_rendered(
                 &sidebar,
-                ".connection-line",
-                "접속 숨김 · 친구에게 오프라인으로 표시",
+                ".profile-form button[aria-pressed='true']:not(:disabled)",
+                "일어나기",
                 true,
             )?;
             if sidebar.is_visible().unwrap_or(true) {
