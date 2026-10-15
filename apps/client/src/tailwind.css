@@ -344,6 +344,35 @@
   }
 }
 
+@layer components {
+  .character:has(.shinchan-sleep) {
+    --animate-sleeping-breathe: none;
+
+    & .sleep-marks {
+      transform: translate(-10px, 30px);
+    }
+
+    &:has(.shinchan-sleep-spread) .sleep-marks {
+      transform: none;
+    }
+  }
+
+  .shinchan-sleep .sleeping-torso {
+    transform-origin: 65px 99px;
+    animation: pajama-breathe 4.8s ease-in-out infinite;
+  }
+}
+
+@keyframes pajama-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(1.035);
+  }
+}
+
 @layer base {
   @media (prefers-reduced-motion: reduce) {
     *,
