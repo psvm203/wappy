@@ -546,7 +546,7 @@ export function Masao({ asleep }: { asleep: boolean }) {
     );
 
   return (
-    <Ink transform="translate(-1 -10) scale(.3)">
+    <Ink transform="translate(100 0) scale(-1 1) translate(-1 -10) scale(.3)">
       <path d="m117 305-5 29 4 13 14-1 17-37m58-2 16 36 18-4 1-37" />
       <path d="m114 336 16 2-3 17-11 3Zm107 0 19-1-2 21-10 2Z" fill="#fffdf2" />
       <path
@@ -687,7 +687,7 @@ export function Bochan({ asleep }: { asleep: boolean }) {
     );
 
   return (
-    <Ink transform="translate(2 -6) scale(.28)">
+    <Ink transform="translate(100 0) scale(-1 1) translate(2 -6) scale(.28)">
       <path d="m139 316 3 38 18 2 8-35m47 1 3 32 20 2 5-34" />
       <path d="m142 351 18-1-2 22-13 3Zm76 0 20 2-3 20-15-1Z" fill="#fffdf3" />
       <path
