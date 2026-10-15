@@ -12,6 +12,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { exit } from "@tauri-apps/plugin-process";
 import {
   parseSidebarState,
+  parsePresenceSettings,
   parseChatMessage,
   parseAttackEvent,
   CHAT_HISTORY_LIMIT,
@@ -75,22 +76,27 @@ function App() {
   const profileSave = useRef<Promise<void>>(Promise.resolve());
   const quitDialog = useRef<HTMLDialogElement>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
+  const [presenceDraft, setPresenceDraft] = useState<boolean | null>(null);
   const [server, setServer] = useState(session?.server ?? DEFAULT_SERVER);
   const [onboarding, setOnboarding] = useState<"create" | "join">("create");
   const [serverState, setState] = useState<SidebarState | null>(null);
   const state = useMemo(
     () =>
-      serverState && profileDraft
-        ? {
-            ...serverState,
-            self: {
+      serverState && {
+        ...serverState,
+        self: profileDraft
+          ? {
               ...serverState.self,
               ...profileDraft,
               name: profileDraft.name.trim() || serverState.self.name,
-            },
-          }
-        : serverState,
-    [serverState, profileDraft],
+            }
+          : serverState.self,
+        presence:
+          serverState.presence && presenceDraft !== null
+            ? { ...serverState.presence, sharing: presenceDraft }
+            : serverState.presence,
+      },
+    [serverState, profileDraft, presenceDraft],
   );
   const [panel, setPanel] = useState<
     "friends" | "invite" | "profile" | "settings"
@@ -175,6 +181,7 @@ function App() {
     currentSession.current = next;
     setSession(next);
     setProfileDraft(null);
+    setPresenceDraft(null);
     setVerifiedInvitation("");
     setFriendView("all");
     setChatTarget(null);
@@ -348,6 +355,34 @@ function App() {
     return completed;
   }
 
+  function toggleSleep() {
+    if (
+      !session ||
+      currentSession.current !== session ||
+      connection !== "online" ||
+      !state?.presence
+    )
+      return;
+    const sharing = !state.presence.sharing;
+    void action(async () => {
+      // Preview locally while polls continue updating the confirmed server state.
+      setPresenceDraft(sharing);
+      try {
+        const presence = parsePresenceSettings(
+          await request(session, "PATCH /presence", { sharing }),
+        );
+        if (currentSession.current !== session) return;
+        setState((current) =>
+          current
+            ? reconcilePresence(current, { ...current, presence })
+            : current,
+        );
+      } finally {
+        if (currentSession.current === session) setPresenceDraft(null);
+      }
+    });
+  }
+
   function createProfile(profile: ProfileInput) {
     void action(async () => {
       const received = onboarding === "join" ? receivedInvitation() : null;
@@ -495,8 +530,7 @@ function App() {
       </button>
     );
   }
-  const presenceHidden =
-    connection === "online" && state?.presence?.sharing === false;
+  const sleeping = state?.presence?.sharing === false;
   const errorAlert = error && (
     <p
       className="
@@ -703,7 +737,7 @@ function App() {
         </div>
       ) : (
         <>
-          {session && (connection !== "online" || presenceHidden) && (
+          {session && connection !== "online" && (
             <div className="connection-line flex items-center gap-[7px] p-[0_22px_19px] text-[11px] text-[#68745e]">
               <span
                 className="
@@ -711,13 +745,11 @@ function App() {
                   [&.offline]:bg-[#b6b9b0]
                 "
               />
-              {connection === "online"
-                ? "접속 숨김 · 친구에게 오프라인으로 표시"
-                : connection === "connecting"
-                  ? "아지트에 들어가는 중…"
-                  : connection === "unauthorized"
-                    ? "프로필 인증이 만료되었어요"
-                    : "연결을 다시 확인하는 중…"}
+              {connection === "connecting"
+                ? "아지트에 들어가는 중…"
+                : connection === "unauthorized"
+                  ? "프로필 인증이 만료되었어요"
+                  : "연결을 다시 확인하는 중…"}
             </div>
           )}
           {session && connection === "offline" && (
@@ -1066,6 +1098,26 @@ function App() {
                 onChange={setProfileDraft}
                 onSave={updateProfile}
                 autoSave
+                beforeProfile={
+                  <button
+                    type="button"
+                    className="
+                      secondary mb-[20px] w-full rounded-[10px] bg-[#e8eede] p-[13px_14px]
+                      text-[12px] font-semibold text-[#526a3d] aria-pressed:bg-[#d3e8af]
+                      [&:hover]:bg-[#dee7ce]
+                    "
+                    aria-pressed={sleeping}
+                    disabled={
+                      busy ||
+                      !session ||
+                      connection !== "online" ||
+                      !state.presence
+                    }
+                    onClick={toggleSleep}
+                  >
+                    {sleeping ? "일어나기" : "자는 척하기"}
+                  </button>
+                }
               />
             )}
             {panel === "settings" && (
@@ -1261,7 +1313,7 @@ function App() {
                   aria-label="내 캐릭터 위에 채팅 입력창 열기"
                   onClick={() => setChatTarget(state.self.id)}
                 >
-                  <Character kind={state.self.character} />
+                  <Character kind={state.self.character} asleep={sleeping} />
                 </button>
               </div>
               <div>

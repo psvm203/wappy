@@ -60,7 +60,11 @@ export function visibleResidents(
 ): DesktopResident[] {
   const hidden = new Set(hiddenIds);
   return [
-    { ...state.self, online: true, isSelf: true },
+    {
+      ...state.self,
+      online: state.presence?.sharing !== false,
+      isSelf: true,
+    },
     ...state.friends.map((friend) => ({
       ...friend,
       online: connected && friend.online,
