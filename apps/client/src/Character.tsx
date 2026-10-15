@@ -68,6 +68,14 @@ const appearances: Record<CharacterKind, ComponentType<{ asleep: boolean }>> = {
   bochan: Bochan,
 };
 
+const LARGE_ARTWORK = new Set<CharacterKind>([
+  "shinchan",
+  "kazama",
+  "nene",
+  "masao",
+  "bochan",
+]);
+
 export function Character({
   kind,
   asleep = false,
@@ -107,7 +115,13 @@ export function Character({
         <g
           className={`character-body ${asleep ? "origin-[50px_96px] animate-sleeping-breathe" : "origin-[50px_100px] animate-breathe"}`}
         >
-          <Artwork asleep={asleep} />
+          {LARGE_ARTWORK.has(kind) ? (
+            <g transform="translate(-5 -5.5) scale(1.1)">
+              <Artwork asleep={asleep} />
+            </g>
+          ) : (
+            <Artwork asleep={asleep} />
+          )}
         </g>
       </g>
       {asleep && (
