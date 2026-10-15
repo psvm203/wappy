@@ -1,4 +1,22 @@
 import sasumata from "./assets/chiikawa-sasumata.png";
+import blueSasumata from "./assets/hachiware-sasumata.png";
+
+function Sasumata({ blue = false }: { blue?: boolean }) {
+  return (
+    <g className="hero-attack-pose" visibility="hidden">
+      <g className="sasumata">
+        <path d="M48 81q5-10 13-5m7 2q8-12 13-8" fill="none" />
+        <image
+          href={blue ? blueSasumata : sasumata}
+          width="420"
+          height="420"
+          transform="translate(55 80) rotate(116) scale(.24) translate(-350 -365)"
+        />
+        <path d="M51 77q3-5 7-2l4 5q1 5-4 6-5 1-7-4Zm22-7q3-4 7-1l3 4q1 5-3 6-5 1-7-4Z" />
+      </g>
+    </g>
+  );
+}
 
 export function Chiikawa({ asleep }: { asleep: boolean }) {
   return (
@@ -59,20 +77,7 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="1.8"
       />
-      {!asleep && (
-        <g className="hero-attack-pose" visibility="hidden">
-          <g className="chiikawa-sasumata">
-            <path d="M48 81q5-10 13-5m7 2q8-12 13-8" fill="none" />
-            <image
-              href={sasumata}
-              width="420"
-              height="420"
-              transform="translate(55 80) rotate(116) scale(.24) translate(-350 -365)"
-            />
-            <path d="M51 77q3-5 7-2l4 5q1 5-4 6-5 1-7-4Zm22-7q3-4 7-1l3 4q1 5-3 6-5 1-7-4Z" />
-          </g>
-        </g>
-      )}
+      {!asleep && <Sasumata />}
     </g>
   );
 }
@@ -87,7 +92,15 @@ export function Hachiware({ asleep }: { asleep: boolean }) {
       strokeLinejoin="round"
     >
       <path d="M45 91L44 97Q44 101 48 100Q54 98 55 92" fill="#94bdcf" />
-      <path d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38C91 47 93 61 84 71Q89 70 89 74Q88 78 81 79L79 85Q86 87 83 91Q80 94 74 90C60 95 40 94 26 87Q19 90 16 86Q14 83 22 81L21 73Q14 74 12 69Q11 66 18 67C9 58 9 43 19 33Z" />
+      <path
+        className="hero-rest-pose"
+        d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38C91 47 93 61 84 71Q89 70 89 74Q88 78 81 79L79 85Q86 87 83 91Q80 94 74 90C60 95 40 94 26 87Q19 90 16 86Q14 83 22 81L21 73Q14 74 12 69Q11 66 18 67C9 58 9 43 19 33Z"
+      />
+      <path
+        className="hero-attack-pose"
+        visibility="hidden"
+        d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38C91 47 93 61 84 71L81 79L79 85Q86 87 83 91Q80 94 74 90C60 95 40 94 26 87Q19 90 16 86Q14 83 22 81L21 73L18 67C9 58 9 43 19 33Z"
+      />
       <path
         d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38Q62 40 50 31Q40 40 19 33Z"
         fill="#94bdcf"
@@ -119,6 +132,7 @@ export function Hachiware({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="1.8"
       />
+      {!asleep && <Sasumata blue />}
     </g>
   );
 }

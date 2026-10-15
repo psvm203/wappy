@@ -309,7 +309,7 @@
   &[data-attack-style="smash"][data-attack="impact"] .hulk-raised-fists {
     visibility: hidden;
   }
-  &[data-attack-style="sasumata"][data-attack="impact"] .chiikawa-sasumata {
+  &[data-attack-style="sasumata"][data-attack="impact"] .sasumata {
     @apply animate-sasumata-thrust;
   }
   &[data-attack-style="smash"][data-attack="impact"] .hulk-slam-fists {

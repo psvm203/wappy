@@ -13,6 +13,7 @@ type AttackKind =
 
 const heroAttacks: Partial<Record<Character, AttackKind>> = {
   chiikawa: "sasumata",
+  hachiware: "sasumata",
   ironman: "repulsor",
   "captain-america": "shield",
   thor: "lightning",
