@@ -167,50 +167,64 @@ export function Shinchan({ asleep }: { asleep: boolean }) {
 export function Kazama({ asleep }: { asleep: boolean }) {
   if (asleep)
     return (
-      <Ink transform="translate(0 0)">
+      <Ink transform="translate(-21 -11) scale(.2)">
         <g
           className="shinchan-sleep"
           fill="#f4c4a9"
           stroke="#211e22"
-          strokeWidth="1.2"
+          strokeWidth="4"
         >
-          <path d="M77 92q8-2 11 2 3 4-3 5l-9-1m-7-3q8 1 8 5l-11 1" />
-          <g className="sleeping-torso">
+          <path
+            d="M211 353q-19-7-32 1-13 8-5 22l17 24q5 6-4 15l-10 13q-8 14 8 23l17 10q-25 17-29 39-5 23 19 44 12 13 24 9l22-8q25 24 48 17 23-2 47-23l28-29-8-39-12-39q-3-14-24-18l-26-16-26-23-34-21Z"
+            fill="#effbfa"
+          />
+          <path
+            d="M232 382q29 15 55 46m-61 27q49-2 91 24m-114-18-11-6"
+            fill="none"
+            strokeWidth="3"
+          />
+          <path d="m398 528-17 14q-9 10 2 8l24-10 11-5m-60-16-15 12q-7 8 4 6l24-9 9-8" />
+          <g
+            className="sleeping-torso"
+            style={{ transformOrigin: "425px 530px" }}
+          >
             <path
-              d="M47 74q14-6 23 2 10 6 10 15l-8 7-24-3-7-12Z"
+              d="M352 319q34-18 68-13c44 0 81 39 98 88q17 37 9 69c-5 22-34 29-57 30l-10 40q-1 8-13 7l-53-7-14-8-47-1q-14 1-13-8l-3-61q2-27 22-29l3-1q-17-18-29-34l-9-22Z"
               fill="#79bad0"
             />
-            <path d="m48 74 5 12 7-7 3 9 6-7" fill="#d1e8e8" />
-            <circle cx="64" cy="88" r="1.2" fill="#d1e8e8" />
-            <circle cx="68" cy="93" r="1.2" fill="#d1e8e8" />
-            <path d="M69 86q9-6 14 1l2 8-11 4-14-1q-5-4-1-8Z" fill="#79bad0" />
-            <path d="m77 90 3 6m-18-2 10 1" fill="none" />
-            <path d="M47 81q7 1 7 9l-11 7-9-6 5-8Z" fill="#79bad0" />
-            <path d="m41 89 7 5" fill="none" />
-          </g>
-          <path d="M41 92q-5-3-10-1l-6 5q2 4 9 3l11-3m-16-1 6 1" />
-          <g
-            transform="translate(33 75) rotate(-30) scale(.38) translate(-505 -491)"
-            strokeWidth="2.8"
-          >
-            <path d="M474 477q-10-5-15 9-10-4-12 9-2 13 14 14l17 9 20 6 22 9q19 6 27-5 10-15-5-31l-7-23-41-13Z" />
             <path
-              d="M462 488q-5-14-2-22 0-7 13-5l13 1 27-19q8-6 13 4l20 31 11-5-2 10 14-6q-1 16-12 17l-23-10-17-5-18-8-13 13-8-5-8 12Z"
-              fill="#202039"
-            />
-            <path
-              d="M483 479q11-10 22 1m13 5q8-5 15 3"
+              d="M355 319q18 13 36-5M400 442q44 22 89 19"
               fill="none"
               strokeWidth="3"
             />
             <path
-              d="M483 491q10 9 21 0m14 6q8 7 17 0"
+              d="M350 432q26-3 40 21 19 9 26 27l5 34q3 12-8 11M321 450q15-9 32-5"
               fill="none"
-              strokeWidth="3.6"
+              strokeWidth="3"
             />
-            <path d="m518 507 6 6-6-1Z" fill="#211e22" strokeWidth="2" />
-            <path d="M518 519q5 4 10 0" fill="none" strokeWidth="2.4" />
+            <path d="m305 366-18 7q-5 4 1 15l7 13q4 8 12 4l17-11Z" />
+            <path d="m292 390 7 5" fill="none" strokeWidth="2.7" />
+            <path
+              d="M355 322q-31 0-52 43l19 26q12 5 28-12l20-30q0-17-15-27Z"
+              fill="#79bad0"
+            />
+            <path d="M350 351q-4 15-13 25" fill="none" strokeWidth="3" />
           </g>
+          <path d="M279 247q-15 14-18 31l-17 25q-16 24-10 45 5 23 25 28 15 6 39-3l30-32q25-28 72-36l-19-24q19-7 18-28 1-22-21-29-24-8-35 22l-6-15-21-22-30 24Z" />
+          <path
+            d="m249 237 45-113q8-25 25-20l79 54 78 5q26 1 22 29-13 60-49 113l-49 1-19-24q19-6 18-29 1-21-20-28-25-9-36 21l-6-15-21-21-27 23-19 23-46 33q-13 0-33-25l-17-22q-7-11 6-8l45 13-11-24q-4-11 5-7Z"
+            fill="#202039"
+          />
+          <path
+            d="M266 257q-1 17 12 17 18-2 25-27"
+            fill="none"
+            strokeWidth="3.7"
+          />
+          <path
+            d="M276 375q5-16 14-15 10 1 12 15l-14 4Z"
+            fill="#88485e"
+            strokeWidth="3.2"
+          />
         </g>
       </Ink>
     );
