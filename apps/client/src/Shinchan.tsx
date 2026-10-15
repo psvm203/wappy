@@ -534,7 +534,7 @@ export function Masao({ asleep }: { asleep: boolean }) {
           <path
             d="M615 141c-8 32 15 53 49 67m45 95c-17 45 13 78 43 97"
             fill="none"
-            strokeWidth="13"
+            strokeWidth="9.5"
           />
           <path
             d="M550 291c-15 0-6 32 5 49 13 19 25 3 22-13-3-18-16-39-27-36Z"
