@@ -44,6 +44,7 @@ import {
 import { ProfileForm } from "./ProfileForm";
 import { ChatBubble } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
+import { useChatComposer } from "./use-chat-composer";
 import { latestChat } from "./chat";
 import { useDesktopChatRequests } from "./chat-bridge";
 import { InviteField } from "./InviteField";
@@ -112,7 +113,6 @@ function App() {
   const [notice, setNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [friendView, setFriendView] = useState<FriendView>("all");
-  const [chatTarget, setChatTarget] = useState<string | null>(null);
   const openSettings = useCallback(() => {
     setPanel("settings");
     setError("");
@@ -129,6 +129,12 @@ function App() {
     session && state
       ? residentSelectionKey(session.server, state.self.id)
       : null;
+  const chat = useChatComposer(
+    profileKey,
+    state?.self.id,
+    state ? latestChat(state.messages, state.self.id) : undefined,
+    sendChat,
+  );
   const selection = useResidentSelection(desktop ? profileKey : null);
   const chatError = useDesktopChatRequests(profileKey, sendChat);
   const syncError = useDesktopSync({
@@ -184,7 +190,7 @@ function App() {
     setPresenceDraft(null);
     setVerifiedInvitation("");
     setFriendView("all");
-    setChatTarget(null);
+    chat.close();
   }
 
   function applyState(next: SidebarState) {
@@ -230,13 +236,15 @@ function App() {
 
   function chatComposer(id: string) {
     return (
-      chatTarget === id &&
+      chat.target === id &&
       state && (
         <ChatComposer
           key={profileKey ?? state.self.id}
           connected={connection === "online" && state.messages !== undefined}
-          onSend={sendChat}
-          onClose={() => setChatTarget(null)}
+          initialText={chat.initialText}
+          initialError={chat.initialError}
+          onSend={chat.send}
+          onClose={chat.close}
         />
       )
     );
@@ -1294,7 +1302,7 @@ function App() {
                   type="button"
                   className="character-chat shrink-0 bg-transparent p-0"
                   aria-label="내 캐릭터 위에 채팅 입력창 열기"
-                  onClick={() => setChatTarget(state.self.id)}
+                  onClick={() => chat.open(state.self.id)}
                 >
                   <Character kind={state.self.character} asleep={sleeping} />
                 </button>
@@ -1306,9 +1314,7 @@ function App() {
                     나
                   </span>
                 </strong>
-                <ChatBubble
-                  message={latestChat(state.messages, state.self.id)}
-                />
+                <ChatBubble message={chat.message} />
               </div>
               {characterVisibility(state.self)}
               <button

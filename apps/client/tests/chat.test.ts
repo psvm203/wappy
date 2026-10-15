@@ -8,7 +8,39 @@ import {
   parseChatText,
   parseSidebarState,
 } from "@wappy/api";
-import { latestChat, movedForDrag } from "../src/chat.ts";
+import { displayedChat, latestChat, movedForDrag } from "../src/chat.ts";
+
+test("local chat appears before confirmation and keeps its bubble identity through server echoes", () => {
+  const previous = {
+    id: 1,
+    senderId: "alice",
+    text: "이전 메시지",
+    sentAt: 1_800_000_000_000,
+  };
+  const optimistic = { ...previous, id: -1, text: "바로 표시" };
+  const confirmed = { ...optimistic, id: 2 };
+  const newer = { ...confirmed, id: 3, text: "다른 기기에서 보냄" };
+  assert.equal(displayedChat(previous, { message: optimistic }), optimistic);
+  assert.equal(displayedChat(confirmed, { message: optimistic }), optimistic);
+  for (const serverMessage of [undefined, previous, confirmed])
+    assert.equal(
+      displayedChat(serverMessage, { message: optimistic, confirmedId: 2 }),
+      optimistic,
+    );
+  assert.equal(
+    displayedChat(newer, { message: optimistic, confirmedId: 2 }),
+    newer,
+  );
+  assert.equal(displayedChat(previous, null), previous);
+  assert.equal(
+    displayedChat(
+      undefined,
+      { message: optimistic },
+      optimistic.sentAt + 60_000,
+    ),
+    undefined,
+  );
+});
 
 test("chat validates text, audience, ordering and history bounds at the server boundary", () => {
   const self = {

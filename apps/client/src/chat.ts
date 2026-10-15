@@ -1,5 +1,25 @@
 import type { ChatMessage } from "@wappy/api";
 
+export interface LocalChat {
+  message: ChatMessage;
+  confirmedId?: number;
+}
+
+export function displayedChat(
+  serverMessage: ChatMessage | undefined,
+  local: LocalChat | null,
+  now = Date.now(),
+) {
+  // Keep the local ID after confirmation so echoes do not restart the bubble timer.
+  return local &&
+    local.message.sentAt + 60_000 > now &&
+    (local.confirmedId === undefined ||
+      !serverMessage ||
+      serverMessage.id <= local.confirmedId)
+    ? local.message
+    : serverMessage;
+}
+
 export function latestChat(
   messages: readonly ChatMessage[] | undefined,
   senderId: string,

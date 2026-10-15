@@ -24,6 +24,7 @@ import { Character } from "./Character";
 import { AttackEffects, drawAttackEffect } from "./AttackEffects";
 import { ChatBubble } from "./ChatBubble";
 import { ChatComposer } from "./ChatComposer";
+import { useChatComposer } from "./use-chat-composer";
 import { requestDesktopChat } from "./chat-bridge";
 import { latestChat, movedForDrag } from "./chat";
 import { requestDesktopAttack } from "./attack-bridge";
@@ -147,11 +148,18 @@ export function DesktopCharacters({
   connected: boolean;
 }) {
   const characterSize = CHARACTER_SIZES[size].pixels;
-  const [chatTarget, setChatTarget] = useState<string | null>(null);
+  const self = residents.find((resident) => resident.isSelf);
+  const chatComposer = useChatComposer(
+    profileKey,
+    self?.id,
+    self ? latestChat(messages, self.id) : undefined,
+    (text) => requestDesktopChat(profileKey!, text),
+  );
+  const chatTarget = chatComposer.target;
+  const closeChat = chatComposer.close;
   const chatTargetRef = useRef(chatTarget);
   chatTargetRef.current = chatTarget;
   const composing = chatTarget !== null;
-  const self = residents.find((resident) => resident.isSelf);
   const [attackNotice, setAttackNotice] = useState<string | null>(null);
   const entries = useRef(new Map<string, Resident>());
   const drag = useRef<Drag | null>(null);
@@ -219,12 +227,11 @@ export function DesktopCharacters({
     for (const id of entries.current.keys())
       if (!ids.has(id)) entries.current.delete(id);
     if (drag.current && !ids.has(drag.current.id)) drag.current = null;
-    if (chatTargetRef.current && !ids.has(chatTargetRef.current))
-      setChatTarget(null);
+    if (chatTargetRef.current && !ids.has(chatTargetRef.current)) closeChat();
     const active = attack.current;
     if (active && (!ids.has(active.attackerId) || !ids.has(active.targetId)))
       stopAttack();
-  }, [residents]);
+  }, [residents, closeChat]);
 
   // oxlint-disable react-hooks/exhaustive-deps -- startNextAttack reads mutable scene refs plus paused, connected and attackInbox, all covered below.
   useLayoutEffect(() => {
@@ -554,14 +561,14 @@ export function DesktopCharacters({
     }
     if (!profileKey || !self) return;
     stopAttack();
-    setChatTarget(id);
+    chatComposer.open(id);
   }
 
   async function attackResident(id: string) {
     const targetProfile = residents.find((resident) => resident.id === id);
     if (!targetProfile) return;
     if (targetProfile.isSelf) return;
-    setChatTarget(null);
+    chatComposer.close();
     if (paused) {
       setAttackNotice("움직임을 다시 시작하면 공격할 수 있어요.");
       return;
@@ -617,7 +624,9 @@ export function DesktopCharacters({
       )}
       {residents.map((resident) => {
         const name = `${resident.name}${resident.isSelf ? " (나)" : ""}`;
-        const chat = latestChat(messages, resident.id);
+        const chat = resident.isSelf
+          ? chatComposer.message
+          : latestChat(messages, resident.id);
         return (
           <figure
             key={resident.id}
@@ -726,8 +735,10 @@ export function DesktopCharacters({
               {chatTarget === resident.id && self && profileKey ? (
                 <ChatComposer
                   connected={connected && messages !== undefined}
-                  onSend={(text) => requestDesktopChat(profileKey, text)}
-                  onClose={() => setChatTarget(null)}
+                  initialText={chatComposer.initialText}
+                  initialError={chatComposer.initialError}
+                  onSend={chatComposer.send}
+                  onClose={chatComposer.close}
                 />
               ) : (
                 <>

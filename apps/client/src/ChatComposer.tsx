@@ -3,29 +3,29 @@ import { MAX_CHAT_LENGTH, parseChatText } from "@wappy/api";
 
 export function ChatComposer({
   connected,
+  initialText = "",
+  initialError = "",
   onSend,
   onClose,
 }: {
   connected: boolean;
-  onSend: (text: string) => Promise<unknown>;
+  initialText?: string;
+  initialError?: string;
+  onSend: (text: string) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [draft, setDraft] = useState(initialText);
+  const [error, setError] = useState(initialError);
   const input = useRef<HTMLTextAreaElement>(null);
-  const sending = useRef(false);
   const connectionError = connected ? "" : "서버에 연결되면 보낼 수 있어요.";
 
   useEffect(() => {
     input.current?.setCustomValidity(error || connectionError);
-    if (error && !busy) input.current?.reportValidity();
-  }, [error, busy, connectionError]);
+    if (error) input.current?.reportValidity();
+  }, [error, connectionError]);
 
   useEffect(() => {
-    const cancel = () => {
-      if (!sending.current) onClose();
-    };
+    const cancel = () => onClose();
     const clickOutside = (event: MouseEvent) => {
       if (!input.current?.form?.contains(event.target as Node)) cancel();
     };
@@ -41,25 +41,18 @@ export function ChatComposer({
     };
   }, [onClose]);
 
-  async function send(event: FormEvent) {
+  function send(event: FormEvent) {
     event.preventDefault();
-    if (sending.current || !connected) return;
+    if (!connected) return;
     try {
       const text = parseChatText(draft);
-      sending.current = true;
-      setBusy(true);
       setError("");
-      await onSend(text);
-      setDraft("");
-      onClose();
+      onSend(text);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "메시지를 보내지 못했어요.",
       );
       input.current?.focus();
-    } finally {
-      sending.current = false;
-      setBusy(false);
     }
   }
 
@@ -67,12 +60,11 @@ export function ChatComposer({
     <form
       className="chat-composer pointer-events-auto m-0 w-[240px] max-w-[calc(100vw-8px)] cursor-default"
       aria-label="친구 모두에게 메시지 보내기"
-      aria-busy={busy}
-      onSubmit={(event) => void send(event)}
+      onSubmit={send}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.nativeEvent.isComposing) {
           event.stopPropagation();
-          if (!sending.current) onClose();
+          onClose();
         }
       }}
     >
@@ -90,7 +82,6 @@ export function ChatComposer({
         rows={2}
         maxLength={MAX_CHAT_LENGTH}
         value={draft}
-        readOnly={busy}
         onChange={(event) => {
           event.target.setCustomValidity(connectionError);
           setError("");
@@ -104,9 +95,11 @@ export function ChatComposer({
             event.keyCode !== 229
           ) {
             event.preventDefault();
-            if (sending.current) return;
             if (!event.currentTarget.value.trim()) onClose();
-            else event.currentTarget.form?.requestSubmit();
+            else {
+              event.currentTarget.setCustomValidity(connectionError);
+              event.currentTarget.form?.requestSubmit();
+            }
           }
         }}
       />
