@@ -62,7 +62,7 @@ test("character selections isolate profiles and servers without changing friends
         online: false,
       },
     ],
-    presence: { sharing: false, revision: 1 },
+    presence: { sharing: true, revision: 1 },
   };
   const original = structuredClone(state);
   const hiddenBob = toggleResidentVisibility(state, [], true, "bob");
@@ -175,4 +175,22 @@ test("character selections isolate profiles and servers without changing friends
       },
     }),
   );
+});
+
+test("self sleeps with hidden presence and wakes when sharing resumes", () => {
+  const state: SidebarState = {
+    self: { id: "alice", name: "Alice", character: "hachiware" },
+    friends: [],
+    presence: { sharing: false, revision: 1 },
+  };
+  for (const connected of [true, false]) {
+    assert.equal(visibleResidents(state, connected, [])[0]?.online, false);
+    assert.deepEqual(visibleResidents(state, connected, [], true), []);
+    for (const presence of [undefined, { sharing: true, revision: 2 }]) {
+      assert.equal(
+        visibleResidents({ ...state, presence }, connected, [])[0]?.online,
+        true,
+      );
+    }
+  }
 });
