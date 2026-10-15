@@ -20,6 +20,7 @@ const width = 1200,
 test("attack origins and contact distances follow the selected character size", () => {
   for (const { pixels } of Object.values(CHARACTER_SIZES)) {
     for (const character of [
+      "momonga",
       "usagi",
       "hachiware",
       "chiikawa",
@@ -54,7 +55,9 @@ test("attack origins and contact distances follow the selected character size", 
                 ? 19
                 : character === "chiikawa" || character === "hachiware"
                   ? 46
-                  : 24) *
+                  : character === "usagi"
+                    ? 36
+                    : 24) *
                 pixels) /
               CHARACTER_SIZE;
             assert.ok(
@@ -77,7 +80,7 @@ test("a dash follows a moving target, hits once, then both characters return to 
   const target = createBody("friend", width, height);
   moveBody(attacker, 120, 400, width, height);
   moveBody(target, 900, 400, width, height);
-  const attack = createAttack(attacker, target, "usagi")!;
+  const attack = createAttack(attacker, target, "momonga")!;
   let hits = 0,
     done = false;
   for (let frame = 0; frame < 180; frame++) {
@@ -115,8 +118,12 @@ test("a dash follows a moving target, hits once, then both characters return to 
   assert.equal(target.mode, "walk");
 });
 
-for (const character of ["chiikawa", "hachiware"] as const) {
-  test(`${character} aims the sasumata in every direction, approaches to weapon reach and recoils after one hit`, () => {
+for (const [character, kind, reach] of [
+  ["chiikawa", "sasumata", 46],
+  ["hachiware", "sasumata", 46],
+  ["usagi", "staff", 36],
+] as const) {
+  test(`${character} aims the ${kind} in every direction, approaches to weapon reach and recoils after one hit`, () => {
     for (const [x, y] of [
       [900, 400],
       [100, 400],
@@ -128,7 +135,7 @@ for (const character of ["chiikawa", "hachiware"] as const) {
       moveBody(attacker, 500, 400, width, height);
       moveBody(target, x, y, width, height);
       const attack = createAttack(attacker, target, character)!;
-      assert.equal(attack.kind, "sasumata");
+      assert.equal(attack.kind, kind);
       let hits = 0,
         done = false;
       for (let frame = 0; frame < 180; frame++) {
@@ -151,8 +158,8 @@ for (const character of ["chiikawa", "hachiware"] as const) {
         if (step === "hit") {
           hits++;
           assert.ok(
-            Math.abs(distance - 46) < 0.001,
-            "the fork reaches the target before their bodies collide",
+            Math.abs(distance - reach) < 0.001,
+            "the weapon reaches the target before their bodies collide",
           );
         }
         if (step === "done") {

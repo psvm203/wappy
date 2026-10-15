@@ -4,6 +4,7 @@ import { CHARACTER_SIZE, moveBody, type Body } from "./desktop-physics.ts";
 type AttackKind =
   | "dash"
   | "sasumata"
+  | "staff"
   | "repulsor"
   | "shield"
   | "lightning"
@@ -14,6 +15,7 @@ type AttackKind =
 const heroAttacks: Partial<Record<Character, AttackKind>> = {
   chiikawa: "sasumata",
   hachiware: "sasumata",
+  usagi: "staff",
   ironman: "repulsor",
   "captain-america": "shield",
   thor: "lightning",
@@ -58,7 +60,7 @@ export function createAttack(
     duration:
       kind === "smash"
         ? Math.max(0.65, Math.min(0.95, distance / 1000))
-        : kind === "dash" || kind === "sasumata"
+        : kind === "dash" || kind === "sasumata" || kind === "staff"
           ? Math.max(0.2, Math.min(1, distance / 1400))
           : Math.max(0.24, Math.min(0.65, distance / 1600)),
     startX: attacker.x,
@@ -177,8 +179,14 @@ export function advanceAttack(
         width,
         height,
       );
-    } else if (attack.kind === "dash" || attack.kind === "sasumata") {
-      const reach = (attack.kind === "sasumata" ? 46 : 24) * contactScale;
+    } else if (
+      attack.kind === "dash" ||
+      attack.kind === "sasumata" ||
+      attack.kind === "staff"
+    ) {
+      const reach =
+        (attack.kind === "sasumata" ? 46 : attack.kind === "staff" ? 36 : 24) *
+        contactScale;
       moveBody(
         attacker,
         attack.startX + (target.x - attack.nx * reach - attack.startX) * eased,
@@ -186,7 +194,7 @@ export function advanceAttack(
         width,
         height,
       );
-      if (attack.kind === "sasumata") aimHero(attack);
+      if (attack.kind !== "dash") aimHero(attack);
       else {
         const heading = Math.atan2(attack.ny, attack.nx) + Math.PI / 2;
         const turn = Math.atan2(
@@ -213,6 +221,7 @@ export function advanceAttack(
   const recoil =
     attack.kind === "dash" ||
     attack.kind === "sasumata" ||
+    attack.kind === "staff" ||
     attack.kind === "smash"
       ? 200
       : 0;

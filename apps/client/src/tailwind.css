@@ -71,6 +71,8 @@
   --animate-attack-dash: attack-dash 0.18s ease-in-out infinite alternate;
   --animate-attack-strike: attack-strike 0.38s ease-out both;
   --animate-sasumata-thrust: sasumata-thrust 0.38s ease-out both;
+  --animate-staff-ready: staff-ready 0.2s ease-out both;
+  --animate-staff-swing: staff-swing 0.38s ease-out both;
   --animate-bow-release: bow-release 0.18s ease-out both;
   --animate-attack-pop: attack-pop 0.38s ease-out both;
   --animate-attack-shake: attack-shake 0.1s ease-in-out 3;
@@ -152,6 +154,22 @@
       transform: translateY(-12px) scale(1);
     }
   }
+  @keyframes staff-ready {
+    to {
+      transform: rotate(-12deg);
+    }
+  }
+  @keyframes staff-swing {
+    0% {
+      transform: rotate(-12deg);
+    }
+    35% {
+      transform: translate(6px, -3px) rotate(12deg);
+    }
+    100% {
+      transform: none;
+    }
+  }
   @keyframes character-waddle {
     0%,
     100% {
@@ -222,7 +240,8 @@
   &[data-hit="true"] {
     @apply z-2;
   }
-  &[data-attack-style="sasumata"] {
+  &[data-attack-style="sasumata"],
+  &[data-attack-style="staff"] {
     @apply z-3;
   }
   &[data-composing="true"] {
@@ -276,6 +295,7 @@
   }
   &:is(
       [data-attack-style="sasumata"],
+      [data-attack-style="staff"],
       [data-attack-style="repulsor"],
       [data-attack-style="shield"],
       [data-attack-style="lightning"],
@@ -311,6 +331,15 @@
   }
   &[data-attack-style="sasumata"][data-attack="impact"] .sasumata {
     @apply animate-sasumata-thrust;
+  }
+  & .usagi-staff {
+    transform-origin: 50px 80px;
+  }
+  &[data-attack-style="staff"][data-attack="dash"] .usagi-staff {
+    @apply animate-staff-ready;
+  }
+  &[data-attack-style="staff"][data-attack="impact"] .usagi-staff {
+    @apply animate-staff-swing;
   }
   &[data-attack-style="smash"][data-attack="impact"] .hulk-slam-fists {
     visibility: visible;

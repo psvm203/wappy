@@ -11,7 +11,13 @@ export function drawAttackEffect(
   if (!svg) return;
   svg.dataset.kind = attack?.kind ?? "";
   svg.dataset.phase = attack?.phase ?? "";
-  if (!attack || attack.kind === "dash" || attack.kind === "sasumata") return;
+  if (
+    !attack ||
+    attack.kind === "dash" ||
+    attack.kind === "sasumata" ||
+    attack.kind === "staff"
+  )
+    return;
   const scale = attack.attacker.size / CHARACTER_SIZE;
   const { sourceX, sourceY, x, y, angle, progress } = attackVisual(
     attack,
