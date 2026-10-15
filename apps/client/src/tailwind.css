@@ -70,6 +70,7 @@
   --animate-flight-trail: flight-trail 0.24s linear infinite;
   --animate-attack-dash: attack-dash 0.18s ease-in-out infinite alternate;
   --animate-attack-strike: attack-strike 0.38s ease-out both;
+  --animate-sasumata-thrust: sasumata-thrust 0.38s ease-out both;
   --animate-bow-release: bow-release 0.18s ease-out both;
   --animate-attack-pop: attack-pop 0.38s ease-out both;
   --animate-attack-shake: attack-shake 0.1s ease-in-out 3;
@@ -121,6 +122,17 @@
     }
     75% {
       transform: translateX(5px) rotate(7deg);
+    }
+  }
+  @keyframes sasumata-thrust {
+    0% {
+      transform: translate(-4px, 1px);
+    }
+    30% {
+      transform: translate(7px, -2px);
+    }
+    100% {
+      transform: none;
     }
   }
   @keyframes attack-pop {
@@ -210,6 +222,9 @@
   &[data-hit="true"] {
     @apply z-2;
   }
+  &[data-attack-style="sasumata"] {
+    @apply z-3;
+  }
   &[data-composing="true"] {
     @apply z-4;
   }
@@ -260,6 +275,7 @@
     @apply animate-attack-strike;
   }
   &:is(
+      [data-attack-style="sasumata"],
       [data-attack-style="repulsor"],
       [data-attack-style="shield"],
       [data-attack-style="lightning"],
@@ -292,6 +308,9 @@
   }
   &[data-attack-style="smash"][data-attack="impact"] .hulk-raised-fists {
     visibility: hidden;
+  }
+  &[data-attack-style="sasumata"][data-attack="impact"] .chiikawa-sasumata {
+    @apply animate-sasumata-thrust;
   }
   &[data-attack-style="smash"][data-attack="impact"] .hulk-slam-fists {
     visibility: visible;

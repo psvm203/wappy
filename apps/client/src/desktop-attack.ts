@@ -3,6 +3,7 @@ import { CHARACTER_SIZE, moveBody, type Body } from "./desktop-physics.ts";
 
 type AttackKind =
   | "dash"
+  | "sasumata"
   | "repulsor"
   | "shield"
   | "lightning"
@@ -11,6 +12,7 @@ type AttackKind =
   | "arrow";
 
 const heroAttacks: Partial<Record<Character, AttackKind>> = {
+  chiikawa: "sasumata",
   ironman: "repulsor",
   "captain-america": "shield",
   thor: "lightning",
@@ -55,7 +57,7 @@ export function createAttack(
     duration:
       kind === "smash"
         ? Math.max(0.65, Math.min(0.95, distance / 1000))
-        : kind === "dash"
+        : kind === "dash" || kind === "sasumata"
           ? Math.max(0.2, Math.min(1, distance / 1400))
           : Math.max(0.24, Math.min(0.65, distance / 1600)),
     startX: attacker.x,
@@ -174,22 +176,24 @@ export function advanceAttack(
         width,
         height,
       );
-    } else if (attack.kind === "dash") {
+    } else if (attack.kind === "dash" || attack.kind === "sasumata") {
+      const reach = (attack.kind === "sasumata" ? 46 : 24) * contactScale;
       moveBody(
         attacker,
-        attack.startX +
-          (target.x - attack.nx * 24 * contactScale - attack.startX) * eased,
-        attack.startY +
-          (target.y - attack.ny * 24 * contactScale - attack.startY) * eased,
+        attack.startX + (target.x - attack.nx * reach - attack.startX) * eased,
+        attack.startY + (target.y - attack.ny * reach - attack.startY) * eased,
         width,
         height,
       );
-      const heading = Math.atan2(attack.ny, attack.nx) + Math.PI / 2;
-      const turn = Math.atan2(
-        Math.sin(heading - attacker.angle),
-        Math.cos(heading - attacker.angle),
-      );
-      attacker.angle += turn * Math.min(1, dt * 20);
+      if (attack.kind === "sasumata") aimHero(attack);
+      else {
+        const heading = Math.atan2(attack.ny, attack.nx) + Math.PI / 2;
+        const turn = Math.atan2(
+          Math.sin(heading - attacker.angle),
+          Math.cos(heading - attacker.angle),
+        );
+        attacker.angle += turn * Math.min(1, dt * 20);
+      }
     }
     if (progress < 1) return "dash";
     attack.phase = "impact";
@@ -205,7 +209,12 @@ export function advanceAttack(
   if (attack.elapsed < (attack.kind === "shield" ? 0.18 : 0.38))
     return "impact";
   attacker.mode = "air";
-  const recoil = attack.kind === "dash" || attack.kind === "smash" ? 200 : 0;
+  const recoil =
+    attack.kind === "dash" ||
+    attack.kind === "sasumata" ||
+    attack.kind === "smash"
+      ? 200
+      : 0;
   attacker.vx = -attack.nx * recoil;
   attacker.vy = -attack.ny * recoil;
   if (targetOnline) {

@@ -1,3 +1,5 @@
+import sasumata from "./assets/chiikawa-sasumata.png";
+
 export function Chiikawa({ asleep }: { asleep: boolean }) {
   return (
     <g
@@ -8,7 +10,15 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
       strokeLinejoin="round"
     >
       <path d="M25 80Q16 84 21 88Q25 91 29 86" />
-      <path d="M25 30C20 23 24 16 30 17Q36 19 36 25C47 22 59 23 68 27C68 19 74 17 78 22Q82 27 78 33C90 42 94 58 86 70Q82 77 76 80Q83 83 79 87Q76 89 72 84C68 92 61 95 55 95L54 98Q50 102 47 96Q44 102 40 97L39 94C30 91 25 86 23 79Q18 84 15 80Q13 78 19 72C10 65 8 53 13 42Q17 35 25 30Z" />
+      <path
+        className="hero-rest-pose"
+        d="M25 30C20 23 24 16 30 17Q36 19 36 25C47 22 59 23 68 27C68 19 74 17 78 22Q82 27 78 33C90 42 94 58 86 70Q82 77 76 80Q83 83 79 87Q76 89 72 84C68 92 61 95 55 95L54 98Q50 102 47 96Q44 102 40 97L39 94C30 91 25 86 23 79Q18 84 15 80Q13 78 19 72C10 65 8 53 13 42Q17 35 25 30Z"
+      />
+      <path
+        className="hero-attack-pose"
+        visibility="hidden"
+        d="M25 30C20 23 24 16 30 17Q36 19 36 25C47 22 59 23 68 27C68 19 74 17 78 22Q82 27 78 33C90 42 94 58 86 70Q80 79 72 84C68 92 61 95 55 95L54 98Q50 102 47 96Q44 102 40 97L39 94C30 91 25 86 23 79L19 72C10 65 8 53 13 42Q17 35 25 30Z"
+      />
       <path d="M47 96v-5" fill="none" />
       <g fill="#f5bbc8" stroke="none">
         <ellipse cx="27" cy="58" rx="7.5" ry="5.2" />
@@ -49,6 +59,20 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="1.8"
       />
+      {!asleep && (
+        <g className="hero-attack-pose" visibility="hidden">
+          <g className="chiikawa-sasumata">
+            <path d="M48 81q5-10 13-5m7 2q8-12 13-8" fill="none" />
+            <image
+              href={sasumata}
+              width="420"
+              height="420"
+              transform="translate(55 80) rotate(116) scale(.24) translate(-350 -365)"
+            />
+            <path d="M51 77q3-5 7-2l4 5q1 5-4 6-5 1-7-4Zm22-7q3-4 7-1l3 4q1 5-3 6-5 1-7-4Z" />
+          </g>
+        </g>
+      )}
     </g>
   );
 }

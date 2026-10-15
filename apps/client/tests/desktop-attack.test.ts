@@ -19,7 +19,12 @@ const width = 1200,
 
 test("attack origins and contact distances follow the selected character size", () => {
   for (const { pixels } of Object.values(CHARACTER_SIZES)) {
-    for (const character of ["chiikawa", "ironman", "hulk"] as const) {
+    for (const character of [
+      "hachiware",
+      "chiikawa",
+      "ironman",
+      "hulk",
+    ] as const) {
       const attacker = createBody("self", width, height, "free", pixels);
       const target = createBody("friend", width, height, "free", pixels);
       moveBody(attacker, 120, 400, width, height);
@@ -44,7 +49,13 @@ test("attack origins and contact distances follow the selected character size", 
           hits++;
           if (character !== "ironman") {
             const distance =
-              ((character === "hulk" ? 19 : 24) * pixels) / CHARACTER_SIZE;
+              ((character === "hulk"
+                ? 19
+                : character === "chiikawa"
+                  ? 46
+                  : 24) *
+                pixels) /
+              CHARACTER_SIZE;
             assert.ok(
               Math.abs(
                 Math.hypot(attacker.x - target.x, attacker.y - target.y) -
@@ -65,7 +76,7 @@ test("a dash follows a moving target, hits once, then both characters return to 
   const target = createBody("friend", width, height);
   moveBody(attacker, 120, 400, width, height);
   moveBody(target, 900, 400, width, height);
-  const attack = createAttack(attacker, target)!;
+  const attack = createAttack(attacker, target, "hachiware")!;
   let hits = 0,
     done = false;
   for (let frame = 0; frame < 180; frame++) {
@@ -101,6 +112,57 @@ test("a dash follows a moving target, hits once, then both characters return to 
   }
   assert.equal(attacker.mode, "walk");
   assert.equal(target.mode, "walk");
+});
+
+test("Chiikawa aims the sasumata in every direction, approaches to weapon reach and recoils after one hit", () => {
+  for (const [x, y] of [
+    [900, 400],
+    [100, 400],
+    [500, 100],
+    [500, 700],
+  ]) {
+    const attacker = createBody("self", width, height);
+    const target = createBody("friend", width, height);
+    moveBody(attacker, 500, 400, width, height);
+    moveBody(target, x, y, width, height);
+    const attack = createAttack(attacker, target, "chiikawa")!;
+    assert.equal(attack.kind, "sasumata");
+    let hits = 0,
+      done = false;
+    for (let frame = 0; frame < 180; frame++) {
+      if (attack.phase === "dash")
+        moveBody(target, target.x + 0.5, target.y + 0.25, width, height);
+      const step = advanceAttack(attack, 1 / 60, width, height, true);
+      const dx = target.x - attacker.x,
+        dy = target.y - attacker.y;
+      const distance = Math.hypot(dx, dy);
+      assert.ok(
+        Math.abs(
+          -attacker.direction * Math.cos(attacker.angle) - dx / distance,
+        ) < 0.001,
+      );
+      assert.ok(
+        Math.abs(
+          -attacker.direction * Math.sin(attacker.angle) - dy / distance,
+        ) < 0.001,
+      );
+      if (step === "hit") {
+        hits++;
+        assert.ok(
+          Math.abs(distance - 46) < 0.001,
+          "the fork reaches the target before their bodies collide",
+        );
+      }
+      if (step === "done") {
+        done = true;
+        break;
+      }
+    }
+    assert.equal(hits, 1);
+    assert.ok(done);
+    assert.ok(attacker.vx * attack.nx + attacker.vy * attack.ny < 0);
+    assert.ok(target.vx * attack.nx + target.vy * attack.ny > 0);
+  }
 });
 
 const heroes = [
