@@ -331,12 +331,23 @@ test("automatic rooms support shared codes, isolated moves and owner-only kicks 
     200,
   );
   assert.deepEqual(await invite(a), first);
+
+  assert.equal((await call("/rooms/leave", c.token, {})).status, 200);
+  await peers(c, []);
+  await peers(a, [d, f]);
+  assert.notEqual((await state(c)).room?.id, originalRoom?.id);
+  assert.equal((await call("/rooms/leave", a.token, {})).status, 200);
+  for (const person of [a, d, f]) {
+    await peers(person, []);
+    assert.notEqual((await state(person)).room?.id, originalRoom?.id);
+  }
+  assert.equal((await call("/invites/preview", undefined, first)).status, 404);
   await close();
   server = createApp({ databasePath, now: () => now });
   await listen();
   await peers(b, []);
   assert.deepEqual((await state(b)).room, kickedRoom);
-  assert.equal((await state(c)).room?.ownerId, a.profile.id);
+  assert.equal((await state(c)).room?.ownerId, c.profile.id);
   assert.deepEqual(inspection.prepare("PRAGMA foreign_key_check").all(), []);
 });
 

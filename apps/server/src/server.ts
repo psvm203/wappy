@@ -627,6 +627,41 @@ export function createApp(options: {
           reply(res, route, profile(friendId));
           break;
         }
+        case "POST /rooms/leave": {
+          transaction(db, () => {
+            const room = selectRoom.get(self!.id) as
+              | { id: string; inviteCode: string }
+              | undefined;
+            if (!room)
+              throw new HttpError(404, "참여 중인 방을 찾을 수 없어요.");
+            const ownerId = selectInviteProfile.get(hash(room.inviteCode))?.id;
+            if (ownerId === self!.id) {
+              const members = db
+                .prepare(
+                  `SELECT u.id, u.name FROM room_members m
+                  JOIN users u ON u.id = m.user_id WHERE m.room_id = ?`,
+                )
+                .all(room.id) as unknown as Pick<Profile, "id" | "name">[];
+              db.prepare(
+                `DELETE FROM friendships WHERE
+                user_id IN (SELECT user_id FROM room_members WHERE room_id = ?) OR
+                friend_id IN (SELECT user_id FROM room_members WHERE room_id = ?)`,
+              ).run(room.id, room.id);
+              db.prepare("DELETE FROM rooms WHERE id = ?").run(room.id);
+              for (const member of members) createRoom(db, member);
+            } else {
+              db.prepare(
+                "DELETE FROM friendships WHERE user_id = ? OR friend_id = ?",
+              ).run(self!.id, self!.id);
+              db.prepare("DELETE FROM room_members WHERE user_id = ?").run(
+                self!.id,
+              );
+              createRoom(db, self!);
+            }
+          });
+          reply(res, route, { ok: true });
+          break;
+        }
         case "POST /friends/remove": {
           const friendId = field(body, "friendId");
           if (friendId === self!.id)

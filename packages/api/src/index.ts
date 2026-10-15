@@ -161,6 +161,11 @@ interface ApiRoutes {
   "POST /invites": { input: Record<string, never>; output: Invite };
   "POST /invites/preview": { input: { code: string }; output: InvitePreview };
   "POST /invites/accept": { input: { code: string }; output: Profile };
+  /** Owners delete the current room; other members leave it. Profiles are preserved. */
+  "POST /rooms/leave": {
+    input: Record<string, never>;
+    output: { ok: true };
+  };
   /** Only the current room's owner can remove another member from the room. */
   "POST /friends/remove": { input: { friendId: string }; output: { ok: true } };
   "POST /friends/attack": { input: { friendId: string }; output: AttackEvent };

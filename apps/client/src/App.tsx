@@ -114,6 +114,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [dismissedSleepHitNotice, setDismissedSleepHitNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const [confirmRoomExit, setConfirmRoomExit] = useState(false);
   const [friendView, setFriendView] = useState<FriendView>("all");
   const openSettings = useCallback(() => {
     setPanel("settings");
@@ -1040,6 +1041,65 @@ function App() {
             )}
             {session && state && panel === "invite" && (
               <div>
+                {state.room && (
+                  <section
+                    className="
+                      room-exit mb-[12px] rounded-[12px] border border-solid border-[#eadbd5]
+                      bg-[#f8efeb] p-[11px_13px] text-[11px] text-[#765b52]
+                    "
+                    aria-label="방 관리"
+                  >
+                    {confirmRoomExit ? (
+                      <div className="flex items-center justify-between gap-[10px]">
+                        <span>
+                          {state.room?.ownerId === state.self.id
+                            ? "방과 참여자 연결을 삭제할까요?"
+                            : "현재 방에서 나갈까요?"}
+                        </span>
+                        <div className="flex shrink-0 gap-[9px]">
+                          <button
+                            type="button"
+                            className="bg-transparent p-[3px_0] text-[#68745e]"
+                            onClick={() => setConfirmRoomExit(false)}
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            className="bg-transparent p-[3px_0] font-semibold text-[#ab5555]"
+                            disabled={busy}
+                            onClick={() =>
+                              void action(async () => {
+                                const deleting =
+                                  state.room?.ownerId === state.self.id;
+                                await request(session, "POST /rooms/leave", {});
+                                setConfirmRoomExit(false);
+                                setNotice(
+                                  deleting
+                                    ? "방을 삭제했어요."
+                                    : "방에서 나왔어요.",
+                                );
+                                await refresh();
+                              })
+                            }
+                          >
+                            확인
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-full bg-transparent p-[3px_0] text-left font-semibold text-[#ab5555]"
+                        onClick={() => setConfirmRoomExit(true)}
+                      >
+                        {state.room?.ownerId === state.self.id
+                          ? "방 삭제"
+                          : "방 나가기"}
+                      </button>
+                    )}
+                  </section>
+                )}
                 <section
                   className="
                     invite-card rounded-[15px] border
