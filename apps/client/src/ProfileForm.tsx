@@ -51,6 +51,14 @@ const CHARACTER_CATEGORIES = {
   "짱구는 못말려": ["shinchan", "kazama", "nene", "masao", "bochan"],
 } satisfies Record<string, ProfileInput["character"][]>;
 
+type CharacterCategory = keyof typeof CHARACTER_CATEGORIES;
+
+function categoryFor(character: ProfileInput["character"]): CharacterCategory {
+  return Object.entries(CHARACTER_CATEGORIES).find(([, characters]) =>
+    characters.some((candidate) => candidate === character),
+  )![0] as CharacterCategory;
+}
+
 export function ProfileForm({
   initial,
   busy,
@@ -78,6 +86,9 @@ export function ProfileForm({
   const composing = useRef(false);
   const timer = useRef<number | undefined>(undefined);
   const [saveError, setSaveError] = useState("");
+  const [category, setCategory] = useState(() =>
+    categoryFor(initial.character),
+  );
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
   // oxlint-disable react-hooks/exhaustive-deps -- Resync only when profile fields change; object identity changes on every server snapshot.
@@ -86,6 +97,7 @@ export function ProfileForm({
     draft.current = initial;
     submitted.current = initial;
     setProfile(initial);
+    setCategory(categoryFor(initial.character));
   }, [initial.name, initial.character]);
   // oxlint-enable react-hooks/exhaustive-deps
 
@@ -190,14 +202,32 @@ export function ProfileForm({
       <fieldset disabled={busy} aria-label="프로필 설정">
         {beforeProfile}
         {nameField}
-        {Object.entries(CHARACTER_CATEGORIES).map(([category, characters]) => (
-          <section key={category} aria-label={category}>
-            <h2 className="character-category-title m-[0_0_10px] text-[14px] text-[#000]">
-              {category}
-            </h2>
-            <div className="character-picker mb-[22px] grid grid-cols-3 gap-[6px]">
-              {characters.map((kind) => (
-                <label className={`
+        <div
+          className="character-categories mb-[10px] flex gap-[5px] overflow-x-auto pb-[2px]"
+          role="tablist"
+          aria-label="캐릭터 카테고리"
+        >
+          {Object.keys(CHARACTER_CATEGORIES).map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              aria-selected={category === name}
+              className="
+                shrink-0 rounded-[8px] bg-[#f0f1e9] p-[8px_9px] text-[10px] whitespace-nowrap
+                text-[#68745e] aria-selected:bg-[#e3edd3] aria-selected:font-bold
+                aria-selected:text-[#374936]
+              "
+              onClick={() => setCategory(name as CharacterCategory)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        <section role="tabpanel" aria-label={category}>
+          <div className="character-picker mb-[22px] grid grid-cols-3 gap-[6px]">
+            {CHARACTER_CATEGORIES[category].map((kind) => (
+              <label className={`
                     character-option relative cursor-pointer rounded-[12px] border-[1.5px]
                     border-solid border-[transparent] bg-[#f1f1e9] p-[7px_2px] text-center
                     focus-within:[outline:2px_solid_#698b5b] focus-within:outline-offset-2 [&_.character]:h-[57px]
@@ -205,23 +235,22 @@ export function ProfileForm({
                     [&_input]:opacity-0 [&_span]:text-[9px] [&_span]:text-[#68745e]
                     [&.selected]:border-[#8a9e6b] [&.selected]:bg-[#eaf0de]
                   ${profile.character === kind ? "selected" : ""}`} key={kind}>
-                  <input
-                    type="radio"
-                    name="character"
-                    aria-label={CHARACTER_NAMES[kind]}
-                    value={kind}
-                    checked={profile.character === kind}
-                    onChange={() =>
-                      changeProfile({ ...draft.current, character: kind })
-                    }
-                  />
-                  <Character kind={kind} />
-                  <span>{CHARACTER_NAMES[kind]}</span>
-                </label>
-              ))}
-            </div>
-          </section>
-        ))}
+                <input
+                  type="radio"
+                  name="character"
+                  aria-label={CHARACTER_NAMES[kind]}
+                  value={kind}
+                  checked={profile.character === kind}
+                  onChange={() =>
+                    changeProfile({ ...draft.current, character: kind })
+                  }
+                />
+                <Character kind={kind} />
+                <span>{CHARACTER_NAMES[kind]}</span>
+              </label>
+            ))}
+          </div>
+        </section>
         {children}
         {autoSave ? (
           saveError && (
