@@ -747,8 +747,6 @@ function App() {
               {error}
             </p>
           )}
-          {desktop && <StartupSettings />}
-          {desktop && !updates.version && <UpdateSettings state={updates} />}
         </div>
       ) : (
         <>
