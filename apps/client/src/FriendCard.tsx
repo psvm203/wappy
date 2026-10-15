@@ -33,7 +33,8 @@ export function FriendCard({
       className={`
         friend-card relative flex min-h-[82px] flex-wrap items-center gap-[7px]
         rounded-[15px] border border-solid border-[#e7e9df] bg-[#f1f1ea] p-[8px_11px_8px_4px]
-        [&.is-online]:bg-[#f4f6ec] [&:focus]:[outline:2px_solid_#60764e] [&:focus]:outline-offset-2
+        [&.is-online]:border-[#a6b892] [&.is-online]:bg-[#f4f6ec]
+        [&:focus]:[outline:2px_solid_#60764e] [&:focus]:outline-offset-2
         [&:nth-child(2n)_.character-body]:[animation-delay:-1.5s]
       ${online ? "is-online" : ""}`}
     >

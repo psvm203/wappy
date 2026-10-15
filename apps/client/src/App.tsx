@@ -490,10 +490,6 @@ function App() {
     friendView,
     connection === "online",
   );
-  function resetFriendFilters() {
-    setFriendView("all");
-    document.getElementById("friend-view-all")?.focus();
-  }
   function characterVisibility(profile: { id: string; name: string }) {
     if (!desktop || !state) return null;
     const visible =
@@ -915,19 +911,6 @@ function App() {
                         </button>
                       ))}
                     </div>
-                    {friendView !== "all" && (
-                      <div className="friend-results flex min-h-[34px] items-center justify-end">
-                        <button
-                          className="
-                            text-button bg-transparent p-[3px_0] text-[11px] text-[#68745e]
-                            [&:hover]:text-[#41562e]
-                          "
-                          onClick={resetFriendFilters}
-                        >
-                          필터 초기화
-                        </button>
-                      </div>
-                    )}
                   </section>
                 )}
                 {state.friends.length === 0 ? (
