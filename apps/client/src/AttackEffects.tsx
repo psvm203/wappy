@@ -15,7 +15,8 @@ export function drawAttackEffect(
     !attack ||
     attack.kind === "dash" ||
     attack.kind === "sasumata" ||
-    attack.kind === "staff"
+    attack.kind === "staff" ||
+    attack.kind === "sword"
   )
     return;
   const scale = attack.attacker.size / CHARACTER_SIZE;

@@ -5,6 +5,7 @@ type AttackKind =
   | "dash"
   | "sasumata"
   | "staff"
+  | "sword"
   | "repulsor"
   | "shield"
   | "lightning"
@@ -16,6 +17,7 @@ const heroAttacks: Partial<Record<Character, AttackKind>> = {
   chiikawa: "sasumata",
   hachiware: "sasumata",
   usagi: "staff",
+  rakko: "sword",
   ironman: "repulsor",
   "captain-america": "shield",
   thor: "lightning",
@@ -60,7 +62,10 @@ export function createAttack(
     duration:
       kind === "smash"
         ? Math.max(0.65, Math.min(0.95, distance / 1000))
-        : kind === "dash" || kind === "sasumata" || kind === "staff"
+        : kind === "dash" ||
+            kind === "sasumata" ||
+            kind === "staff" ||
+            kind === "sword"
           ? Math.max(0.2, Math.min(1, distance / 1400))
           : Math.max(0.24, Math.min(0.65, distance / 1600)),
     startX: attacker.x,
@@ -182,11 +187,15 @@ export function advanceAttack(
     } else if (
       attack.kind === "dash" ||
       attack.kind === "sasumata" ||
-      attack.kind === "staff"
+      attack.kind === "staff" ||
+      attack.kind === "sword"
     ) {
       const reach =
-        (attack.kind === "sasumata" ? 46 : attack.kind === "staff" ? 36 : 24) *
-        contactScale;
+        (attack.kind === "sasumata" || attack.kind === "sword"
+          ? 46
+          : attack.kind === "staff"
+            ? 36
+            : 24) * contactScale;
       moveBody(
         attacker,
         attack.startX + (target.x - attack.nx * reach - attack.startX) * eased,
@@ -222,6 +231,7 @@ export function advanceAttack(
     attack.kind === "dash" ||
     attack.kind === "sasumata" ||
     attack.kind === "staff" ||
+    attack.kind === "sword" ||
     attack.kind === "smash"
       ? 200
       : 0;

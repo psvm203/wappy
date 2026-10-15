@@ -617,10 +617,28 @@ export function Rakko({ asleep }: { asleep: boolean }) {
       strokeLinejoin="round"
     >
       <path
+        className="hero-rest-pose"
         d="M77 64Q86 68 94 68Q91 72 90 79C89 85 87 88 83 89Q79 90 77 94Q74 97 70 94L65 90Z"
         fill="#fffefd"
       />
-      <path d="M80 73q2 2.5 5 3M86 78l.5.3" fill="none" strokeWidth="1.1" />
+      <path
+        className="hero-rest-pose"
+        d="M80 73q2 2.5 5 3M86 78l.5.3"
+        fill="none"
+        strokeWidth="1.1"
+      />
+      {!asleep && (
+        <g className="hero-attack-pose" visibility="hidden">
+          <g className="rakko-cape" fill="#fffefd">
+            <path d="M74 60Q89 55 103 64q11 3 19-2l-10 15Q104 94 81 92L68 84Z" />
+            <path
+              d="M82 68q18 9 29 1M80 79q12 6 21 2"
+              fill="none"
+              strokeWidth="1.1"
+            />
+          </g>
+        </g>
+      )}
       <path
         d="M10 51C7 33 15 16 32 12C50 6 70 13 78 27Q85 39 83 52Q82 59 82 67C82 82 74 94 62 97Q41 101 29 93C19 87 16 77 16 68Q10 61 10 51Z"
         stroke="none"
@@ -636,7 +654,7 @@ export function Rakko({ asleep }: { asleep: boolean }) {
         <path d="M36 95.8Q38 96.8 40.5 96Q41 98 39.5 100Q36 102 35.5 98Z" />
         <path d="M65 95Q67 93.5 69.5 95.5L71 99Q70 101 67.5 100Q65.5 98.5 65 95Z" />
       </g>
-      <g fill="#fffefd" strokeWidth="1.1">
+      <g className="hero-rest-pose" fill="#fffefd" strokeWidth="1.1">
         <path d="M7 56L9.5 54.5L16 63L13.5 65Z" />
         <path
           d="M6 57L10.5 54M8 60L12 57.5M10 62.5L14 60M12 65L17 62"
@@ -714,10 +732,40 @@ export function Rakko({ asleep }: { asleep: boolean }) {
         strokeWidth="1"
       />
       <path
+        className="hero-rest-pose"
         d="M42.7 75Q45.1 73.6 47.5 74.5Q50 73.7 52 74.4Q55.1 73.9 56.5 75.8Q57.2 77.6 54.8 79Q52 80.6 49.3 79.6Q47.2 81 45.2 79.7Q42.7 81.2 40.7 79.2Q39.4 77.3 42.7 75Z"
         fill="#171713"
         stroke="none"
       />
+      {!asleep && (
+        <g className="hero-attack-pose" visibility="hidden">
+          <path
+            d="m62 27-4 6-5 1 3 4-2 6 6-5 5 1-2-5 4-7-5 3Z"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M48 76q5-4 9-1l3 3q-1 4-6 4-5-1-6-6Z"
+            fill="#171713"
+            stroke="none"
+          />
+          <g className="rakko-sword" strokeWidth="1.8">
+            <path d="M33 78q-5-8-11-7l-2 8q6 6 13-1Z" fill="#171713" />
+            <path d="M7 62-22 28-24 13-9 20 20 54Z" fill="#eef3f3" />
+            <path d="m-16 25 7-5 29 34-7 4Z" fill="#d5dfe0" stroke="none" />
+            <path
+              d="m-24 13 8 12 29 33m-29-33-6 3m6-3 7-5"
+              fill="none"
+              strokeWidth="1.3"
+            />
+            <path d="m12 64 7-5 10 14-7 5Z" fill="#52595a" />
+            <path d="m1 64 21-15 3 4L4 68Z" fill="#d5dfe0" />
+            <path
+              d="M18 68q3-4 6-1l5 7q1 4-3 5-5 1-8-4-3-4 0-7Z"
+              fill="#171713"
+            />
+          </g>
+        </g>
+      )}
     </g>
   );
 }

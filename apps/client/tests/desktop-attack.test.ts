@@ -22,6 +22,7 @@ test("attack origins and contact distances follow the selected character size", 
     for (const character of [
       "momonga",
       "usagi",
+      "rakko",
       "hachiware",
       "chiikawa",
       "ironman",
@@ -53,7 +54,9 @@ test("attack origins and contact distances follow the selected character size", 
             const distance =
               ((character === "hulk"
                 ? 19
-                : character === "chiikawa" || character === "hachiware"
+                : character === "chiikawa" ||
+                    character === "hachiware" ||
+                    character === "rakko"
                   ? 46
                   : character === "usagi"
                     ? 36
@@ -122,6 +125,7 @@ for (const [character, kind, reach] of [
   ["chiikawa", "sasumata", 46],
   ["hachiware", "sasumata", 46],
   ["usagi", "staff", 36],
+  ["rakko", "sword", 46],
 ] as const) {
   test(`${character} aims the ${kind} in every direction, approaches to weapon reach and recoils after one hit`, () => {
     for (const [x, y] of [

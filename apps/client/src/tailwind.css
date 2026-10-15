@@ -73,6 +73,9 @@
   --animate-sasumata-thrust: sasumata-thrust 0.38s ease-out both;
   --animate-staff-ready: staff-ready 0.2s ease-out both;
   --animate-staff-swing: staff-swing 0.38s ease-out both;
+  --animate-sword-ready: sword-ready 0.2s ease-out both;
+  --animate-sword-slash: sword-slash 0.38s ease-out both;
+  --animate-cape-flutter: cape-flutter 0.28s ease-in-out infinite alternate;
   --animate-bow-release: bow-release 0.18s ease-out both;
   --animate-attack-pop: attack-pop 0.38s ease-out both;
   --animate-attack-shake: attack-shake 0.1s ease-in-out 3;
@@ -183,6 +186,30 @@
       transform: translateY(0) rotate(6deg) scale(1.03, 0.97);
     }
   }
+  @keyframes sword-ready {
+    to {
+      transform: rotate(12deg);
+    }
+  }
+  @keyframes sword-slash {
+    0% {
+      transform: rotate(12deg);
+    }
+    35% {
+      transform: translate(-4px, 0) rotate(-40deg);
+    }
+    100% {
+      transform: none;
+    }
+  }
+  @keyframes cape-flutter {
+    from {
+      transform: rotate(-4deg) skewY(-3deg);
+    }
+    to {
+      transform: rotate(5deg) skewY(3deg);
+    }
+  }
   @keyframes step-shadow {
     25%,
     75% {
@@ -241,7 +268,8 @@
     @apply z-2;
   }
   &[data-attack-style="sasumata"],
-  &[data-attack-style="staff"] {
+  &[data-attack-style="staff"],
+  &[data-attack-style="sword"] {
     @apply z-3;
   }
   &[data-composing="true"] {
@@ -296,6 +324,7 @@
   &:is(
       [data-attack-style="sasumata"],
       [data-attack-style="staff"],
+      [data-attack-style="sword"],
       [data-attack-style="repulsor"],
       [data-attack-style="shield"],
       [data-attack-style="lightning"],
@@ -340,6 +369,19 @@
   }
   &[data-attack-style="staff"][data-attack="impact"] .usagi-staff {
     @apply animate-staff-swing;
+  }
+  & .rakko-sword {
+    transform-origin: 22px 73px;
+  }
+  &[data-attack-style="sword"][data-attack="dash"] .rakko-sword {
+    @apply animate-sword-ready;
+  }
+  &[data-attack-style="sword"][data-attack="impact"] .rakko-sword {
+    @apply animate-sword-slash;
+  }
+  &[data-attack-style="sword"] .rakko-cape {
+    transform-origin: 73px 64px;
+    @apply animate-cape-flutter;
   }
   &[data-attack-style="smash"][data-attack="impact"] .hulk-slam-fists {
     visibility: visible;
