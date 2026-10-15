@@ -1,10 +1,11 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { isIP } from "node:net";
 import { HttpError, field, json, readBody, reply } from "./http.ts";
 import { createRoom, openDatabase, transaction } from "./database.ts";
 import {
   ONLINE_TIMEOUT_MS,
+  HEARTBEAT_INTERVAL_MS,
   ATTACK_COOLDOWN_MS,
   ATTACK_TTL_MS,
   ATTACK_HISTORY_LIMIT,
@@ -113,6 +114,7 @@ export function createApp(options: {
       // Retain this absence's result throughout the connection, including repeated polls.
       finishSleep.run(id);
       presenceRevision++;
+      publish();
     }
     lastSeen.set(id, time);
   }
@@ -140,6 +142,162 @@ export function createApp(options: {
   const selectChanges = db.prepare("SELECT total_changes() AS changes");
   const selectDataVersion = db.prepare("PRAGMA data_version");
   const profile = (id: string) => selectProfile.get(id) as unknown as Profile;
+  function snapshot(self: Profile, time: number, previous?: string) {
+    const changes = Number(selectChanges.get()!.changes);
+    const dataVersion = Number(selectDataVersion.get()!.data_version);
+    const cached = validators.get(self.id);
+    if (
+      cached &&
+      cached.etag === previous &&
+      cached.changes === changes &&
+      cached.dataVersion === dataVersion &&
+      cached.presenceRevision === presenceRevision &&
+      time >= cached.createdAt &&
+      time < cached.validUntil
+    )
+      return { etag: cached.etag, validUntil: cached.validUntil };
+    const rows = selectFriends.all(
+      self.id,
+      self.id,
+      self.id,
+    ) as unknown as (Profile & {
+      sharing: number;
+    })[];
+    const presence = selectPresence.get(self.id);
+    const messages = (
+      selectMessages.all(
+        self.id,
+        self.id,
+        self.id,
+        time - CHAT_TTL_MS,
+        CHAT_HISTORY_LIMIT,
+      ) as unknown as ChatMessage[]
+    ).reverse();
+    const room = selectRoom.get(
+      self.id,
+    ) as unknown as Output<"GET /state">["room"];
+    // The permanent code keeps the room's owner stable across name changes.
+    if (room?.inviteCode) {
+      const owner = selectInviteProfile.get(hash(room.inviteCode));
+      if (owner) {
+        room.name = `${owner.name}의 방`;
+        room.ownerId = owner.id as string;
+      }
+    }
+    const state: Output<"GET /state"> = {
+      self,
+      sleepHitCount: Number(selectSleepHits.get(self.id)?.last_count ?? 0),
+      room,
+      attacks: (
+        selectAttacks.all(
+          self.id,
+          self.id,
+          self.id,
+          time - ATTACK_TTL_MS,
+          ATTACK_HISTORY_LIMIT,
+        ) as unknown as AttackEvent[]
+      ).reverse(),
+      messages,
+      presence: {
+        sharing: presence ? presence.sharing === 1 : true,
+        revision: presence ? Number(presence.revision) : 0,
+      },
+      friends: rows.map(({ sharing, ...friend }) => ({
+        ...friend,
+        online: sharing === 1 && isOnline(friend.id, time),
+      })),
+    };
+    const body = JSON.stringify(state);
+    const etag = `"${hash(body)}"`;
+    let validUntil = time + ONLINE_TIMEOUT_MS;
+    for (const friend of state.friends) {
+      if (friend.online)
+        validUntil = Math.min(
+          validUntil,
+          lastSeen.get(friend.id)! + ONLINE_TIMEOUT_MS,
+        );
+    }
+    for (const message of state.messages!)
+      validUntil = Math.min(validUntil, message.sentAt + CHAT_TTL_MS);
+    for (const attack of state.attacks!)
+      validUntil = Math.min(validUntil, attack.sentAt + ATTACK_TTL_MS);
+    if (!validators.has(self.id) && validators.size >= 1024)
+      validators.delete(validators.keys().next().value!);
+    validators.set(self.id, {
+      etag,
+      changes,
+      dataVersion,
+      presenceRevision,
+      createdAt: time,
+      validUntil,
+    });
+    return { etag, validUntil, body: etag === previous ? undefined : body };
+  }
+
+  type StateStream = {
+    res: ServerResponse;
+    tokenHash: string;
+    etag?: string;
+    validUntil: number;
+    keepaliveAt: number;
+  };
+  const streams = new Set<StateStream>();
+  function writeStream(stream: { res: ServerResponse }, data: string) {
+    // Keep at most one pending frame for a slow reader. Reconnecting gets a fresh snapshot.
+    if (
+      stream.res.destroyed ||
+      stream.res.writableEnded ||
+      stream.res.writableNeedDrain
+    ) {
+      stream.res.destroy();
+      return;
+    }
+    stream.res.write(data);
+  }
+  function updateStream(stream: StateStream, time: number) {
+    try {
+      const user = authenticate.get(stream.tokenHash) as unknown as
+        | Profile
+        | undefined;
+      if (!user) {
+        writeStream(stream, "event: unauthorized\ndata: {}\n\n");
+        stream.res.end();
+        return;
+      }
+      const next = snapshot(user, time, stream.etag);
+      stream.etag = next.etag;
+      stream.validUntil = next.validUntil;
+      if (next.body !== undefined)
+        writeStream(stream, `event: state\ndata: ${next.body}\n\n`);
+      if (time >= stream.keepaliveAt) {
+        // These comments keep the transport active, but never refresh lastSeen.
+        if (next.body === undefined) writeStream(stream, ": keepalive\n\n");
+        stream.keepaliveAt = time + HEARTBEAT_INTERVAL_MS;
+      }
+    } catch (error) {
+      console.error("State stream failed:", error);
+      stream.res.destroy();
+    }
+  }
+  let pendingPush: ReturnType<typeof setImmediate> | undefined;
+  function publish() {
+    if (!streams.size || pendingPush) return;
+    // ponytail: scan active subscribers after writes; target affected rooms if fan-out becomes costly.
+    pendingPush = setImmediate(() => {
+      pendingPush = undefined;
+      const time = now();
+      for (const stream of streams) updateStream(stream, time);
+    });
+  }
+  // Expire presence and events even when nobody writes. Idle connections only send comments.
+  const streaming = setInterval(() => {
+    const time = now();
+    for (const stream of streams)
+      if (time >= stream.validUntil || time >= stream.keepaliveAt)
+        updateStream(stream, time);
+  }, 1000);
+  streaming.unref();
+
   const housekeeping = setInterval(() => {
     const time = now();
     for (const [id, validator] of validators)
@@ -186,7 +344,7 @@ export function createApp(options: {
       }
       const publicSession = route === "POST /session";
       const publicPreview = route === "POST /invites/preview";
-      if (req.method !== "GET") {
+      if (req.method !== "GET" && route !== "POST /heartbeat") {
         // Opt in only behind one trusted proxy with no direct access to this port.
         // Its appended, rightmost address wins over any client-supplied prefix.
         const forwarded = req.headers["x-forwarded-for"];
@@ -214,11 +372,13 @@ export function createApp(options: {
       const body = req.method === "GET" ? undefined : await readBody(req);
       // Authenticate after the last await so revoked sessions cannot complete in-flight writes.
       let self: Profile | undefined;
+      let tokenHash = "";
       if (!publicSession && !publicPreview) {
         const token = req.headers.authorization?.match(
           /^Bearer ([A-Za-z0-9_-]{43})$/,
         )?.[1];
-        const user = token && authenticate.get(hash(token));
+        tokenHash = token ? hash(token) : "";
+        const user = token && authenticate.get(tokenHash);
         if (!user)
           throw new HttpError(
             401,
@@ -227,6 +387,50 @@ export function createApp(options: {
         self = user as unknown as Profile;
       }
       switch (route) {
+        case "POST /heartbeat": {
+          const time = now();
+          const key = `heartbeat:${self!.id}`;
+          const previous = limits.get(key);
+          const limit =
+            previous && previous.until > time
+              ? previous
+              : { count: 0, until: time + 60_000 };
+          limits.set(key, limit);
+          if (++limit.count > 60)
+            throw new HttpError(429, "접속 확인 요청이 너무 많습니다.");
+          markSeen(self!.id, time);
+          res.writeHead(204, { "Cache-Control": "no-store" });
+          res.end();
+          break;
+        }
+        case "GET /events": {
+          if (
+            streams.size >= 1024 ||
+            [...streams].filter((stream) => stream.tokenHash === tokenHash)
+              .length >= 4
+          )
+            throw new HttpError(
+              429,
+              "연결이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+            );
+          const time = now();
+          markSeen(self!.id, time);
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "private, no-store, no-transform",
+          });
+          res.flushHeaders();
+          const stream = {
+            res,
+            tokenHash,
+            validUntil: time,
+            keepaliveAt: time + HEARTBEAT_INTERVAL_MS,
+          };
+          streams.add(stream);
+          res.once("close", () => streams.delete(stream));
+          updateStream(stream, time);
+          break;
+        }
         case "POST /session": {
           let input;
           try {
@@ -252,109 +456,22 @@ export function createApp(options: {
         case "GET /state": {
           const time = now();
           markSeen(self!.id, time);
-          const changes = Number(selectChanges.get()!.changes);
-          const dataVersion = Number(selectDataVersion.get()!.data_version);
-          const matches = (etag: string) =>
-            req.headers["if-none-match"]
-              ?.split(",")
-              .some((tag) => [etag, `W/${etag}`, "*"].includes(tag.trim()));
+          const previous = req.headers["if-none-match"]
+            ?.split(",")
+            .map((tag) => tag.trim().replace(/^W\//, ""));
           const cached = validators.get(self!.id);
-          if (
+          const next = snapshot(
+            self!,
+            time,
             cached &&
-            cached.changes === changes &&
-            cached.dataVersion === dataVersion &&
-            cached.presenceRevision === presenceRevision &&
-            time >= cached.createdAt &&
-            time < cached.validUntil &&
-            matches(cached.etag)
-          ) {
-            res.writeHead(304, {
-              "Cache-Control": "private, no-store",
-              ETag: cached.etag,
-            });
-            res.end();
-            break;
-          }
-          const rows = selectFriends.all(
-            self!.id,
-            self!.id,
-            self!.id,
-          ) as unknown as (Profile & {
-            sharing: number;
-          })[];
-          const presence = selectPresence.get(self!.id);
-          const messages = (
-            selectMessages.all(
-              self!.id,
-              self!.id,
-              self!.id,
-              time - CHAT_TTL_MS,
-              CHAT_HISTORY_LIMIT,
-            ) as unknown as ChatMessage[]
-          ).reverse();
-          const room = selectRoom.get(
-            self!.id,
-          ) as unknown as Output<"GET /state">["room"];
-          // The permanent code keeps the room's owner stable across name changes.
-          if (room?.inviteCode) {
-            const owner = selectInviteProfile.get(hash(room.inviteCode));
-            if (owner) {
-              room.name = `${owner.name}의 방`;
-              room.ownerId = owner.id as string;
-            }
-          }
-          const state: Output<"GET /state"> = {
-            self: self!,
-            sleepHitCount: Number(
-              selectSleepHits.get(self!.id)?.last_count ?? 0,
-            ),
-            room,
-            attacks: (
-              selectAttacks.all(
-                self!.id,
-                self!.id,
-                self!.id,
-                time - ATTACK_TTL_MS,
-                ATTACK_HISTORY_LIMIT,
-              ) as unknown as AttackEvent[]
-            ).reverse(),
-            messages,
-            presence: {
-              sharing: presence ? presence.sharing === 1 : true,
-              revision: presence ? Number(presence.revision) : 0,
-            },
-            friends: rows.map(({ sharing, ...friend }) => ({
-              ...friend,
-              online: sharing === 1 && isOnline(friend.id, time),
-            })),
-          };
-          const body = JSON.stringify(state);
-          const etag = `"${hash(body)}"`;
-          let validUntil = time + ONLINE_TIMEOUT_MS;
-          for (const friend of state.friends) {
-            if (friend.online)
-              validUntil = Math.min(
-                validUntil,
-                lastSeen.get(friend.id)! + ONLINE_TIMEOUT_MS,
-              );
-          }
-          for (const message of state.messages!)
-            validUntil = Math.min(validUntil, message.sentAt + CHAT_TTL_MS);
-          for (const attack of state.attacks!)
-            validUntil = Math.min(validUntil, attack.sentAt + ATTACK_TTL_MS);
-          if (!validators.has(self!.id) && validators.size >= 1024)
-            validators.delete(validators.keys().next().value!);
-          validators.set(self!.id, {
-            etag,
-            changes,
-            dataVersion,
-            presenceRevision,
-            createdAt: time,
-            validUntil,
-          });
+              (previous?.includes(cached.etag) || previous?.includes("*"))
+              ? cached.etag
+              : undefined,
+          );
+          const { etag, body } = next;
           // Authenticate and refresh presence before validating. Hash the current
           // representation so TTL/offline transitions cannot leave a stale cache.
-          const unchanged = matches(etag);
+          const unchanged = previous?.includes(etag) || previous?.includes("*");
           res.writeHead(unchanged ? 304 : 200, {
             "Content-Type": "application/json; charset=utf-8",
             "Cache-Control": "private, no-store",
@@ -592,6 +709,8 @@ export function createApp(options: {
         default:
           throw new HttpError(404, "API 경로를 찾을 수 없습니다.");
       }
+      // Committed writes must reach subscribers even if the sender loses its response.
+      if (req.method !== "GET" && route !== "POST /heartbeat") publish();
     } catch (error) {
       const known = error instanceof HttpError;
       const status = known ? error.status : 500;
@@ -606,6 +725,9 @@ export function createApp(options: {
   server.headersTimeout = 10_000;
   server.on("close", () => {
     clearInterval(housekeeping);
+    clearInterval(streaming);
+    clearImmediate(pendingPush);
+    streams.clear();
     db.close();
   });
   return server;

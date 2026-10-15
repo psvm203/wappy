@@ -23,6 +23,7 @@ server.listen(port, host, () =>
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     server.close();
-    server.closeIdleConnections();
+    // SSE responses are active connections and must also close on shutdown.
+    server.closeAllConnections();
   });
 }

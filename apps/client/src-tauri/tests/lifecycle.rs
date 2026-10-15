@@ -262,31 +262,36 @@ fn presence_server() -> Result<(String, Receiver<String>), String> {
                 }
                 request.push_str(&line);
             }
+            let events = request.starts_with("GET /events ");
+            let heartbeat = request.starts_with("POST /heartbeat ");
             let health = request.starts_with("GET /health ");
-            let unchanged = request
-                .to_lowercase()
-                .contains("if-none-match: \"lifecycle-v1\"");
             if sent.send(request).is_err() {
                 break;
             }
-            let status = if !health && state_requests == 1 {
-                503
-            } else if !health && unchanged {
-                304
-            } else {
-                200
-            };
-            if !health {
+            if events {
                 state_requests += 1;
-            }
-            let body = if status == 304 {
-                ""
-            } else if health {
-                r#"{"ok":true}"#
+                let disconnect = state_requests == 1;
+                thread::spawn(move || {
+                    let body = r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware"},"presence":{"sharing":false,"revision":1},"friends":[{"id":"presence-friend","name":"Friend","character":"shisa","online":true}]}"#;
+                    if write!(socket, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\nevent: state\ndata: {body}\n\n").is_err() { return; }
+                    loop {
+                        thread::sleep(Duration::from_secs(1));
+                        if disconnect || socket.write_all(b": keepalive\n\n").is_err() {
+                            break;
+                        }
+                    }
+                });
             } else {
-                r#"{"self":{"id":"presence-check","name":"Presence","character":"hachiware"},"presence":{"sharing":false,"revision":1},"friends":[{"id":"presence-friend","name":"Friend","character":"shisa","online":true}]}"#
-            };
-            let _ = write!(socket, "HTTP/1.1 {status} Test\r\nETag: \"lifecycle-v1\"\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                let status = if heartbeat {
+                    204
+                } else if health {
+                    200
+                } else {
+                    404
+                };
+                let body = if health { r#"{"ok":true}"# } else { "" };
+                let _ = write!(socket, "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+            }
         }
     });
     Ok((base, requests))
@@ -444,13 +449,13 @@ fn main() -> Result<(), String> {
             })?;
 
             // The real sidebar is hidden and all WebView timers are disabled.
-            // Presence must still poll, report a failure and reconnect using native time.
+            // SSE must reconnect and heartbeat using native time.
             println!("CHECK: hidden background connection and reconnect");
             let (server, requests) = presence_server()?;
             let session = serde_json::json!({ "server": server, "token": "a".repeat(43) });
             sidebar.eval(format!("localStorage.setItem('wappy.session.v1', JSON.stringify({session})); location.reload();"))
                 .map_err(|error| error.to_string())?;
-            for (index, connected) in [true, false, true].into_iter().enumerate() {
+            for connected in [true, false, true] {
                 let update = snapshot(&received, |value| {
                     value["state"]["self"]["id"] == "presence-check"
                         && value["connected"] == connected
@@ -461,21 +466,26 @@ fn main() -> Result<(), String> {
                 if sidebar.is_visible().unwrap_or(true) {
                     return Err("The presence check unexpectedly showed the sidebar".into());
                 }
-                let request = requests
-                    .recv_timeout(Duration::from_secs(1))
-                    .map_err(|error| error.to_string())?;
-                if !request.starts_with("GET /state HTTP/1.1")
-                    || !request.contains(&format!("Bearer {}", "a".repeat(43)))
-                {
-                    return Err("Background presence used the wrong request or credential".into());
+                if connected {
+                    let request = requests
+                        .recv_timeout(Duration::from_secs(1))
+                        .map_err(|error| error.to_string())?;
+                    if !request.starts_with("GET /events HTTP/1.1")
+                        || !request.contains(&format!("Bearer {}", "a".repeat(43)))
+                    {
+                        return Err("Background SSE used the wrong request or credential".into());
+                    }
                 }
-                if index > 0
-                    && !request
-                        .to_lowercase()
-                        .contains("if-none-match: \"lifecycle-v1\"")
-                {
-                    return Err("Background presence did not reuse its state validator".into());
-                }
+            }
+            let heartbeat = requests
+                .recv_timeout(Duration::from_secs(12))
+                .map_err(|error| error.to_string())?;
+            if !heartbeat.starts_with("POST /heartbeat HTTP/1.1")
+                || !heartbeat.contains(&format!("Bearer {}", "a".repeat(43)))
+            {
+                return Err(
+                    "Hidden SSE did not keep presence alive through native heartbeats".into(),
+                );
             }
             handle
                 .emit_to("main", "wappy:tray-control", "toggle-visible")
@@ -557,17 +567,17 @@ fn main() -> Result<(), String> {
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             println!("CHECK: session cleanup");
-            // Drain earlier requests before checking that session removal stops polling.
+            // Drain earlier requests before checking that session removal stops SSE and heartbeats.
             while requests.try_recv().is_ok() {}
             sidebar
                 .eval("localStorage.removeItem('wappy.session.v1'); location.reload();")
                 .map_err(|error| error.to_string())?;
             snapshot(&received, |value| value["state"].is_null())?;
             if !matches!(
-                requests.recv_timeout(Duration::from_secs(6)),
+                requests.recv_timeout(Duration::from_secs(12)),
                 Err(mpsc::RecvTimeoutError::Timeout)
             ) {
-                return Err("The previous session kept polling after page reload".into());
+                return Err("The previous session kept connecting after page reload".into());
             }
 
             println!("CHECK: duplicate launches and minimized window restoration");

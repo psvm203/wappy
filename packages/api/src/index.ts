@@ -73,6 +73,7 @@ export const CHARACTER_NAMES: Record<Character, string> = {
   bochan: "맹구",
 };
 export const POLL_INTERVAL_MS = 5_000;
+export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const ONLINE_TIMEOUT_MS = 30_000;
 export const MAX_NAME_LENGTH = 24;
 export const ATTACK_COOLDOWN_MS = 2_000;
@@ -151,6 +152,8 @@ export interface ApiErrorBody {
 interface ApiRoutes {
   "POST /session": { input: ProfileInput; output: Session };
   "GET /state": { input: undefined; output: SidebarState };
+  /** GET /events streams personalized SidebarState snapshots using SSE. */
+  "POST /heartbeat": { input: Record<string, never>; output: undefined };
   "POST /chat": { input: { text: string }; output: ChatMessage };
   "PATCH /profile": { input: ProfileInput; output: Profile };
   "PATCH /presence": { input: { sharing: boolean }; output: PresenceSettings };

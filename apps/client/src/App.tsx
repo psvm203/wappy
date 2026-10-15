@@ -74,6 +74,7 @@ const emptyProfile: ProfileInput = {
 function App() {
   const [session, setSession] = useState(loadSession);
   const currentSession = useRef(session);
+  const stateRevision = useRef(0);
   const profileSave = useRef<Promise<void>>(Promise.resolve());
   const quitDialog = useRef<HTMLDialogElement>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileInput | null>(null);
@@ -185,6 +186,7 @@ function App() {
   function changeSession(next: SavedSession | null) {
     // Invalidate old callbacks immediately, before React runs effect cleanup.
     currentSession.current = next;
+    stateRevision.current++;
     setSession(next);
     setProfileDraft(null);
     setPresenceDraft(null);
@@ -194,6 +196,7 @@ function App() {
   }
 
   function applyState(next: SidebarState) {
+    stateRevision.current++;
     setState((current) => reconcilePresence(current, next));
   }
 
@@ -282,12 +285,18 @@ function App() {
     }
   }
 
-  async function refresh() {
-    if (session) {
+  async function refresh(active = session) {
+    if (active) {
+      const revision = stateRevision.current;
       const next = parseSidebarState(
-        await request(session, "GET /state", undefined),
+        await request(active, "GET /state", undefined),
       );
-      if (currentSession.current === session) {
+      // A delayed HTTP response must not overwrite a newer streamed snapshot.
+      if (
+        currentSession.current?.server === active.server &&
+        currentSession.current?.token === active.token &&
+        stateRevision.current === revision
+      ) {
         applyState(next);
         setConnection("online");
       }
@@ -344,13 +353,18 @@ function App() {
       .then(async () => {
         if (!session || currentSession.current !== session)
           throw new ApiError(409, "현재 프로필에서 다시 시도해 주세요.");
+        const revision = stateRevision.current;
         const updated = parseSidebarState({
           self: await request(session, "PATCH /profile", profile),
           friends: [],
         }).self;
         if (updated.id !== state?.self.id)
           throw new ApiError(502, "프로필 저장 결과를 확인하지 못했어요.");
-        if (currentSession.current !== session) return;
+        if (
+          currentSession.current !== session ||
+          stateRevision.current !== revision
+        )
+          return;
         setState((current) =>
           current ? { ...current, self: updated } : current,
         );
@@ -373,7 +387,7 @@ function App() {
       return;
     const sharing = !state.presence.sharing;
     void action(async () => {
-      // Preview locally while polls continue updating the confirmed server state.
+      // Preview locally while the subscription updates the confirmed server state.
       setPresenceDraft(sharing);
       try {
         const presence = parsePresenceSettings(
@@ -452,10 +466,7 @@ function App() {
     setNotice("방에 참여했어요. 같은 방의 친구들을 함께 만나요.");
     setPanel("friends");
     setFriendView("all");
-    applyState(
-      parseSidebarState(await request(current, "GET /state", undefined)),
-    );
-    setConnection("online");
+    await refresh(current);
   }
 
   function acceptInvite(event: FormEvent) {

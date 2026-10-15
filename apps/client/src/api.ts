@@ -40,7 +40,8 @@ export async function request<R extends Route>(
       },
       body: input === undefined ? undefined : JSON.stringify(input),
     });
-    const body: unknown = await response.json();
+    const body: unknown =
+      response.status === 204 ? undefined : await response.json();
     if (!response.ok)
       throw new ApiError(
         response.status,
