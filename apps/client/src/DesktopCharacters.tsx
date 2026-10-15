@@ -89,7 +89,10 @@ function draw(
   element.dataset.hit = String(
     attack?.target === body && attack.phase === "impact",
   );
-  element.style.transform = `translate3d(${body.x - body.size / 2}px, ${body.y - body.size / 2}px, 0)`;
+  const pixel = 1 / devicePixelRatio;
+  const x = Math.round((body.x - body.size / 2) / pixel) * pixel;
+  const y = Math.round((body.y - body.size / 2) / pixel) * pixel;
+  element.style.transform = `translate(${x}px, ${y}px)`;
   element.style.setProperty("--character-size", `${body.size}px`);
   element.style.setProperty(
     "--character-scale",
