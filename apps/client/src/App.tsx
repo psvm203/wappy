@@ -112,6 +112,7 @@ function App() {
     "connecting" | "online" | "offline" | "unauthorized"
   >("connecting");
   const [notice, setNotice] = useState("");
+  const [dismissedSleepHitNotice, setDismissedSleepHitNotice] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [friendView, setFriendView] = useState<FriendView>("all");
   const openSettings = useCallback(() => {
@@ -129,6 +130,14 @@ function App() {
   const profileKey =
     session && state
       ? residentSelectionKey(session.server, state.self.id)
+      : null;
+  const sleepHitCount = state?.sleepHitCount ?? 0;
+  const sleepHitNoticeKey = `${profileKey}:${sleepHitCount}`;
+  const visibleSleepHitCount =
+    connection === "online" &&
+    sleepHitCount > 0 &&
+    dismissedSleepHitNotice !== sleepHitNoticeKey
+      ? sleepHitCount
       : null;
   const chat = useChatComposer(
     profileKey,
@@ -271,6 +280,15 @@ function App() {
     );
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (connection !== "online" || sleepHitCount < 1) return;
+    const timer = window.setTimeout(
+      () => setDismissedSleepHitNotice(sleepHitNoticeKey),
+      10_000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [connection, sleepHitCount, sleepHitNoticeKey]);
 
   async function action(work: () => Promise<void>) {
     if (busy) return;
@@ -819,12 +837,12 @@ function App() {
           )}
           {session &&
             connection === "online" &&
-            state?.sleepHitCount !== undefined && (
+            visibleSleepHitCount !== null && (
               <p
                 className="m-[0_20px_12px] shrink-0 rounded-[9px] bg-[#edf1e5] p-[10px_12px] text-[12px] text-[#536447]"
                 role="status"
               >
-                자다가 맞은 횟수: {state.sleepHitCount}회
+                자다가 맞은 횟수: {visibleSleepHitCount}회
               </p>
             )}
           <nav
