@@ -13,6 +13,21 @@ import {
 import { reconcilePresence } from "../src/presence.ts";
 import { saveSession, SAVED_SESSIONS_KEY } from "../src/sessions.ts";
 
+test("sleep hit counts accept nonnegative integers and remain optional for older servers", () => {
+  const state = {
+    self: { id: "alice", name: "Alice", character: "chiikawa" },
+    friends: [],
+  };
+  assert.equal(parseSidebarState(state).sleepHitCount, undefined);
+  for (const sleepHitCount of [0, 1, 42, Number.MAX_SAFE_INTEGER])
+    assert.equal(
+      parseSidebarState({ ...state, sleepHitCount }).sleepHitCount,
+      sleepHitCount,
+    );
+  for (const sleepHitCount of [null, "3", -1, 1.5, NaN, Infinity, 2 ** 53])
+    assert.throws(() => parseSidebarState({ ...state, sleepHitCount }));
+});
+
 test("legacy status and blocking data are discarded from server snapshots and saved sessions", () => {
   const input = { name: "Alice", character: "chiikawa" };
   const profile = { id: "self", ...input };

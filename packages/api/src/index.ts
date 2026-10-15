@@ -125,6 +125,8 @@ export interface SidebarState {
   messages?: ChatMessage[];
   /** Recent attacks between self or visible friends; absent on servers without online attacks. */
   attacks?: AttackEvent[];
+  /** Hits during the last absence, private to self; absent on older servers. */
+  sleepHitCount?: number;
 }
 interface PresenceSettings {
   sharing: boolean;
@@ -381,9 +383,19 @@ export function parseSidebarState(value: unknown): SidebarState {
       return attack;
     });
   }
+  if (
+    value.sleepHitCount !== undefined &&
+    (typeof value.sleepHitCount !== "number" ||
+      !Number.isSafeInteger(value.sleepHitCount) ||
+      value.sleepHitCount < 0)
+  )
+    throw new Error("잘못된 수면 중 공격 횟수입니다.");
   return {
     self,
     friends,
+    ...(value.sleepHitCount === undefined
+      ? {}
+      : { sleepHitCount: value.sleepHitCount }),
     ...(room === undefined ? {} : { room }),
     ...(attacks === undefined ? {} : { attacks }),
     ...(messages === undefined ? {} : { messages }),

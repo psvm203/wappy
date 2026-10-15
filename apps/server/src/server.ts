@@ -93,6 +93,29 @@ export function createApp(options: {
   const selectPresence = db.prepare(
     "SELECT sharing, revision FROM presence_settings WHERE user_id = ?",
   );
+  const selectSleepHits = db.prepare(
+    "SELECT last_count FROM sleep_hit_counts WHERE user_id = ?",
+  );
+  const recordSleepHit = db.prepare(`
+    INSERT INTO sleep_hit_counts (user_id, pending_count) VALUES (?, 1)
+    ON CONFLICT(user_id) DO UPDATE SET pending_count = pending_count + 1
+  `);
+  const finishSleep = db.prepare(`
+    UPDATE sleep_hit_counts SET last_count = pending_count, pending_count = 0
+    WHERE user_id = ? AND (pending_count != 0 OR last_count != 0)
+  `);
+  function isOnline(id: string, time: number) {
+    const seen = lastSeen.get(id);
+    return seen !== undefined && time - seen < ONLINE_TIMEOUT_MS;
+  }
+  function markSeen(id: string, time: number) {
+    if (!isOnline(id, time)) {
+      // Retain this absence's result throughout the connection, including repeated polls.
+      finishSleep.run(id);
+      presenceRevision++;
+    }
+    lastSeen.set(id, time);
+  }
   // Keep legacy private rows out of the broadcast feed.
   const selectMessages = db.prepare(`
     SELECT id, sender_id AS senderId, text, sent_at AS sentAt
@@ -222,18 +245,13 @@ export function createApp(options: {
             );
             createRoom(db, user);
           });
-          lastSeen.set(user.id, now());
+          markSeen(user.id, now());
           reply(res, route, { token, profile: user }, 201);
           break;
         }
         case "GET /state": {
           const time = now();
-          if (
-            !lastSeen.has(self!.id) ||
-            time - lastSeen.get(self!.id)! >= ONLINE_TIMEOUT_MS
-          )
-            presenceRevision++;
-          lastSeen.set(self!.id, time);
+          markSeen(self!.id, time);
           const changes = Number(selectChanges.get()!.changes);
           const dataVersion = Number(selectDataVersion.get()!.data_version);
           const matches = (etag: string) =>
@@ -287,6 +305,9 @@ export function createApp(options: {
           }
           const state: Output<"GET /state"> = {
             self: self!,
+            sleepHitCount: Number(
+              selectSleepHits.get(self!.id)?.last_count ?? 0,
+            ),
             room,
             attacks: (
               selectAttacks.all(
@@ -304,10 +325,7 @@ export function createApp(options: {
             },
             friends: rows.map(({ sharing, ...friend }) => ({
               ...friend,
-              online:
-                sharing === 1 &&
-                lastSeen.has(friend.id) &&
-                time - lastSeen.get(friend.id)! < ONLINE_TIMEOUT_MS,
+              online: sharing === 1 && isOnline(friend.id, time),
             })),
           };
           const body = JSON.stringify(state);
@@ -424,7 +442,7 @@ export function createApp(options: {
           `,
             )
             .get(self!.id, Number(body.sharing))!;
-          lastSeen.set(self!.id, now());
+          markSeen(self!.id, now());
           reply(res, route, {
             sharing: setting.sharing === 1,
             revision: Number(setting.revision),
@@ -535,30 +553,35 @@ export function createApp(options: {
           const time = now();
           if (
             selectPresence.get(self!.id)?.sharing === 0 ||
-            !lastSeen.has(self!.id) ||
-            time - lastSeen.get(self!.id)! >= ONLINE_TIMEOUT_MS
+            !isOnline(self!.id, time)
           )
             throw new HttpError(
               409,
               "접속 상태를 공개하고 온라인일 때 공격할 수 있어요.",
             );
           // A single guarded insert enforces the sender cooldown across all targets and restarts.
-          const attack = db
-            .prepare(
-              `INSERT INTO attack_events (user_id, friend_id, attacker_id, target_id, sent_at)
+          const attack = transaction(db, () => {
+            const event = db
+              .prepare(
+                `INSERT INTO attack_events (user_id, friend_id, attacker_id, target_id, sent_at)
             SELECT user_id, friend_id, ?, ?, ? FROM friendships WHERE user_id = ? AND friend_id = ?
             AND NOT EXISTS (SELECT 1 FROM attack_events WHERE attacker_id = ? AND sent_at > ?)
             RETURNING id, attacker_id AS attackerId, target_id AS targetId, sent_at AS sentAt`,
-            )
-            .get(
-              self!.id,
-              friendId,
-              time,
-              pair[0]!,
-              pair[1]!,
-              self!.id,
-              time - ATTACK_COOLDOWN_MS,
-            ) as unknown as AttackEvent | undefined;
+              )
+              .get(
+                self!.id,
+                friendId,
+                time,
+                pair[0]!,
+                pair[1]!,
+                self!.id,
+                time - ATTACK_COOLDOWN_MS,
+              ) as unknown as AttackEvent | undefined;
+            // Hidden presence is cosmetic: only a missing heartbeat counts as sleep.
+            if (event && !isOnline(friendId, time))
+              recordSleepHit.run(friendId);
+            return event;
+          });
           if (!attack) {
             res.setHeader("Retry-After", String(ATTACK_COOLDOWN_MS / 1000));
             throw new HttpError(429, "공격은 2초에 한 번 보낼 수 있어요.");

@@ -808,6 +808,16 @@ function App() {
               </details>
             </div>
           )}
+          {session &&
+            connection === "online" &&
+            state?.sleepHitCount !== undefined && (
+              <p
+                className="m-[0_20px_12px] shrink-0 rounded-[9px] bg-[#edf1e5] p-[10px_12px] text-[12px] text-[#536447]"
+                role="status"
+              >
+                자다가 맞은 횟수: {state.sleepHitCount}회
+              </p>
+            )}
           <nav
             className="
               tabs [&_button]:rounded-0 m-[0_20px_12px] flex shrink-0 gap-[18px]

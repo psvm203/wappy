@@ -53,6 +53,11 @@ export function openDatabase(databasePath: string) {
     CREATE INDEX IF NOT EXISTS attacks_sender ON attack_events(attacker_id, sent_at);
     CREATE INDEX IF NOT EXISTS attacks_target ON attack_events(target_id, sent_at);
     CREATE INDEX IF NOT EXISTS attacks_expiry ON attack_events(sent_at);
+    CREATE TABLE IF NOT EXISTS sleep_hit_counts (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      pending_count INTEGER NOT NULL DEFAULT 0 CHECK (pending_count >= 0),
+      last_count INTEGER NOT NULL DEFAULT 0 CHECK (last_count >= 0)
+    ) STRICT;
     CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id, id DESC);
     CREATE INDEX IF NOT EXISTS chat_expiry ON chat_messages(sent_at);
     CREATE TABLE IF NOT EXISTS chat_recipients (
