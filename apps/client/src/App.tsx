@@ -7,7 +7,7 @@ import {
   type FormEvent,
   type MouseEvent,
 } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { exit } from "@tauri-apps/plugin-process";
 import {
@@ -622,7 +622,7 @@ function App() {
               aria-label="최소화"
               title="최소화"
               onClick={() =>
-                void windowAction(() => getCurrentWindow().minimize())
+                void windowAction(() => invoke("minimize_sidebar"))
               }
             >
               −

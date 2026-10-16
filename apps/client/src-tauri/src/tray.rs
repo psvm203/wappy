@@ -11,6 +11,18 @@ struct TrayControls {
     settings: MenuItem<tauri::Wry>,
 }
 
+#[tauri::command]
+pub fn minimize_sidebar(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the sidebar can minimize itself".into());
+    }
+    #[cfg(windows)]
+    let result = window.hide();
+    #[cfg(not(windows))]
+    let result = window.minimize();
+    result.map_err(|error| error.to_string())
+}
+
 pub fn show_sidebar(app: &AppHandle) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("main") {
         window.show()?;

@@ -197,6 +197,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         .invoke_handler(tauri::generate_handler![
             updater_enabled,
             desktop_cursor_position,
+            tray::minimize_sidebar,
             tray::sync_tray_controls,
             state_sync::start_state_polling,
             state_sync::stop_state_polling,

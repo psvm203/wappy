@@ -364,12 +364,6 @@ fn main() -> Result<(), String> {
             let desktop = handle
                 .get_webview_window("desktop")
                 .ok_or("Missing character window")?;
-            text_rendered(
-                &sidebar,
-                ".update-panel",
-                "이 빌드는 자동 업데이트를 지원하지 않습니다.",
-                true,
-            )?;
             desktop.eval(r#"(async () => {
                 const results = await Promise.all(['plugin:updater|check', 'plugin:process|restart', 'plugin:process|exit'].map(command =>
                     window.__TAURI_INTERNALS__.invoke(command)
@@ -390,6 +384,13 @@ fn main() -> Result<(), String> {
             if client_lib::startup::set_startup_enabled(desktop.clone(), true).is_ok() {
                 return Err("The character window was allowed to change login startup".into());
             }
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            text_rendered(
+                &sidebar,
+                ".update-panel",
+                "이 빌드는 자동 업데이트를 지원하지 않습니다.",
+                true,
+            )?;
             click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
             until(|| startup.0.is_enabled().unwrap_or(false))?;
             // Wait for readback to re-enable the checkbox before toggling off.
@@ -555,10 +556,16 @@ fn main() -> Result<(), String> {
             )?;
             click_button(&sidebar, "Friend 캐릭터 표시")?;
             text_rendered(&desktop, ".desktop-resident:nth-of-type(2)", "", false)?;
-            println!("CHECK: tray settings restores the minimized window");
+            println!("CHECK: minimize button hides the Windows sidebar; tray settings restores it");
             client_lib::show_sidebar(&handle).map_err(|error| error.to_string())?;
-            sidebar.minimize().map_err(|error| error.to_string())?;
+            click_button(&sidebar, "최소화")?;
+            #[cfg(windows)]
+            until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
+            #[cfg(not(windows))]
             until(|| sidebar.is_minimized().unwrap_or(false))?;
+            if !desktop.is_visible().unwrap_or(false) {
+                return Err("Minimizing the sidebar hid the desktop characters".into());
+            }
             client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
             until(|| {
                 sidebar.is_visible().unwrap_or(false) && !sidebar.is_minimized().unwrap_or(true)
