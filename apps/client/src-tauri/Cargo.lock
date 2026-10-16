@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "objc2",
  "objc2-app-kit",
