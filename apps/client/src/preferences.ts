@@ -10,11 +10,11 @@ export const CHARACTER_POSITIONS = {
 export type CharacterPosition = keyof typeof CHARACTER_POSITIONS;
 
 export const CHARACTER_SIZES = {
-  "very-small": { label: "매우 작게", pixels: 24 },
-  small: { label: "작게", pixels: 32 },
-  normal: { label: "보통", pixels: 42 },
-  large: { label: "크게", pixels: 56 },
-  "very-large": { label: "매우 크게", pixels: 72 },
+  "very-small": { label: "매우 작게", pixels: 32 },
+  small: { label: "작게", pixels: 42 },
+  normal: { label: "보통", pixels: 56 },
+  large: { label: "크게", pixels: 72 },
+  "very-large": { label: "매우 크게", pixels: 96 },
 } as const;
 export type CharacterSize = keyof typeof CHARACTER_SIZES;
 

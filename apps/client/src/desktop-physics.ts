@@ -1,10 +1,7 @@
-import {
-  CHARACTER_SIZES,
-  type CharacterActivity,
-  type CharacterPosition,
-} from "./preferences.ts";
+import type { CharacterActivity, CharacterPosition } from "./preferences.ts";
 
-export const CHARACTER_SIZE = CHARACTER_SIZES.normal.pixels;
+// Fixed reference for attack geometry and effects; display sizes are passed to createBody.
+export const CHARACTER_SIZE = 42;
 const GRAVITY = 1400;
 
 export interface Body {
