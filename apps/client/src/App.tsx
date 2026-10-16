@@ -604,9 +604,7 @@ function App() {
           >
             ✳
           </span>
-          <span>
-            wappy<span className="brand-period text-[#8aaa70]">.</span>
-          </span>
+          <span>Wappy</span>
         </div>
         {desktop && (
           <div
