@@ -131,7 +131,16 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
         })
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                if let Err(error) = startup::Startup::new(app.handle()).and_then(|startup| {
+                    startup
+                        .migrate_executable()
+                        .map_err(|error| error.to_string())
+                }) {
+                    eprintln!("Could not update the Wappy startup executable: {error}");
+                }
+            }
             tray::setup(app)?;
             if let Some(window) = app.get_webview_window("main") {
                 place_sidebar(&window)?;

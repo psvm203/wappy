@@ -70,6 +70,31 @@ impl Startup {
         ])
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn migrate_executable(&self) -> io::Result<()> {
+        if !self.is_enabled()? {
+            return Ok(());
+        }
+        let mut content: plist::Dictionary =
+            plist::from_file(&self.file).map_err(io::Error::other)?;
+        let Some(arguments) = content
+            .get_mut("ProgramArguments")
+            .and_then(plist::Value::as_array_mut)
+        else {
+            return Ok(());
+        };
+        let legacy = self.executable.with_file_name("client");
+        if arguments.first().and_then(plist::Value::as_string)
+            != Some(legacy.to_string_lossy().as_ref())
+        {
+            return Ok(());
+        }
+        arguments[0] = self.executable.to_string_lossy().into_owned().into();
+        let temporary = self.file.with_extension("plist.tmp");
+        plist::to_file_xml(&temporary, &content).map_err(io::Error::other)?;
+        std::fs::rename(temporary, &self.file)
+    }
+
     pub fn is_enabled(&self) -> io::Result<bool> {
         #[cfg(target_os = "macos")]
         {
@@ -215,7 +240,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn launch_agent_round_trips_special_characters_and_can_be_removed() {
+    fn launch_agent_preserves_settings_when_migrating_the_executable_and_can_be_removed() {
         let directory = std::env::temp_dir().join(format!("wappy-startup-{}", std::process::id()));
         let entry = Startup {
             name: "com.wappy.startup-test".into(),
@@ -223,6 +248,8 @@ mod tests {
             file: directory.join("test.plist"),
         };
         let check = || -> io::Result<()> {
+            entry.migrate_executable()?;
+            assert!(!entry.is_enabled()?);
             entry.set_enabled(true)?;
             assert!(entry.is_enabled()?);
             let content: plist::Dictionary =
@@ -234,8 +261,35 @@ mod tests {
             );
             assert_eq!(content["RunAtLoad"].as_boolean(), Some(true));
             assert!(!content.contains_key("KeepAlive"));
+
+            for executable in [
+                entry.executable.with_file_name("client"),
+                entry.executable.clone(),
+                "/Applications/Other.app/Contents/MacOS/client".into(),
+            ] {
+                let mut content = entry.plist();
+                content
+                    .get_mut("ProgramArguments")
+                    .unwrap()
+                    .as_array_mut()
+                    .unwrap()[0] = executable.to_string_lossy().into_owned().into();
+                content.insert("RunAtLoad".into(), false.into());
+                plist::to_file_xml(&entry.file, &content).map_err(io::Error::other)?;
+                entry.migrate_executable()?;
+                if executable == entry.executable.with_file_name("client") {
+                    content
+                        .get_mut("ProgramArguments")
+                        .unwrap()
+                        .as_array_mut()
+                        .unwrap()[0] = entry.executable.to_string_lossy().into_owned().into();
+                }
+                let migrated: plist::Dictionary =
+                    plist::from_file(&entry.file).map_err(io::Error::other)?;
+                assert_eq!(migrated, content);
+            }
             entry.set_enabled(false)?;
             entry.set_enabled(false)?;
+            entry.migrate_executable()?;
             assert!(!entry.is_enabled()?);
             Ok(())
         };

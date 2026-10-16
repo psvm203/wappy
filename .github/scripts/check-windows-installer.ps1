@@ -10,7 +10,7 @@ $bundleId = 'com.wappy.client'
 $runKey = 'Software\Microsoft\Windows\CurrentVersion\Run'
 $approvalKey = 'Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run'
 $installDir = Join-Path $env:RUNNER_TEMP 'Wappy 설치 확인'
-$executable = Join-Path $installDir 'client.exe'
+$executable = Join-Path $installDir 'Wappy.exe'
 $uninstaller = Join-Path $installDir 'uninstall.exe'
 $startupCommand = '"{0}" --autostart' -f $executable
 # A Task Manager override must survive updates without silently re-enabling startup.
@@ -61,6 +61,7 @@ try {
     Start-Sleep -Seconds 5
     $app.Refresh()
     Assert-Check (-not $app.HasExited) 'The installed app exited unexpectedly'
+    Assert-Check ($app.ProcessName -eq 'Wappy') 'The app process is not named Wappy'
     Assert-Check ($app.MainWindowHandle -ne 0) 'The installed app has no visible native window'
     Stop-Process -Id $app.Id -Force
     $app.WaitForExit()
@@ -69,6 +70,10 @@ try {
     # The native lifecycle check already exercises the real startup toggle.
     # Seed its persisted values here to test the installer boundary separately.
     $startupSeeded = $true
+    Seed-Startup ('"{0}" --autostart' -f (Join-Path $installDir 'client.exe'))
+    Write-Host 'CHECK: update migrates the old executable path without resetting Task Manager settings'
+    Run-Package $Installer "/S /UPDATE /D=$installDir"
+    Assert-Startup $startupCommand
     Seed-Startup $startupCommand
     Write-Host 'CHECK: update and update-mode removal preserve startup and Task Manager settings'
     Run-Package $Installer "/S /UPDATE /D=$installDir"
@@ -88,6 +93,8 @@ try {
     Run-Package $Installer "/S /D=$installDir"
     $otherCommand = '"{0}" --autostart' -f (Join-Path $env:RUNNER_TEMP 'Another Wappy\client.exe')
     Seed-Startup $otherCommand
+    Run-Package $Installer "/S /UPDATE /D=$installDir"
+    Assert-Startup $otherCommand
     Run-Package $uninstaller '/S'
     Assert-Startup $otherCommand
     Write-Host 'PASS: installed release launch, startup opt-in, update preservation and scoped uninstall cleanup'
