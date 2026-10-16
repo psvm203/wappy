@@ -61,14 +61,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm exec turbo run build check-types test
       - run: cargo fmt --manifest-path apps/client/src-tauri/Cargo.toml --check
-      - run: cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --locked
-      - name: Check native windows, tray and background connection
+      - name: Check Rust unit tests, native windows, tray and background connection
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
-            caffeinate -du cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
+            caffeinate -du cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --test lifecycle --features tauri/custom-protocol --locked
           else
-            cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --features tauri/custom-protocol --locked
+            cargo test --manifest-path apps/client/src-tauri/Cargo.toml --lib --test lifecycle --features tauri/custom-protocol --locked
           fi
       - name: Build preview installer
         if: ${{ !inputs.skip-preview }}
