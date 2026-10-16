@@ -119,7 +119,7 @@ export function InviteField({
           disabled={busy || current?.loading || !value.trim()}
           onClick={() => void check()}
         >
-          {current?.loading ? "초대 확인 중…" : "초대장 미리 확인하기"}
+          {current?.loading ? "초대 확인 중…" : "초대장 확인하기"}
         </button>
       )}
       {current?.error && (
@@ -139,29 +139,15 @@ export function InviteField({
           className="
             invitation-preview m-[16px_0] flex items-center gap-[10px] rounded-[12px] border border-solid
             border-[#d6dfc9] bg-[#edf2e6] p-[12px] text-[12px] wrap-anywhere
-            [&_.character]:w-[48px] [&_.character]:shrink-0 [&_.hint]:m-[5px_0_0]
+            [&_.character]:w-[48px] [&_.character]:shrink-0
           "
           role="status"
         >
           <Character kind={current.preview.character} />
-          <div>
-            <strong>{current.preview.name} 님이 보낸 방 초대예요.</strong>
-            <p className="hint text-[10px] leading-[1.7] text-[#68745e]">
-              인원과 기간 제한 없이 사용할 수 있어요.
-            </p>
-            <p className="hint text-[10px] leading-[1.7] text-[#68745e]">
-              참여하면 같은 방의 친구들을 모두 만날 수 있어요.
-            </p>
-            <p className="hint text-[10px] leading-[1.7] text-[#68745e]">
-              아직 방에 참여하지 않았어요.
-            </p>
-          </div>
+          <span>
+            <strong>{current.preview.name}</strong> 님의 방이에요.
+          </span>
         </div>
-      )}
-      {onVerified && !current?.preview && (
-        <p className="hint text-[10px] leading-[1.7] text-[#68745e]">
-          초대장을 먼저 확인한 뒤 내 이름과 캐릭터로 시작해 주세요.
-        </p>
       )}
     </>
   );
