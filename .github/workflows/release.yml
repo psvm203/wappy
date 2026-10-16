@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 24
       - uses: pnpm/action-setup@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           targets: ${{ matrix.rust-targets }}
       - name: Cache Rust dependencies
