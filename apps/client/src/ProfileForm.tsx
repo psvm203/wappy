@@ -203,7 +203,7 @@ export function ProfileForm({
         {beforeProfile}
         {nameField}
         <div
-          className="character-categories mb-[10px] flex gap-[5px] overflow-x-auto pb-[2px]"
+          className="character-categories mb-[10px] grid grid-cols-3 gap-[5px] pb-[2px]"
           role="tablist"
           aria-label="캐릭터 카테고리"
         >
@@ -214,7 +214,7 @@ export function ProfileForm({
               role="tab"
               aria-selected={category === name}
               className="
-                shrink-0 rounded-[8px] bg-[#f0f1e9] p-[8px_9px] text-[10px] whitespace-nowrap
+                min-w-0 rounded-[8px] bg-[#f0f1e9] p-[8px_9px] text-[10px]
                 text-[#68745e] aria-selected:bg-[#e3edd3] aria-selected:font-bold
                 aria-selected:text-[#374936]
               "
