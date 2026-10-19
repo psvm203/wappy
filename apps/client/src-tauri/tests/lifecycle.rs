@@ -25,6 +25,72 @@ impl Drop for StartupCleanup {
     }
 }
 
+#[cfg(target_os = "macos")]
+struct CoverApp(std::process::Child);
+
+#[cfg(target_os = "macos")]
+impl Drop for CoverApp {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn native_foreground(sidebar: &tauri::WebviewWindow) -> Result<(bool, bool, isize), String> {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSWindow, NSWindowOcclusionState};
+
+    let (sent, received) = mpsc::channel();
+    sidebar
+        .with_webview(move |webview| {
+            let window = unsafe { &*webview.ns_window().cast::<NSWindow>() };
+            let app = NSApplication::sharedApplication(MainThreadMarker::new().unwrap());
+            let _ = sent.send((
+                app.isActive() && window.isKeyWindow(),
+                window
+                    .occlusionState()
+                    .contains(NSWindowOcclusionState::Visible),
+                window.level(),
+            ));
+        })
+        .map_err(|error| error.to_string())?;
+    received
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn restore_covered_sidebar(app: &AppHandle, sidebar: &tauri::WebviewWindow) -> Result<(), String> {
+    let level = native_foreground(sidebar)?.2;
+    let position = sidebar
+        .outer_position()
+        .map_err(|error| error.to_string())?;
+    let size = sidebar.outer_size().map_err(|error| error.to_string())?;
+    let bounds = serde_json::json!([
+        position.x - 20,
+        position.y - 20,
+        size.width + 40,
+        size.height + 40
+    ]);
+    let _cover = CoverApp(
+        Command::new(std::env::current_exe().map_err(|error| error.to_string())?)
+            .arg("--cover-sidebar")
+            .env("WAPPY_COVER_BOUNDS", bounds.to_string())
+            .spawn()
+            .map_err(|error| error.to_string())?,
+    );
+    until(|| native_foreground(sidebar).is_ok_and(|(active, visible, _)| !active && !visible))
+        .map_err(|error| format!("The other app did not cover the sidebar: {error}"))?;
+    client_lib::show_sidebar(app).map_err(|error| error.to_string())?;
+    until(|| native_foreground(sidebar).is_ok_and(|(active, visible, _)| active && visible))
+        .map_err(|error| format!("Open Wappy did not restore the covered sidebar: {error}"))?;
+    if native_foreground(sidebar)?.2 != level {
+        return Err("Opening Wappy changed the sidebar's window level".into());
+    }
+    Ok(())
+}
+
 fn secondary_launch(app: &AppHandle, autostart: bool) -> Result<(), String> {
     let mut command = Command::new(std::env::current_exe().map_err(|error| error.to_string())?);
     command
@@ -313,6 +379,30 @@ fn main() -> Result<(), String> {
     for window in &mut context.config_mut().app.windows {
         window.incognito = true;
     }
+    #[cfg(target_os = "macos")]
+    if std::env::args().any(|arg| arg == "--cover-sidebar") {
+        let (x, y, width, height): (i32, i32, u32, u32) = serde_json::from_str(
+            &std::env::var("WAPPY_COVER_BOUNDS").map_err(|error| error.to_string())?,
+        )
+        .map_err(|error| error.to_string())?;
+        context.config_mut().app.windows.truncate(1);
+        let window = &mut context.config_mut().app.windows[0];
+        window.url = tauri::WebviewUrl::External("about:blank".parse().unwrap());
+        window.transparent = false;
+        window.visible = true;
+        tauri::Builder::default()
+            .setup(move |app| {
+                let window = app.get_webview_window("main").unwrap();
+                window.set_position(tauri::PhysicalPosition::new(x, y))?;
+                window.set_size(tauri::PhysicalSize::new(width, height))?;
+                window.set_focus()?;
+                Ok(())
+            })
+            .build(context)
+            .map_err(|error| error.to_string())?
+            .run(|_, _| {});
+        return Ok(());
+    }
     let app = client_lib::app_builder()
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("disable-webview-timers")
@@ -396,6 +486,11 @@ fn main() -> Result<(), String> {
             // Wait for readback to re-enable the checkbox before toggling off.
             click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
             until(|| startup.0.is_enabled().is_ok_and(|enabled| !enabled))?;
+            #[cfg(target_os = "macos")]
+            {
+                println!("CHECK: Open Wappy raises the sidebar covered by another app");
+                restore_covered_sidebar(&handle, &sidebar)?;
+            }
             sidebar.close().map_err(|error| error.to_string())?;
             until(|| sidebar.is_visible().is_ok_and(|visible| !visible))?;
             if handle.get_webview_window("main").is_none() || !desktop.is_visible().unwrap_or(false)

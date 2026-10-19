@@ -28,6 +28,12 @@ pub fn show_sidebar(app: &AppHandle) -> tauri::Result<()> {
         window.show()?;
         window.unminimize()?;
         window.set_focus()?;
+        #[cfg(target_os = "macos")]
+        window.with_webview(|webview| unsafe {
+            // Raise an inactive app's sidebar explicitly, without making it always-on-top.
+            let window = &*webview.ns_window().cast::<objc2_app_kit::NSWindow>();
+            window.orderFrontRegardless();
+        })?;
     }
     Ok(())
 }
