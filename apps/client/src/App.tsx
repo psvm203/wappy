@@ -50,10 +50,16 @@ import { useDesktopChatRequests } from "./chat-bridge";
 import { InviteField } from "./InviteField";
 import { InviteCode } from "./InviteCode";
 import { StartupSettings } from "./StartupSettings";
+import { AccountSettings } from "./AccountSettings";
 import { UpdateSettings, useAppUpdates } from "./UpdateSettings";
 import { filterFriends, type FriendView } from "./friend-filter";
 import { reconcilePresence } from "./presence";
-import { saveSession, type SavedSession } from "./sessions";
+import {
+  saveSession,
+  loadGuestSession,
+  GUEST_SESSION_KEY,
+  type SavedSession,
+} from "./sessions";
 import { isLocalServer, parseInvitation, WAPPY_SERVER } from "./invitations";
 import { subscribeState } from "./state-sync";
 import { useDesktopAttackRequests } from "./attack-bridge";
@@ -101,7 +107,7 @@ function App() {
     [serverState, profileDraft, presenceDraft],
   );
   const [panel, setPanel] = useState<
-    "friends" | "invite" | "profile" | "settings"
+    "friends" | "invite" | "profile" | "account" | "settings"
   >("friends");
   const panelScrollPositions = useRef<Partial<Record<typeof panel, number>>>(
     {},
@@ -365,6 +371,56 @@ function App() {
     setPanel("friends");
     setNotice("");
     setError("");
+  }
+
+  function prepareAccountLogin() {
+    if (session && state && !state.account?.kakao)
+      localStorage.setItem(GUEST_SESSION_KEY, JSON.stringify(session));
+  }
+
+  function connectAccount(address: string, created: Session) {
+    if (session?.server === address && state?.self.id === created.profile.id) {
+      try {
+        localStorage.removeItem(GUEST_SESSION_KEY);
+      } catch {
+        /* Logout also checks that the backup is still an unlinked guest. */
+      }
+    }
+    connectSession(address, created);
+    setState({ self: created.profile, friends: [], account: { kakao: true } });
+    setPanel("account");
+    setNotice("카카오 계정으로 로그인했어요.");
+  }
+
+  function logoutAccount() {
+    if (!session) return;
+    void action(async () => {
+      await request(session, "POST /session/logout", {});
+      localStorage.removeItem(SESSION_KEY);
+      const guest = loadGuestSession();
+      showOnboarding();
+      setPanel("account");
+      if (guest) {
+        try {
+          const next = parseSidebarState(
+            await request(guest, "GET /state", undefined),
+          );
+          if (!next.account?.kakao) {
+            connectSession(guest.server, {
+              token: guest.token,
+              profile: next.self,
+            });
+            applyState(next);
+            setPanel("account");
+          }
+          localStorage.removeItem(GUEST_SESSION_KEY);
+        } catch (cause) {
+          if (!(cause instanceof ApiError && cause.status === 401)) throw cause;
+          localStorage.removeItem(GUEST_SESSION_KEY);
+        }
+      }
+      setNotice("로그아웃했어요. 로그인 없이도 계속 사용할 수 있어요.");
+    });
   }
 
   function selectedServer() {
@@ -678,7 +734,7 @@ function App() {
         </div>
       )}
 
-      {!session && panel !== "settings" ? (
+      {!session && panel !== "settings" && panel !== "account" ? (
         <div
           className="
             onboarding scroll-area min-h-0 [scrollbar-width:thin] [scrollbar-color:#d8ddd0_transparent]
@@ -736,6 +792,14 @@ function App() {
                 {label}
               </button>
             ))}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setPanel("account")}
+              className="bg-transparent p-[3px_0] text-[11px] text-[#68745e] hover:text-[#41562e]"
+            >
+              계정
+            </button>
           </nav>
           <ProfileForm
             initial={emptyProfile}
@@ -860,7 +924,7 @@ function App() {
             )}
           <nav
             className="
-              tabs [&_button]:rounded-0 m-[0_20px_12px] flex shrink-0 gap-[18px]
+              tabs [&_button]:rounded-0 m-[0_20px_12px] flex shrink-0 gap-[14px]
               border-b [border-bottom-style:solid] border-b-[#e6e8df] [&_button]:border-b-[2px] [&_button]:[border-bottom-style:solid]
               [&_button]:border-b-[transparent] [&_button]:bg-transparent [&_button]:p-[11px_0]
               [&_button]:text-[12px] [&_button]:text-[#68745e]
@@ -874,11 +938,16 @@ function App() {
                 ["friends", session ? "친구들" : "시작 화면"],
                 ["invite", "초대"],
                 ["profile", "내 모습"],
+                ["account", "계정"],
                 ["settings", "설정"],
               ] as const
             )
               .filter(
-                ([id]) => session || id === "friends" || id === "settings",
+                ([id]) =>
+                  session ||
+                  id === "friends" ||
+                  id === "account" ||
+                  id === "settings",
               )
               .map(([id, label]) => (
                 <button
@@ -1220,6 +1289,24 @@ function App() {
                     {sleeping ? "일어나기" : "자는 척하기"}
                   </button>
                 }
+              />
+            )}
+            {panel === "account" && (
+              <AccountSettings
+                key={`${session?.server ?? server}:${session?.token ?? "guest"}`}
+                server={session?.server ?? server}
+                session={
+                  connection === "unauthorized"
+                    ? undefined
+                    : (session ?? undefined)
+                }
+                state={state}
+                busy={busy || profileDraft !== null}
+                onBusyChange={setBusy}
+                onStart={prepareAccountLogin}
+                onLogin={connectAccount}
+                onLogout={logoutAccount}
+                onGuest={() => setPanel("friends")}
               />
             )}
             {panel === "settings" && (

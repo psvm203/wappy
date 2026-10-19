@@ -3,6 +3,7 @@ import { serverUrl } from "./invitations.ts";
 
 export const SESSION_KEY = "wappy.session.v1";
 export const SAVED_SESSIONS_KEY = "wappy.saved-sessions.v1";
+export const GUEST_SESSION_KEY = "wappy.guest-session.v1";
 export interface SavedSession {
   server: string;
   token: string;
@@ -31,6 +32,19 @@ export function loadSession(storage?: SessionStorage): SavedSession | null {
   try {
     return parseSession(
       JSON.parse((storage ?? localStorage).getItem(SESSION_KEY) || "null"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Keep the guest credential when an existing Kakao profile replaces it. */
+export function loadGuestSession(
+  storage: SessionStorage = localStorage,
+): SavedSession | null {
+  try {
+    return parseSession(
+      JSON.parse(storage.getItem(GUEST_SESSION_KEY) || "null"),
     );
   } catch {
     return null;

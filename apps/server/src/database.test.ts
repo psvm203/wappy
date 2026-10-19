@@ -6,6 +6,43 @@ import { join } from "node:path";
 import test from "node:test";
 import { createRoom, openDatabase, transaction } from "./database.ts";
 
+test("legacy sessions migrate once and revoked credentials stay revoked after restart", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "wappy-session-migration-"));
+  const path = join(directory, "test.sqlite");
+  let db = new DatabaseSync(path);
+  t.after(() => {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  db.exec(`
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL, character TEXT NOT NULL
+    ) STRICT;
+    INSERT INTO users VALUES ('alice', 'legacy-hash', 'Alice', 'chiikawa');
+  `);
+  db.close();
+  db = openDatabase(path);
+  assert.equal(
+    db
+      .prepare("SELECT user_id FROM sessions WHERE token_hash = 'legacy-hash'")
+      .get()?.user_id,
+    "alice",
+  );
+  db.exec("DELETE FROM sessions WHERE token_hash = 'legacy-hash'");
+  db.close();
+  db = openDatabase(path);
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS count FROM sessions").get()?.count,
+    0,
+  );
+  assert.equal(
+    db.prepare("SELECT name FROM users WHERE id = 'alice'").get()?.name,
+    "Alice",
+  );
+  assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+});
+
 test("retired blocking data restores only affected room connections once", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-block-removal-"));
   const path = join(directory, "test.sqlite");

@@ -117,6 +117,8 @@ interface Room {
 }
 export interface SidebarState {
   self: Profile;
+  /** Private to self; omitted by servers without optional account login. */
+  account?: { kakao: boolean };
   friends: Friend[];
   /** The profile's current room; absent before joining or on older servers. */
   room?: Room;
@@ -151,6 +153,22 @@ export interface ApiErrorBody {
 /** The client and server share method, path, request and response types. */
 interface ApiRoutes {
   "POST /session": { input: ProfileInput; output: Session };
+  "POST /session/logout": {
+    input: Record<string, never>;
+    output: { ok: true };
+  };
+  "POST /auth/kakao/start": {
+    input: Record<string, never>;
+    output: { loginToken: string; authorizationUrl: string; expiresAt: number };
+  };
+  "POST /auth/kakao/poll": {
+    input: { loginToken: string };
+    output: { status: "pending" } | { status: "complete"; session: Session };
+  };
+  "POST /auth/kakao/cancel": {
+    input: { loginToken: string };
+    output: { ok: true };
+  };
   "GET /state": { input: undefined; output: SidebarState };
   /** GET /events streams personalized SidebarState snapshots using SSE. */
   "POST /heartbeat": { input: Record<string, never>; output: undefined };
@@ -306,6 +324,11 @@ export function parseSidebarState(value: unknown): SidebarState {
   if (!isRecord(value) || !Array.isArray(value.friends))
     throw new Error("잘못된 친구 목록 응답입니다.");
   const self = profile(value.self);
+  if (
+    value.account !== undefined &&
+    (!isRecord(value.account) || typeof value.account.kakao !== "boolean")
+  )
+    throw new Error("잘못된 계정 응답입니다.");
   const ids = new Set([self.id]);
   const friends = value.friends.map((friend): Friend => {
     if (!isRecord(friend) || typeof friend.online !== "boolean")
@@ -401,6 +424,9 @@ export function parseSidebarState(value: unknown): SidebarState {
   return {
     self,
     friends,
+    ...(value.account === undefined
+      ? {}
+      : { account: { kakao: (value.account as { kakao: boolean }).kakao } }),
     ...(value.sleepHitCount === undefined
       ? {}
       : { sleepHitCount: value.sleepHitCount }),

@@ -481,6 +481,31 @@ fn main() -> Result<(), String> {
                 "이 빌드는 자동 업데이트를 지원하지 않습니다.",
                 true,
             )?;
+            println!("CHECK: optional account login and guest entry");
+            click_button(&sidebar, "계정")?;
+            text_rendered(
+                &sidebar,
+                "section[aria-label='계정']",
+                "게스트로 사용 중이에요",
+                true,
+            )?;
+            text_rendered(
+                &sidebar,
+                ".kakao-login button:not(:disabled)",
+                "카카오 로그인",
+                true,
+            )?;
+            click_button(&sidebar, "로그인 없이 시작하기")?;
+            text_rendered(&sidebar, ".onboarding", "처음이에요", true)?;
+            click_button(&sidebar, "계정")?;
+            text_rendered(
+                &sidebar,
+                ".kakao-login button:not(:disabled)",
+                "카카오 로그인",
+                true,
+            )?;
+            client_lib::show_settings(&handle).map_err(|error| error.to_string())?;
+            text_rendered(&sidebar, ".settings-panel", "캐릭터 활동", true)?;
             click_button(&sidebar, "컴퓨터 로그인 시 Wappy 실행")?;
             until(|| startup.0.is_enabled().unwrap_or(false))?;
             // Wait for readback to re-enable the checkbox before toggling off.

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -247,14 +248,31 @@ test("SSE authenticates opens and active streams, bounds connections, and releas
   await new Promise((resolve) => setTimeout(resolve, 30));
   const replacement = await f.connect(alice.token);
   await replacement.state();
+  // Model a second device's separately issued session for the same profile.
+  const otherToken = "z".repeat(43);
   const db = new DatabaseSync(f.databasePath);
-  db.prepare("UPDATE users SET token_hash = ? WHERE id = ?").run(
-    "revoked",
+  db.prepare("INSERT INTO sessions (token_hash, user_id) VALUES (?, ?)").run(
+    createHash("sha256").update(otherToken).digest("hex"),
     alice.profile.id,
   );
   db.close();
+  const otherDevice = await f.connect(otherToken);
+  await otherDevice.state();
+  await f.write("/session/logout", {}, alice.token);
   f.advance(10_000);
   assert.match(await replacement.event(), /event: unauthorized/);
+  await f.write(
+    "/profile",
+    { name: "Still connected", character: "usagi" },
+    otherToken,
+    "PATCH",
+  );
+  assert.equal(
+    (await otherDevice.state((s) => s.self.name === "Still connected")).self
+      .character,
+    "usagi",
+    "logging out one session must leave another device's stream and writes authorized",
+  );
   const heartbeat = await fetch(f.base + "/heartbeat", {
     method: "POST",
     headers: {

@@ -574,7 +574,7 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   }
 });
 
-test("startup removes retired authentication data and profile fields while preserving existing accounts", async () => {
+test("startup removes recovery data and retired fields while preserving Kakao accounts", async () => {
   const directory = mkdtempSync(join(tmpdir(), "wappy-migration-"));
   const databasePath = join(directory, "test.sqlite");
   const token = "a".repeat(43);
@@ -631,11 +631,6 @@ test("startup removes retired authentication data and profile fields while prese
         for (const [method, path] of [
           ["POST", "/recovery-code"],
           ["POST", "/session/recover"],
-          ["POST", "/auth/kakao/start"],
-          ["POST", "/auth/kakao/poll"],
-          ["POST", "/auth/kakao/cancel"],
-          ["GET", "/auth/kakao/authorize?state=retired"],
-          ["GET", "/auth/kakao/callback?state=retired&code=retired"],
         ]) {
           for (const authenticated of [false, true]) {
             const response = await fetch(base + path, {
@@ -668,10 +663,18 @@ test("startup removes retired authentication data and profile fields while prese
           assert.equal(
             inspection
               .prepare(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('recovery_codes', 'kakao_accounts')",
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recovery_codes'",
               )
               .get(),
             undefined,
+          );
+          assert.equal(
+            inspection
+              .prepare(
+                "SELECT user_id FROM kakao_accounts WHERE kakao_id = '123456789'",
+              )
+              .get()?.user_id,
+            "alice",
           );
           assert.equal(
             inspection

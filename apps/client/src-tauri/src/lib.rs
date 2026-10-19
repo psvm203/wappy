@@ -1,5 +1,6 @@
 use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow, WindowEvent};
 
+mod kakao;
 pub mod startup;
 mod state_sync;
 mod tray;
@@ -195,6 +196,7 @@ pub fn app_builder() -> tauri::Builder<tauri::Wry> {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            kakao::open_kakao_login,
             updater_enabled,
             desktop_cursor_position,
             tray::minimize_sidebar,

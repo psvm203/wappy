@@ -30,7 +30,10 @@ export function openDatabase(databasePath: string) {
       PRIMARY KEY (room_id, user_id)
     ) STRICT;
     DROP TABLE IF EXISTS recovery_codes;
-    DROP TABLE IF EXISTS kakao_accounts;
+    CREATE TABLE IF NOT EXISTS kakao_accounts (
+      kakao_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;
     CREATE TABLE IF NOT EXISTS presence_settings (
       user_id TEXT PRIMARY KEY REFERENCES users(id),
       sharing INTEGER NOT NULL CHECK (sharing IN (0, 1)),
@@ -70,6 +73,26 @@ export function openDatabase(databasePath: string) {
     CREATE INDEX IF NOT EXISTS recipients_user ON chat_recipients(user_id, message_id);
     CREATE INDEX IF NOT EXISTS recipients_friend ON chat_recipients(friend_id, message_id);
   `);
+  // Import legacy credentials once. The old users.token_hash column remains for
+  // schema compatibility, but only sessions is used for authentication now.
+  transaction(db, () => {
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
+        )
+        .get()
+    )
+      return;
+    db.exec(`
+      CREATE TABLE sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+      ) STRICT;
+      CREATE INDEX sessions_user ON sessions(user_id);
+      INSERT INTO sessions SELECT token_hash, id FROM users;
+    `);
+  });
   if (
     db
       .prepare("PRAGMA table_info(users)")

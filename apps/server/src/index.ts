@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createApp } from "./server.ts";
+import { kakaoConfig } from "./kakao.ts";
 
 const databasePath = resolve(
   process.env.DATABASE_PATH ?? "./data/wappy.sqlite",
@@ -12,6 +13,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const host = process.env.HOST ?? "127.0.0.1";
 const server = createApp({
   databasePath,
+  kakao: kakaoConfig(process.env),
   trustProxy: process.env.TRUST_PROXY === "1",
   origins: process.env.ALLOWED_ORIGINS?.split(",")
     .map((origin) => origin.trim())
