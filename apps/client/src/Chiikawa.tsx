@@ -1,3 +1,4 @@
+import { useId } from "react";
 import sasumata from "./assets/chiikawa-sasumata.png";
 import blueSasumata from "./assets/hachiware-sasumata.png";
 
@@ -669,6 +670,70 @@ export function Momonga({ asleep }: { asleep: boolean }) {
 }
 
 export function Kurimanju({ asleep }: { asleep: boolean }) {
+  const sleepGradientId = useId();
+
+  if (asleep)
+    return (
+      <g
+        transform="translate(116 -16) scale(-.63 .63)"
+        fill="#ffe4b8"
+        stroke="#33251f"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <defs>
+          <linearGradient
+            id={sleepGradientId}
+            x1="0"
+            y1="108"
+            x2="2"
+            y2="130"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="#afba9f" />
+            <stop offset="1" stopColor="#ffe4b8" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M61 158C84 150 126 151 153 157Q154 169 164 180C134 190 86 190 55 179Q59 169 61 158Z"
+          fill="#bb8c66"
+          stroke="none"
+        />
+        <path
+          d="M62 158C80 149 132 148 153 157C158 164 143 169 114 169C84 169 64 166 62 158Z"
+          fill="#d6ad87"
+          strokeWidth="2.2"
+        />
+        <path
+          d="M61 165l-4 13m7-11-1 5M149 170l1 4m2-5 1 2"
+          fill="none"
+          strokeWidth="2"
+        />
+        <path
+          d="M49 76Q45 79 45 80Q39 80 39 85Q40 89 45 89C39 102 39 116 44 128Q48 138 58 142L57 146C57 153 61 159 68 164L72 168L72 174Q76 181 81 178Q85 176 84 169L104 170Q103 177 107 179Q111 181 114 175L116 169L134 168Q145 165 152 156Q149 144 150 137Q149 133 146 132C155 121 154 103 151 90Q149 82 144 79Q147 77 145 74Q143 71 138 71L130 65C121 54 107 50 92 50C75 50 58 59 49 76Z"
+          fill={`url(#${sleepGradientId})`}
+        />
+        <path
+          d="M49 76C56 63 71 51 92 50C107 49 121 55 130 65C121 80 101 86 83 87C68 88 57 85 49 76Z"
+          fill="#695440"
+        />
+        <g fill="none">
+          <path d="M68 118q4 4 8 0M101 115q4 4 8 0" />
+          <path
+            d="M90 126v2M85 127q1 4 5 3q3 4 6 0q2 0 3-3M88 136q2 1 4 .5"
+            strokeWidth="2.2"
+          />
+          <path d="M58 145Q57 152 62 156Q68 160 71 156Q74 152 66 151M122 145q-2 4-7 6q-4 2-1 5q4 3 12-7" />
+          <path
+            d="M85 153q5-2 10-1m10-.4 3-.4"
+            strokeWidth="1.8"
+            opacity=".6"
+          />
+        </g>
+      </g>
+    );
+
   return (
     <g
       fill="#ffe4b8"
@@ -699,46 +764,39 @@ export function Kurimanju({ asleep }: { asleep: boolean }) {
           transform="rotate(-24 63 35.5)"
         />
       </g>
-      {asleep ? (
-        <path
-          d="M30.8 44.1q3.4 3.5 6.1-1.5M50.1 34q3.4 3.5 6.1-1.5"
-          fill="none"
+      <g fill="#33251f" stroke="none">
+        <ellipse
+          cx="33.8"
+          cy="44.3"
+          rx="2.9"
+          ry="3.3"
+          transform="rotate(24 33.8 44.3)"
         />
-      ) : (
-        <g fill="#33251f" stroke="none">
+        <ellipse
+          cx="53.2"
+          cy="34.1"
+          rx="3"
+          ry="3.4"
+          transform="rotate(24 53.2 34.1)"
+        />
+        <g fill="#fffdf3">
           <ellipse
-            cx="33.8"
-            cy="44.3"
-            rx="2.9"
-            ry="3.3"
-            transform="rotate(24 33.8 44.3)"
+            cx="34.1"
+            cy="43.1"
+            rx="1.2"
+            ry=".8"
+            transform="rotate(-30 34.1 43.1)"
           />
           <ellipse
-            cx="53.2"
-            cy="34.1"
-            rx="3"
-            ry="3.4"
-            transform="rotate(24 53.2 34.1)"
+            cx="53.5"
+            cy="32.9"
+            rx="1.3"
+            ry=".9"
+            transform="rotate(-30 53.5 32.9)"
           />
-          <g fill="#fffdf3">
-            <ellipse
-              cx="34.1"
-              cy="43.1"
-              rx="1.2"
-              ry=".8"
-              transform="rotate(-30 34.1 43.1)"
-            />
-            <ellipse
-              cx="53.5"
-              cy="32.9"
-              rx="1.3"
-              ry=".9"
-              transform="rotate(-30 53.5 32.9)"
-            />
-            <path d="M32.2 45.2q1.4.7 2.6-.6q-.9 1.9-2.6.6M51.5 35.1q1.5.7 2.8-.6q-1 2-2.8.6" />
-          </g>
+          <path d="M32.2 45.2q1.4.7 2.6-.6q-.9 1.9-2.6.6M51.5 35.1q1.5.7 2.8-.6q-1 2-2.8.6" />
         </g>
-      )}
+      </g>
       <path
         d="M24.4 52.3l-.2 3.1M27 51.5v3M29.6 50.7l.1 2.8M32 50.3v2.3M59.5 35.8l-.1 2.6M62.1 34.3l.1 2.8M64.7 32.8l.1 2.8M67.1 32.5v2.6"
         fill="none"
