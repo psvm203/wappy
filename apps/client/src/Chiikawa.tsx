@@ -445,6 +445,85 @@ export function Usagi({ asleep }: { asleep: boolean }) {
 }
 
 export function Momonga({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <g
+        transform="translate(-18 10) scale(.55)"
+        fill="#fffefd"
+        stroke="#242622"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path
+          d="M80 143C59 139 44 117 42 94C40 80 44 66 55 60C65 54 79 56 89 62C100 68 105 77 105 88L91 104Z"
+          fill="#ccebf5"
+          stroke="none"
+        />
+        <path
+          d="M44 87q5 0 8 2M47 71q6 0 9 4M55 62q5 1 6 6M66 56q4 2 5 11M80 58v8M91 61q0 6-2 9M95 76l3-1M44 107q3-4 7-4M52 118q0-4 5-6M59 125q0-5 4-6M68 130l1-5"
+          fill="none"
+          strokeWidth="2.1"
+        />
+        <path
+          d="M107 89C111 84 115 80 120 78C110 78 106 72 107 62C108 52 114 44 123 43C134 42 140 48 139 56L137 69C149 66 160 70 170 76C176 68 176 57 185 54C195 52 203 60 204 69C206 79 197 87 186 89C190 95 192 99 193 106L201 108Q207 115 205 122Q208 131 200 138Q200 145 193 148Q188 156 179 153C157 164 123 164 97 154L82 153Q76 157 73 151Q70 146 75 141Q75 134 78 130Q75 124 80 120C80 107 85 93 95 86Z"
+          stroke="none"
+        />
+        <path
+          d="M121 54C113 54 111 60 113 68Q115 74 124 72L127 54ZM187 65C197 67 199 74 192 80Q187 84 181 81Z"
+          fill="#ccebf5"
+          stroke="none"
+        />
+        <g fill="none">
+          <path d="M95 86L107 89C111 84 115 80 120 78C110 78 106 72 107 62C108 52 114 44 123 43C134 42 140 48 139 56L137 69C149 66 160 70 170 76C176 68 176 57 185 54C195 52 203 60 204 69C206 79 197 87 186 89C190 95 192 99 193 105" />
+          <path
+            d="M128 54Q125 62 126 68L121 73M120 67Q124 66 128 69M187 65Q185 73 180 80L184 82M182 77q3-1 6 1"
+            strokeWidth="2.1"
+          />
+          <path
+            d="M89 98q6-3 12 0M86 110q4-4 11-5M90 122q3-4 6-5M192 108q7-2 12 2M194 116q8 2 11 6M192 127q7 2 7 9M190 135q3 4 4 8"
+            strokeWidth="2.2"
+          />
+          <path d="M76 141Q70 144 73 150Q75 155 81 153L95 154C117 165 146 165 169 154" />
+        </g>
+        <g fill="#f6bac8" stroke="none">
+          <ellipse
+            cx="115"
+            cy="108"
+            rx="8"
+            ry="6"
+            transform="rotate(12 115 108)"
+          />
+          <ellipse
+            cx="176"
+            cy="116"
+            rx="8"
+            ry="6"
+            transform="rotate(12 176 116)"
+          />
+        </g>
+        <g fill="none">
+          <path d="M123 102q7 6 14 1M157 106q7 6 14 1" />
+          <path d="M138 93l1 .8M158 95l1-.4" strokeWidth="1.8" />
+          <path
+            d="M110 105l-2 2M114 106l-2 3M118 107l-2 3M122 109l-1 2M172 113l-2 2M176 114l-2 3M180 115l-2 3M184 117l-1 1"
+            strokeWidth="1.8"
+          />
+          <path d="M139 111q0 5 5 2q1 6 5 1q4 4 6 0M142 119q2 2 4 1" />
+        </g>
+        <ellipse
+          cx="146"
+          cy="105"
+          rx="5.5"
+          ry="6"
+          fill="#ccebf5"
+          stroke="none"
+        />
+        <path d="M87 116C82 115 79 120 81 124Q78 127 82 130Q85 133 88 130Q92 132 94 128L94 125M79 128C74 131 75 135 77 139Q73 139 74 143Q74 147 79 146Q82 148 85 145Q90 144 87 139M174 142L174 137Q174 132 179 134Q182 132 184 136Q188 134 188 139Q190 142 186 144C187 150 180 156 174 152" />
+        <path d="M85 128v3M81 143v3M179 137v2" fill="none" strokeWidth="1.8" />
+      </g>
+    );
+
   return (
     <g
       transform="translate(100 0) scale(-1 1)"
@@ -503,26 +582,22 @@ export function Momonga({ asleep }: { asleep: boolean }) {
           transform="rotate(12 61 68)"
         />
       </g>
-      {asleep ? (
-        <path d="M25 56q5 5 11 1M48 59q5 5 11 1" fill="none" />
-      ) : (
-        <g fill="#242622" stroke="none">
-          <g transform="rotate(12 31 57)">
-            <ellipse cx="31" cy="57" rx="6.5" ry="5.7" />
-            <path
-              d="M27 56C27 51 35 51 35 56Q35 58 31 56Q29 58 27 56ZM27 59Q31 62 35 59Q31 64 27 59Z"
-              fill="#fffefd"
-            />
-          </g>
-          <g transform="rotate(12 54 60)">
-            <ellipse cx="54" cy="60" rx="6.5" ry="5.7" />
-            <path
-              d="M50 59C50 54 58 54 58 59Q58 61 54 59Q52 61 50 59ZM50 62Q54 65 58 62Q54 67 50 62Z"
-              fill="#fffefd"
-            />
-          </g>
+      <g fill="#242622" stroke="none">
+        <g transform="rotate(12 31 57)">
+          <ellipse cx="31" cy="57" rx="6.5" ry="5.7" />
+          <path
+            d="M27 56C27 51 35 51 35 56Q35 58 31 56Q29 58 27 56ZM27 59Q31 62 35 59Q31 64 27 59Z"
+            fill="#fffefd"
+          />
         </g>
-      )}
+        <g transform="rotate(12 54 60)">
+          <ellipse cx="54" cy="60" rx="6.5" ry="5.7" />
+          <path
+            d="M50 59C50 54 58 54 58 59Q58 61 54 59Q52 61 50 59ZM50 62Q54 65 58 62Q54 67 50 62Z"
+            fill="#fffefd"
+          />
+        </g>
+      </g>
       <path d="M37 52l.5.8M49 53l1-.6" fill="none" strokeWidth="1.6" />
       <ellipse cx="42" cy="60" rx="4.2" ry="4.8" fill="#ccebf5" stroke="none" />
       <path
