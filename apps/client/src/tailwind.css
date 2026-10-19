@@ -453,9 +453,11 @@
 }
 
 @layer components {
-  .character:has(.shinchan-sleep) {
+  .character:has(.shinchan-sleep, .chiikawa-sleep) {
     --animate-sleeping-breathe: none;
+  }
 
+  .character:has(.shinchan-sleep) {
     & .sleep-marks {
       transform: translate(-10px, 30px);
     }

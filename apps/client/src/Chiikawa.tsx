@@ -19,6 +19,90 @@ function Sasumata({ blue = false }: { blue?: boolean }) {
 }
 
 export function Chiikawa({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <g
+        className="chiikawa-sleep"
+        transform="translate(100 3) scale(-.5 .5)"
+        fill="#fffefa"
+        stroke="#302c2a"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <g className="animate-sleeping-marks" aria-hidden="true">
+          <path
+            d="M46 19C34 17 25 24 25 36C25 48 38 57 50 52Q60 49 61 38C52 45 41 41 40 34C37 28 41 22 46 19Z"
+            stroke="#edb745"
+          />
+          <g stroke="none">
+            <path d="m20 55 4 5-4 6-4-5Z" fill="#f7cc62" />
+            <circle cx="18" cy="70" r="2.4" />
+            <circle cx="79" cy="28" r="3.2" />
+            <circle cx="71" cy="29" r="1.8" fill="#f7cc62" />
+            <circle cx="97" cy="27" r="1.8" fill="#f7cc62" />
+          </g>
+        </g>
+        <path d="M153 75Q158 68 164 74Q171 70 176 77Q184 74 186 82Q195 82 191 90Q197 96 191 101Q194 109 185 111Q184 120 175 118Q169 125 161 119L147 103Z" />
+        <path d="M173 89q5-1 6 3m-9 6q5 0 5 5m-11 6 4 3" fill="none" />
+        <path
+          d="M69 88C69 71 79 56 95 50C93 46 97 41 101 42Q107 43 102 48C116 45 133 48 145 54Q148 47 153 51Q158 56 153 59L157 61C167 71 172 83 171 97C171 109 165 119 157 124L89 122L73 109Z"
+          stroke="none"
+        />
+        <path
+          d="M69 88C69 71 79 56 95 50C93 46 97 41 101 42Q107 43 102 48C116 45 133 48 145 54Q148 47 153 51Q158 56 153 59M157 61C167 71 172 83 171 97C171 109 165 119 157 124"
+          fill="none"
+        />
+        <g fill="#f5bbc8" stroke="none">
+          <ellipse
+            cx="85"
+            cy="74"
+            rx="10.2"
+            ry="6.2"
+            transform="rotate(24 85 74)"
+          />
+          <ellipse
+            cx="136"
+            cy="86"
+            rx="10.5"
+            ry="6.8"
+            transform="rotate(34 136 86)"
+          />
+        </g>
+        <g fill="none" strokeWidth="2.4">
+          <path d="M98 60.5Q101 59 104 60M122 63Q126 63 128 64.5" />
+          <path d="M94 67.5Q98 66.5 102 68M123 71Q127 72 130 75" />
+          <path d="M111 75L110.5 78.5M103 77Q105 81 110.5 78.5Q116 83 118 80.5" />
+          <path d="M108.5 85Q110 87 112.5 86" />
+          <path
+            d="M82 69.5 78.5 73M86.5 71 83 75M91 73 88 76.5M95 75 93 77M130 80 127 83.5M134.5 82.5 131.5 86M139 85.5 136.5 89M143 89 141.5 92"
+            strokeWidth="2"
+          />
+        </g>
+        <g fill="#dba16e" strokeWidth="2.2">
+          <circle cx="58" cy="86" r="4.5" />
+          <circle cx="74" cy="83" r="4.5" />
+          <path d="M54 92Q54 82 65 82Q78 79 81 91Q84 98 78 103L84 111Q87 118 79 119L57 118Q48 116 52 108L55 102Q50 98 54 92Z" />
+          <ellipse cx="66" cy="96" rx="6" ry="5" fill="#fff0d8" />
+          <g fill="#302c2a" stroke="none">
+            <circle cx="60" cy="91" r="1.5" />
+            <circle cx="74" cy="90" r="1.5" />
+            <ellipse cx="66" cy="94" rx="1.8" ry="1.3" />
+          </g>
+          <path d="M66 95v3m-7 11q5-3 7 2m8-3 2 4" fill="none" />
+        </g>
+        <path d="M49 111q-1-7 5-8q6-1 9 5l3 6m8-2q-2-8 4-9q5-1 7 5l4 7" />
+        <g className="origin-[99px_194px] animate-[pajama-breathe_4.8s_ease-in-out_infinite]">
+          <path d="M43 119Q42 111 51 112Q55 105 62 111Q68 105 74 111Q81 105 88 112Q94 106 101 113Q108 107 114 114Q121 108 128 115Q135 109 141 116Q149 112 154 120Q164 116 166 125Q172 130 164 137Q168 144 160 149Q163 156 154 160Q154 168 145 171Q145 179 135 180Q132 188 123 187Q118 195 109 191Q101 198 93 191Q85 195 79 188Q69 192 63 185Q51 187 47 178Q35 180 32 171Q22 170 25 160Q19 154 25 147Q21 139 29 134Q26 126 35 125Q35 117 43 119Z" />
+          <path
+            d="M41 128q7-3 12 1m-13 8q6-1 11 3"
+            fill="none"
+            strokeWidth="2"
+          />
+        </g>
+      </g>
+    );
+
   return (
     <g
       fill="#fffefa"
@@ -43,41 +127,35 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
         <ellipse cx="74" cy="61" rx="7.5" ry="5.2" />
       </g>
       <path d="M34 40q3-2 5-2m24 1 5 2" fill="none" strokeWidth="2" />
-      {asleep ? (
-        <path d="M32 51q5 5 10 0m17 2q5 5 10 0" fill="none" />
-      ) : (
-        <g fill="#302c2a" stroke="none">
-          <ellipse cx="37" cy="51" rx="4.6" ry="5.3" />
-          <ellipse cx="64" cy="53" rx="4.6" ry="5.3" />
-          <g fill="#fffefa">
-            <ellipse
-              cx="37"
-              cy="49"
-              rx="1.8"
-              ry="1.2"
-              transform="rotate(-35 37 49)"
-            />
-            <path d="M33.8 52.4q3 2.9 6.2-.7q-1.8 5-6.2.7M60.8 54.4q3 2.9 6.2-.7q-1.8 5-6.2.7" />
-            <ellipse
-              cx="64"
-              cy="51"
-              rx="1.8"
-              ry="1.2"
-              transform="rotate(-35 64 51)"
-            />
-          </g>
+      <g fill="#302c2a" stroke="none">
+        <ellipse cx="37" cy="51" rx="4.6" ry="5.3" />
+        <ellipse cx="64" cy="53" rx="4.6" ry="5.3" />
+        <g fill="#fffefa">
+          <ellipse
+            cx="37"
+            cy="49"
+            rx="1.8"
+            ry="1.2"
+            transform="rotate(-35 37 49)"
+          />
+          <path d="M33.8 52.4q3 2.9 6.2-.7q-1.8 5-6.2.7M60.8 54.4q3 2.9 6.2-.7q-1.8 5-6.2.7" />
+          <ellipse
+            cx="64"
+            cy="51"
+            rx="1.8"
+            ry="1.2"
+            transform="rotate(-35 64 51)"
+          />
         </g>
-      )}
-      {!asleep && (
-        <path d="M46 64q-1 10 5 8q4-1 3-7" fill="#fffefa" strokeWidth="2" />
-      )}
+      </g>
+      <path d="M46 64q-1 10 5 8q4-1 3-7" fill="#fffefa" strokeWidth="2" />
       <path d="M44 62q3 5 7 0q2 4 5 2m-8 12h3" fill="none" strokeWidth="2" />
       <path
         d="M23 55l-2 5m6-5-2 5m6-4-2 4m41-2-2 5m6-5-2 5m6-4-2 4"
         fill="none"
         strokeWidth="1.8"
       />
-      {!asleep && <Sasumata />}
+      <Sasumata />
     </g>
   );
 }
