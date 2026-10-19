@@ -105,55 +105,71 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
 
   return (
     <g
-      fill="#fffefa"
-      stroke="#302c2a"
-      strokeWidth="2.5"
+      fill="#ffffff"
+      stroke="#171512"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M25 80Q16 84 21 88Q25 91 29 86" />
       <path
         className="hero-rest-pose"
-        d="M25 30C20 23 24 16 30 17Q36 19 36 25C47 22 59 23 68 27C68 19 74 17 78 22Q82 27 78 33C90 42 94 58 86 70Q82 77 76 80Q83 83 79 87Q76 89 72 84C68 92 61 95 55 95L54 98Q50 102 47 96Q44 102 40 97L39 94C30 91 25 86 23 79Q18 84 15 80Q13 78 19 72C10 65 8 53 13 42Q17 35 25 30Z"
+        d="M29 27C27 23 28 18 32 17Q38 15 39 22C47 19 56 20 63 23Q64 17 69 18Q74 19 72 28C80 34 86 44 87 54Q89 66 80 74Q87 78 84 81Q81 83 77 79C75 87 69 91 63 92L63 97Q62 101 59 98L58 93Q48 95 39 92Q40 98 37 98Q33 98 33 91C26 89 22 83 22 76Q18 80 16 77Q14 75 20 71C13 64 12 54 16 44Q20 33 29 27Z"
       />
       <path
         className="hero-attack-pose"
         visibility="hidden"
-        d="M25 30C20 23 24 16 30 17Q36 19 36 25C47 22 59 23 68 27C68 19 74 17 78 22Q82 27 78 33C90 42 94 58 86 70Q80 79 72 84C68 92 61 95 55 95L54 98Q50 102 47 96Q44 102 40 97L39 94C30 91 25 86 23 79L19 72C10 65 8 53 13 42Q17 35 25 30Z"
+        d="M29 27C27 23 28 18 32 17Q38 15 39 22C47 19 56 20 63 23Q64 17 69 18Q74 19 72 28C80 34 86 44 87 54Q89 66 80 74L77 79C75 87 69 91 63 92L63 97Q62 101 59 98L58 93Q48 95 39 92Q40 98 37 98Q33 98 33 91C26 89 22 83 22 76L20 71C13 64 12 54 16 44Q20 33 29 27Z"
       />
-      <path d="M47 96v-5" fill="none" />
-      <g fill="#f5bbc8" stroke="none">
-        <ellipse cx="27" cy="58" rx="7.5" ry="5.2" />
-        <ellipse cx="74" cy="61" rx="7.5" ry="5.2" />
+      <g fill="#ffb8c5" stroke="none">
+        <ellipse
+          cx="28"
+          cy="51.5"
+          rx="6.8"
+          ry="4.8"
+          transform="rotate(-12 28 51.5)"
+        />
+        <ellipse
+          cx="73"
+          cy="53.5"
+          rx="6.4"
+          ry="4.9"
+          transform="rotate(12 73 53.5)"
+        />
       </g>
-      <path d="M34 40q3-2 5-2m24 1 5 2" fill="none" strokeWidth="2" />
-      <g fill="#302c2a" stroke="none">
-        <ellipse cx="37" cy="51" rx="4.6" ry="5.3" />
-        <ellipse cx="64" cy="53" rx="4.6" ry="5.3" />
-        <g fill="#fffefa">
+      <path
+        d="M37 34q2.5-.8 4.5-.4m17 .1q2.4 1.4 5.1 1.2"
+        fill="none"
+        strokeWidth="1.1"
+      />
+      <g fill="#171512" stroke="none">
+        <path d="M34.4 44.5C34.5 41.6 37 40.8 39.5 41.5Q43 42.3 42 46.3Q41 49.5 37 48.7Q33.6 48.2 34.4 44.5ZM57.7 44.3Q58.7 41.1 62.4 42Q66.2 43 64.9 46.6Q64 49.5 60.6 49Q57 48.7 57.7 44.3Z" />
+        <g fill="#ffffff">
           <ellipse
-            cx="37"
-            cy="49"
-            rx="1.8"
-            ry="1.2"
-            transform="rotate(-35 37 49)"
+            cx="38.2"
+            cy="43.4"
+            rx="1.6"
+            ry="1"
+            transform="rotate(-28 38.2 43.4)"
           />
-          <path d="M33.8 52.4q3 2.9 6.2-.7q-1.8 5-6.2.7M60.8 54.4q3 2.9 6.2-.7q-1.8 5-6.2.7" />
+          <path d="M36.1 46.1q2.1 1.4 4.3-.5q-.9 2.6-3.4 1.8ZM59.3 46.4q2 1.4 4.1-.3q-.7 2.4-3 1.5Z" />
           <ellipse
-            cx="64"
-            cy="51"
-            rx="1.8"
-            ry="1.2"
-            transform="rotate(-35 64 51)"
+            cx="61.3"
+            cy="43.7"
+            rx="1.5"
+            ry=".9"
+            transform="rotate(-28 61.3 43.7)"
           />
         </g>
       </g>
-      <path d="M46 64q-1 10 5 8q4-1 3-7" fill="#fffefa" strokeWidth="2" />
-      <path d="M44 62q3 5 7 0q2 4 5 2m-8 12h3" fill="none" strokeWidth="2" />
       <path
-        d="M23 55l-2 5m6-5-2 5m6-4-2 4m41-2-2 5m6-5-2 5m6-4-2 4"
+        d="M50.3 52.5v1.8m-3.9 0q1.6 2.3 3.9.2q2.4 2.2 4-.2m-6.2 1.8q2 3.1 4.5 0m-3.1 4.3q1.1.5 2.2.1"
         fill="none"
-        strokeWidth="1.8"
+        strokeWidth="1.4"
+      />
+      <path
+        d="m24.1 50.1-1.2 2.4m4.4-2.6L26 52.6m4.4-2.6-1.3 2.6m40.9-.7-1.2 2.5m4.4-2.2-1.3 2.5m4.3-2.1-1.2 2.3"
+        fill="none"
+        strokeWidth="1.1"
       />
       <Sasumata />
     </g>
