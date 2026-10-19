@@ -137,7 +137,7 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
         />
       </g>
       <path
-        d="M37 34q2.5-.8 4.5-.4m17 .1q2.4 1.4 5.1 1.2"
+        d="M37 34q2.5-.8 4.5-.4M63 34q-2.5-.8-4.5-.4"
         fill="none"
         strokeWidth="1.1"
       />
@@ -179,52 +179,88 @@ export function Chiikawa({ asleep }: { asleep: boolean }) {
 export function Hachiware({ asleep }: { asleep: boolean }) {
   return (
     <g
-      fill="#fffefa"
-      stroke="#302c2a"
-      strokeWidth="2.5"
+      fill="#ffffff"
+      stroke="#171512"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M45 91L44 97Q44 101 48 100Q54 98 55 92" fill="#94bdcf" />
+      <path d="M71 86q6-4 9-1q2 3-9 5Z" fill="#78a9be" />
       <path
         className="hero-rest-pose"
-        d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38C91 47 93 61 84 71Q89 70 89 74Q88 78 81 79L79 85Q86 87 83 91Q80 94 74 90C60 95 40 94 26 87Q19 90 16 86Q14 83 22 81L21 73Q14 74 12 69Q11 66 18 67C9 58 9 43 19 33Z"
+        d="M26 33L30.5 21Q32.7 14.5 36.1 18.4Q40.5 20.4 43 24Q50 21.2 56.5 24Q60.7 19.5 65.2 18Q67.7 17 69.6 23L73.6 32.5Q76 30.7 75.4 33.8C83 39.4 87 49.5 85 59.4Q84 66.8 79.4 70.9Q86 73.7 83.4 76.2Q81.6 77.7 77.2 75.3C75.2 84.2 71.1 89.1 64.4 92.8L62.8 98.5Q60.2 102 58.4 98.2L57.4 94.3Q49.6 95.2 43.5 94.4L42.3 98.3Q40.7 101.4 38.6 98.6L36.5 93.1C29.5 91.4 26.7 86.6 25.2 79.6Q19.5 80.3 18.6 76.8Q17.8 74 21.3 72.8L22.3 68.7C14.6 62.6 12.7 54.4 16.1 45.2Q19.3 37 26 33Z"
       />
       <path
         className="hero-attack-pose"
         visibility="hidden"
-        d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38C91 47 93 61 84 71L81 79L79 85Q86 87 83 91Q80 94 74 90C60 95 40 94 26 87Q19 90 16 86Q14 83 22 81L21 73L18 67C9 58 9 43 19 33Z"
+        d="M26 33L30.5 21Q32.7 14.5 36.1 18.4Q40.5 20.4 43 24Q50 21.2 56.5 24Q60.7 19.5 65.2 18Q67.7 17 69.6 23L73.6 32.5Q76 30.7 75.4 33.8C83 39.4 87 49.5 85 59.4Q84 66.8 79.4 70.9L77.2 75.3C75.2 84.2 71.1 89.1 64.4 92.8L62.8 98.5Q60.2 102 58.4 98.2L57.4 94.3Q49.6 95.2 43.5 94.4L42.3 98.3Q40.7 101.4 38.6 98.6L36.5 93.1C29.5 91.4 26.7 86.6 25.2 79.6L22.3 68.7C14.6 62.6 12.7 54.4 16.1 45.2Q19.3 37 26 33Z"
       />
       <path
-        d="M19 33L26 15Q28 10 32 14L42 24Q50 21 59 25L73 19Q78 16 79 22L82 38Q62 40 50 31Q40 40 19 33Z"
-        fill="#94bdcf"
+        d="M26 33L30.5 21Q32.7 14.5 36.1 18.4Q40.5 20.4 43 24Q50 21.2 56.5 24Q60.7 19.5 65.2 18Q67.7 17 69.6 23L73.6 32.5Q76 30.7 75.4 33.8Q66 39 56.5 34.4Q51.1 32.8 49.5 30.7Q45.3 35.3 37.5 35.9Q30 36.2 26 33Z"
+        fill="#78a9be"
       />
-      <g fill="#f5bbc8" stroke="none">
-        <ellipse cx="26" cy="57" rx="7.5" ry="5.2" />
-        <ellipse cx="74" cy="60" rx="7.5" ry="5.2" />
+      <path
+        className="hero-rest-pose"
+        d="M25.2 79.6q3.8-1.2 3.6-4.2q-.4-2.4-2.9-1.1"
+        fill="none"
+      />
+      <g fill="#ffb8c5" stroke="none">
+        <ellipse
+          cx="29"
+          cy="55.8"
+          rx="6.5"
+          ry="4.8"
+          transform="rotate(-14 29 55.8)"
+        />
+        <ellipse
+          cx="71.7"
+          cy="56.1"
+          rx="6.5"
+          ry="4.8"
+          transform="rotate(12 71.7 56.1)"
+        />
       </g>
-      <path d="M35 43h2m26 1 2 1" fill="none" strokeWidth="1.8" />
+      <path d="m38.3 40 1-.5m18.6.9 1 .5" fill="none" strokeWidth="1.3" />
       {asleep ? (
-        <path d="M32 51q5 5 10 0m17 2q5 5 10 0" fill="none" />
+        <path d="M33.6 49.5q4.2 3.7 8.4 0m14.5 1.2q4.3 3.9 8.6 0" fill="none" />
       ) : (
-        <g fill="#302c2a" stroke="none">
-          <ellipse cx="37" cy="51" rx="4.5" ry="5" />
-          <ellipse cx="64" cy="53" rx="4.5" ry="5" />
-          <g fill="#fffefa">
-            <ellipse cx="37" cy="49.2" rx="1.8" ry="1.2" />
-            <path d="M34 52.5q3 2 6-.5q-2 4-6 .5M61 54.5q3 2 6-.5q-2 4-6 .5" />
-            <ellipse cx="64" cy="51.2" rx="1.8" ry="1.2" />
+        <g fill="#171512" stroke="none">
+          <path d="M33.6 48Q33.8 43.9 37.8 44.4Q42.3 44.8 42 49.2Q41.7 53.1 37.7 53Q33.2 52.6 33.6 48ZM56.5 49Q56.5 44.7 60.9 45.1Q65.4 45.5 65.1 49.8Q64.8 54 60.7 53.8Q56.3 53.5 56.5 49Z" />
+          <g fill="#ffffff">
+            <ellipse
+              cx="37.7"
+              cy="46.7"
+              rx="1.7"
+              ry="1"
+              transform="rotate(18 37.7 46.7)"
+            />
+            <path d="M35.3 49.7q2.6-1.2 4.6 1.1q-3 .9-4.6-1.1ZM58.2 50.5q2.6-1.2 4.7 1q-2.8 1.1-4.7-1Z" />
+            <ellipse
+              cx="60.7"
+              cy="47.5"
+              rx="1.7"
+              ry="1"
+              transform="rotate(18 60.7 47.5)"
+            />
           </g>
         </g>
       )}
       {!asleep && (
-        <path d="M46 64q0 10 5 8q4-1 3-7" fill="#efb2bc" strokeWidth="2" />
+        <path
+          d="M47.4 59q-.6 6.1 2.7 6.1q3.2-.1 2.5-5.9"
+          fill="#f5b0bc"
+          strokeWidth="1.6"
+        />
       )}
-      <path d="M44 62q3 5 7 0q2 4 5 2m-7 11h2" fill="none" strokeWidth="2" />
       <path
-        d="M22 55l-2 4m6-4-2 4m6-3-2 4m41-2-2 4m6-4-2 4m6-3-2 4"
+        d="M49.9 56v1.8m-4.6-.1q1.7 3 4.6.3q2.8 2.8 4.6-.1m-5.1 10h1"
         fill="none"
-        strokeWidth="1.8"
+        strokeWidth="1.6"
+      />
+      <path
+        d="m25.6 54.4-1.3 2.6m4.5-2.8-1.3 2.7m4.6-2.8-1.4 2.8m38-2.6-1.3 2.6m4.6-2.5-1.3 2.6m4.5-2.4-1.2 2.6"
+        fill="none"
+        strokeWidth="1.1"
       />
       {!asleep && <Sasumata blue />}
     </g>
