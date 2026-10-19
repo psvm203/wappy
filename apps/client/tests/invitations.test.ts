@@ -39,13 +39,13 @@ test("invitation previews validate display data and discard private fields", () 
 });
 
 test("five-character invitations omit the default server and accept lowercase input", () => {
-  assert.equal(WAPPY_SERVER, "https://wappy-api.waps.im");
+  assert.equal(WAPPY_SERVER, "http://localhost:3001");
   assert.equal(formatInvitation(WAPPY_SERVER, "A7K3M"), "A7K3M");
   assert.equal(formatInvitation(`${WAPPY_SERVER}/`, "a7k3m"), "A7K3M");
   assert.deepEqual(parseInvitation(" a7K3m\n"), { code: "A7K3M" });
   assert.deepEqual(
-    parseInvitation(formatInvitation("http://localhost:3001", "a7k3m")),
-    { server: "http://localhost:3001", code: "A7K3M" },
+    parseInvitation(formatInvitation("https://example.test", "a7k3m")),
+    { server: "https://example.test", code: "A7K3M" },
   );
   for (const code of [
     "ABCD",

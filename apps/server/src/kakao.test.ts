@@ -26,7 +26,7 @@ test("Kakao configuration is optional, complete, and restricted to safe callback
   assert.throws(() => kakaoConfig({ KAKAO_REST_API_KEY: "partial" }));
   for (const url of [
     "https://api.example/auth/kakao/callback",
-    "http://127.0.0.1:3001/auth/kakao/callback",
+    "http://localhost:3001/auth/kakao/callback",
     "http://[::1]:3001/auth/kakao/callback",
   ])
     assert.ok(kakaoConfig({ ...env, KAKAO_REDIRECT_URI: url }));
@@ -92,11 +92,11 @@ test("Kakao OAuth validates the browser and exchanges codes only on the server; 
   let server = createApp(options);
   let base = "";
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");
@@ -386,7 +386,7 @@ test("optional login links a guest without losing the room, restores existing ac
         ? Response.json({ access_token: "mock-access" })
         : Response.json({ id: kakaoId }),
   });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   t.after(() => {
     server.close();
@@ -394,7 +394,7 @@ test("optional login links a guest without losing the room, restores existing ac
   });
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const base = `http://127.0.0.1:${address.port}`;
+  const base = `http://localhost:${address.port}`;
   async function call(path: string, body?: unknown, token?: string) {
     const response = await fetch(base + path, {
       method: body === undefined ? "GET" : "POST",
@@ -479,7 +479,7 @@ test("optional login links a guest without losing the room, restores existing ac
 
 test("unconfigured servers reject Kakao login and public starts retain rate limiting", async (t) => {
   const server = createApp({ databasePath: ":memory:" });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   t.after(() => {
     server.close();
@@ -487,7 +487,7 @@ test("unconfigured servers reject Kakao login and public starts retain rate limi
   });
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const url = `http://127.0.0.1:${address.port}/auth/kakao/start`;
+  const url = `http://localhost:${address.port}/auth/kakao/start`;
   const forbidden = await fetch(url, {
     method: "POST",
     headers: {
@@ -533,7 +533,7 @@ test("cancelling during the provider exchange prevents a late callback from issu
       return Response.json({ id: 42 });
     },
   });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   t.after(() => {
     finish();
@@ -542,7 +542,7 @@ test("cancelling during the provider exchange prevents a late callback from issu
   });
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const base = `http://127.0.0.1:${address.port}`;
+  const base = `http://localhost:${address.port}`;
   async function post(path: string, body: unknown) {
     return fetch(base + path, {
       method: "POST",

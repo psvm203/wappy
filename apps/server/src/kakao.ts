@@ -20,7 +20,7 @@ export function kakaoConfig(env: NodeJS.ProcessEnv): KakaoConfig | undefined {
     (url.protocol !== "https:" &&
       !(
         url.protocol === "http:" &&
-        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+        ["localhost", "[::1]"].includes(url.hostname)
       )) ||
     url.username ||
     url.password ||

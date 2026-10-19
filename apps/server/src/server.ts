@@ -94,7 +94,6 @@ export function createApp(options: {
     "http://tauri.localhost",
     "https://tauri.localhost",
     "http://localhost:1420",
-    "http://127.0.0.1:1420",
     ...(options.origins ?? []),
   ]);
   // Reuse the hot statements rather than allocating native SQL resources per poll.

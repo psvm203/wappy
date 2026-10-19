@@ -1,4 +1,6 @@
-export const WAPPY_SERVER = "https://wappy-api.waps.im";
+export const WAPPY_SERVER = serverUrl(
+  import.meta.env?.VITE_API_URL || "http://localhost:3001",
+);
 const INVITE_CODE = /^(?:[A-HJ-NP-Z2-9]{5}|[a-z0-9_-]{43})$/i;
 
 export function serverUrl(value: string): string {

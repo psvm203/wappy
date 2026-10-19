@@ -14,11 +14,11 @@ async function fixture(t: TestContext) {
   const directory = mkdtempSync(join(tmpdir(), "wappy-events-"));
   const databasePath = join(directory, "test.sqlite");
   const server = createApp({ databasePath, now: () => now });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const base = `http://127.0.0.1:${address.port}`;
+  const base = `http://localhost:${address.port}`;
   t.after(async () => {
     const closed = once(server, "close");
     server.close();

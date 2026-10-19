@@ -7,11 +7,11 @@ import { createApp } from "./server.ts";
 test("conditional state remains fresh across writes, presence/TTL transitions and authentication", async (t) => {
   let now = 1_800_000_000_000;
   const server = createApp({ databasePath: ":memory:", now: () => now });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const base = `http://127.0.0.1:${address.port}`;
+  const base = `http://localhost:${address.port}`;
   t.after(async () => {
     const closed = once(server, "close");
     server.close();

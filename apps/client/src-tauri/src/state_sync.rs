@@ -419,8 +419,8 @@ mod tests {
     }
 
     fn server(responses: Vec<String>) -> (String, mpsc::Receiver<String>) {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = format!("http://{}", listener.local_addr().unwrap());
+        let listener = TcpListener::bind("localhost:0").unwrap();
+        let address = format!("http://localhost:{}", listener.local_addr().unwrap().port());
         let (sent, requests) = mpsc::channel();
         thread::spawn(move || {
             for response in responses {
@@ -555,8 +555,8 @@ mod tests {
 
     #[test]
     fn native_stream_outlives_request_timeout_and_heartbeats_without_webview_timers() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
+        let listener = TcpListener::bind("localhost:0").unwrap();
+        let base = format!("http://localhost:{}", listener.local_addr().unwrap().port());
         let (sent, requests) = mpsc::channel();
         let worker = thread::spawn(move || {
             fn read_request(socket: &std::net::TcpStream) -> String {

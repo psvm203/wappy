@@ -9,7 +9,7 @@ import { WAPPY_SERVER } from "./invitations";
 export { serverUrl } from "./invitations";
 export { SESSION_KEY, loadSession, type SavedSession } from "./sessions";
 
-export const DEFAULT_SERVER = import.meta.env.VITE_API_URL || WAPPY_SERVER;
+export const DEFAULT_SERVER = WAPPY_SERVER;
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

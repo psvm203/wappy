@@ -19,12 +19,12 @@ import { createApp } from "./server.ts";
 test("proxy rate limits require opt-in and use only the last valid forwarded address", async () => {
   for (const trustProxy of [false, true]) {
     const server = createApp({ databasePath: ":memory:", trustProxy });
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
     async function call(forwarded?: string) {
-      const response = await fetch(`http://127.0.0.1:${address.port}/session`, {
+      const response = await fetch(`http://localhost:${address.port}/session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -71,12 +71,12 @@ test("short invitation collisions retry without replacing existing codes", async
   syncBuiltinESMExports();
   const server = createApp({ databasePath });
   const inspection = new DatabaseSync(databasePath);
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   async function call(path: string, body: unknown, token?: string) {
-    const response = await fetch(`http://127.0.0.1:${address.port}${path}`, {
+    const response = await fetch(`http://localhost:${address.port}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -147,11 +147,11 @@ test("public invitation previews are read-only, bounded and reveal only invitati
   const databasePath = join(directory, "test.sqlite");
   let time = Date.now();
   const server = createApp({ databasePath, now: () => time });
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  const base = `http://127.0.0.1:${address.port}`;
+  const base = `http://localhost:${address.port}`;
   const inspection = new DatabaseSync(databasePath);
   async function call(
     path: string,
@@ -309,11 +309,11 @@ test("profiles, invitations, presence and friendship persist safely end to end",
   let server = createApp({ databasePath, now: () => time });
   let base = "";
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");
@@ -623,11 +623,11 @@ test("startup removes recovery data and retired fields while preserving Kakao ac
     for (let attempt = 0; attempt < 2; attempt++) {
       const server = createApp({ databasePath });
       try {
-        server.listen(0, "127.0.0.1");
+        server.listen(0, "localhost");
         await once(server, "listening");
         const address = server.address();
         assert.ok(address && typeof address !== "string");
-        const base = `http://127.0.0.1:${address.port}`;
+        const base = `http://localhost:${address.port}`;
         for (const [method, path] of [
           ["POST", "/recovery-code"],
           ["POST", "/session/recover"],
@@ -721,11 +721,11 @@ test("presence sharing stays private and hidden through polling, profile edits, 
   let server = createApp({ databasePath, now: () => time });
   let base = "";
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");
@@ -926,11 +926,11 @@ test("the removed profile deletion endpoint leaves profiles and relationships in
   let server = createApp({ databasePath });
   let base = "";
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");
@@ -1061,11 +1061,11 @@ test("existing invitation codes migrate without expiry and remain reusable by mu
     let server = createApp({ databasePath, now: () => time });
     let base = "";
     async function listen() {
-      server.listen(0, "127.0.0.1");
+      server.listen(0, "localhost");
       await once(server, "listening");
       const address = server.address();
       assert.ok(address && typeof address !== "string");
-      base = `http://127.0.0.1:${address.port}`;
+      base = `http://localhost:${address.port}`;
     }
     async function close() {
       const closed = once(server, "close");

@@ -52,7 +52,7 @@ if (process.argv.includes("--server")) {
   }
   db.exec("COMMIT");
   db.close();
-  server.listen(0, "127.0.0.1");
+  server.listen(0, "localhost");
   await once(server, "listening");
   process.send({ port: server.address().port });
   process.on("message", () => {
@@ -77,7 +77,7 @@ if (process.argv.includes("--server")) {
       return new Promise((resolve, reject) => {
         let before = 0;
         const request = get(
-          `http://127.0.0.1:${port}/state`,
+          `http://localhost:${port}/state`,
           {
             agent,
             headers: {

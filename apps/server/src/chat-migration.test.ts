@@ -46,11 +46,11 @@ test("removed social features reject requests and legacy data stays hidden", asy
   let base = "";
   let inspection: DatabaseSync | undefined;
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");

@@ -4,7 +4,7 @@ use tauri::WebviewWindow;
 
 fn login_url(value: &str) -> Result<Url, String> {
     let url = Url::parse(value).map_err(|_| "Invalid login URL")?;
-    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+    let local = matches!(url.host_str(), Some("localhost" | "[::1]"));
     let query: Vec<_> = url.query_pairs().collect();
     if !(url.scheme() == "https" || (url.scheme() == "http" && local))
         || url.host_str().is_none()
@@ -63,9 +63,8 @@ mod tests {
     fn browser_login_only_opens_bounded_authorization_urls() {
         let state = "a".repeat(64);
         for origin in [
-            "https://wappy-api.waps.im",
+            "https://example.test",
             "http://localhost:3001",
-            "http://127.0.0.1:3001",
             "http://[::1]:3001",
         ] {
             assert!(login_url(&format!("{origin}/auth/kakao/authorize?state={state}")).is_ok());

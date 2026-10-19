@@ -20,7 +20,7 @@
 2. **방 초대 코드**를 친구에게 공유합니다.
 3. 친구는 **초대받았어요**에서 코드를 확인하고 프로필을 만들어 같은 방에 참여합니다.
 
-기본 서버 주소는 `https://wappy-api.waps.im`입니다. 친구와 함께 사용하려면 같은 서버에 연결해야 합니다. 다른 방의 초대를 수락하면 기존 방에서 나와 새 방에 참여합니다.
+기본 서버 주소는 `http://localhost:3001`입니다. 다른 기기의 친구와 함께 사용하려면 모두 접속할 수 있는 같은 서버에 연결해야 합니다. 다른 방의 초대를 수락하면 기존 방에서 나와 새 방에 참여합니다.
 
 ## 로컬 개발
 
@@ -46,13 +46,26 @@ pnpm install --frozen-lockfile
 cp apps/server/.env.example apps/server/.env
 ```
 
-클라이언트가 로컬 API를 사용하도록 `apps/client/.env.local` 파일을 만들고 다음 내용을 넣습니다.
+클라이언트는 기본적으로 로컬 API에 연결합니다. 서버 주소를 명시하거나 변경하려면 예시 파일을 복사하고 `VITE_API_URL`을 원하는 서버의 기본 주소로 설정합니다.
 
-```dotenv
-VITE_API_URL=http://127.0.0.1:3001
+```sh
+cp apps/client/.env.example apps/client/.env.local
 ```
 
-이 설정이 없으면 개발 중에도 기본 공용 서버로 연결합니다. 이미 저장된 프로필은 해당 프로필의 서버 주소를 계속 사용합니다.
+```dotenv
+VITE_API_URL=http://localhost:3001
+```
+
+이 설정을 생략하거나 빈 값으로 두면 `http://localhost:3001`에 연결합니다. 지정한 주소는 API 연결, 초대 코드, 화면의 기본 서버 판단에 함께 적용됩니다. 이미 저장된 프로필은 해당 프로필의 서버 주소를 계속 사용합니다.
+
+실행 명령에 환경변수를 전달할 수도 있습니다. 아래 예시 주소를 사용할 서버 주소로 바꿉니다.
+
+```sh
+VITE_API_URL=https://api.example.com pnpm dev
+VITE_API_URL=https://api.example.com pnpm build
+```
+
+실행 명령의 환경변수가 `.env` 파일보다 우선합니다. `.env` 파일을 변경하면 개발 서버를 다시 시작해야 하며, 배포 앱에 반영하려면 해당 값으로 다시 빌드해야 합니다. 자세한 동작은 [Vite 환경변수 문서](https://vite.dev/guide/env-and-mode)를 참고합니다. 서버가 요청을 받을 호스트와 포트는 별도로 `apps/server/.env`의 `HOST`, `PORT`로 설정합니다.
 
 ### 데스크톱 앱 실행
 
@@ -69,8 +82,8 @@ pnpm dev
 ```
 
 - 클라이언트: `http://localhost:1420`
-- API 서버: `http://127.0.0.1:3001`
-- 서버 상태 확인: `GET http://127.0.0.1:3001/health`
+- API 서버: `http://localhost:3001`
+- 서버 상태 확인: `GET http://localhost:3001/health`
 
 브라우저에서는 프로필, 초대, 친구 목록, 채팅을 확인할 수 있습니다. 바탕화면 오버레이와 OS 연동 기능은 데스크톱 앱에서 제공합니다.
 
@@ -78,16 +91,16 @@ pnpm dev
 
 클라이언트 설정은 `apps/client/.env.local`, 서버 설정은 `apps/server/.env`에 작성합니다.
 
-| 변수              | 기본값                      | 용도                                                      |
-| ----------------- | --------------------------- | --------------------------------------------------------- |
-| `VITE_API_URL`    | `https://wappy-api.waps.im` | 클라이언트의 기본 API 서버 주소. 실행·빌드 시 적용됩니다. |
-| `HOST`            | `127.0.0.1`                 | API 서버가 요청을 받을 주소                               |
-| `PORT`            | `3001`                      | API 서버 포트                                             |
-| `DATABASE_PATH`   | `./data/wappy.sqlite`       | 서버 작업 디렉터리 기준 SQLite 파일 경로                  |
-| `ALLOWED_ORIGINS` | 추가 허용 없음              | 쉼표로 구분한 추가 브라우저 Origin                        |
-| `TRUST_PROXY`     | 비활성                      | 신뢰하는 리버스 프록시 하나 뒤에서 실행할 때 `1`로 설정   |
+| 변수              | 기본값                  | 용도                                                      |
+| ----------------- | ----------------------- | --------------------------------------------------------- |
+| `VITE_API_URL`    | `http://localhost:3001` | 클라이언트의 기본 API 서버 주소. 실행·빌드 시 적용됩니다. |
+| `HOST`            | `localhost`             | API 서버가 요청을 받을 주소                               |
+| `PORT`            | `3001`                  | API 서버 포트                                             |
+| `DATABASE_PATH`   | `./data/wappy.sqlite`   | 서버 작업 디렉터리 기준 SQLite 파일 경로                  |
+| `ALLOWED_ORIGINS` | 추가 허용 없음          | 쉼표로 구분한 추가 브라우저 Origin                        |
+| `TRUST_PROXY`     | 비활성                  | 신뢰하는 리버스 프록시 하나 뒤에서 실행할 때 `1`로 설정   |
 
-Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 Origin에 포함됩니다. 로컬 실행 시 데이터는 기본적으로 `apps/server/data/wappy.sqlite`에 저장되며 별도 DB 설치는 필요하지 않습니다. `TRUST_PROXY=1`은 API 포트에 직접 접근할 수 없도록 구성한 프록시 환경에서 사용합니다.
+Tauri 앱과 `http://localhost:1420`은 기본 허용 Origin에 포함됩니다. 로컬 실행 시 데이터는 기본적으로 `apps/server/data/wappy.sqlite`에 저장되며 별도 DB 설치는 필요하지 않습니다. `TRUST_PROXY=1`은 API 포트에 직접 접근할 수 없도록 구성한 프록시 환경에서 사용합니다.
 
 ### 카카오 로그인 설정
 
@@ -98,7 +111,7 @@ Tauri 앱과 `http://localhost:1420`, `http://127.0.0.1:1420`은 기본 허용 O
 [카카오 로그인 설정 문서](https://developers.kakao.com/docs/ko/kakaologin/prerequisite)에 따라 카카오 로그인을 활성화하고 REST API 키의 Redirect URI에 다음 주소를 등록합니다.
 
 ```text
-https://wappy-api.waps.im/auth/kakao/callback
+http://localhost:3001/auth/kakao/callback
 ```
 
 서버의 `apps/server/.env`에 아래 세 환경 변수를 설정합니다. 이 파일은 Git에서 제외됩니다. 키와 시크릿을 클라이언트의 `VITE_*` 변수에 넣지 않습니다.
@@ -106,10 +119,10 @@ https://wappy-api.waps.im/auth/kakao/callback
 ```dotenv
 KAKAO_REST_API_KEY=your-rest-api-key
 KAKAO_CLIENT_SECRET=your-client-secret
-KAKAO_REDIRECT_URI=https://wappy-api.waps.im/auth/kakao/callback
+KAKAO_REDIRECT_URI=http://localhost:3001/auth/kakao/callback
 ```
 
-로컬 API를 사용한다면 Redirect URI를 `http://127.0.0.1:3001/auth/kakao/callback`으로 설정하고 카카오 개발자 콘솔에도 같은 주소를 등록합니다. 클라이언트의 API 주소와 Redirect URI의 서버 주소는 같아야 합니다. Docker Compose 배포에서는 위 세 변수를 서버 환경 변수 또는 루트 `.env`로 전달합니다. 운영 서버에도 변경된 코드와 환경 변수를 배포해야 로그인할 수 있습니다.
+다른 API 서버를 사용한다면 Redirect URI의 서버 주소를 해당 서버에 맞추고 카카오 개발자 콘솔에도 같은 주소를 등록합니다. 클라이언트의 API 주소와 Redirect URI의 서버 주소는 같아야 합니다. Docker Compose 배포에서는 위 세 변수를 서버 환경 변수 또는 루트 `.env`로 전달합니다. 운영 서버에도 변경된 코드와 환경 변수를 배포해야 로그인할 수 있습니다.
 
 설정을 생략하면 게스트 기능은 동작하고 카카오 로그인 시 설정 안내가 표시됩니다. 인증은 기본 브라우저에서 진행하며 카카오 토큰은 서버에서만 사용합니다. 이메일·전화번호는 저장하지 않고 카카오 회원번호와 Wappy 프로필만 연결합니다.
 
@@ -156,10 +169,10 @@ cargo test --manifest-path apps/client/src-tauri/Cargo.toml --test lifecycle --f
 
 ```sh
 docker compose up -d --build
-curl http://127.0.0.1:3001/health
+curl http://localhost:3001/health
 ```
 
-API는 호스트의 `127.0.0.1:3001`에 연결되고, SQLite 데이터는 `wappy-data` 볼륨에 저장됩니다. 공개 포트를 바꾸려면 저장소 루트의 `.env`에 `WAPPY_PORT`를 설정합니다. 이 구성은 API 서버를 실행합니다.
+API는 호스트의 IPv6 루프백 `[::1]:3001`에 바인딩되며 `http://localhost:3001`로 접속합니다. 호스트의 IPv6 루프백 지원이 필요합니다. SQLite 데이터는 `wappy-data` 볼륨에 저장됩니다. 공개 포트를 바꾸려면 저장소 루트의 `.env`에 `WAPPY_PORT`를 설정합니다. 이 구성은 API 서버를 실행합니다.
 
 외부 기기에서 접속할 HTTPS 서버는 [compose.https.yaml](compose.https.yaml)을 함께 사용합니다. 서버를 가리키는 도메인과 80·443 포트가 필요합니다. 저장소 루트의 `.env`에 다음 값을 설정합니다.
 
@@ -185,6 +198,8 @@ GitHub 저장소에 다음 값을 설정해야 합니다.
 | Secret   | `TAURI_SIGNING_PRIVATE_KEY`          | 업데이트 서명용 개인 키                  |
 | Secret   | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 개인 키에 설정한 비밀번호(사용하는 경우) |
 
+배포 앱의 기본 API 서버는 GitHub 저장소의 선택적 Variable `VITE_API_URL`로 설정합니다. 릴리스 빌드에 이 값이 전달되며, 설정하지 않으면 `http://localhost:3001`을 사용합니다.
+
 워크플로는 검사를 통과한 뒤 macOS·Windows 설치 파일과 업데이트 파일을 Draft Release에 올립니다. 두 플랫폼의 파일, 서명, `latest.json` 검증까지 성공하면 릴리스를 공개합니다. 선택적인 macOS 코드 서명 설정도 워크플로에 포함되어 있습니다.
 
 공개 키가 포함된 앱은 시작 시와 이후 1시간 간격으로 새 버전을 확인합니다. 사용자가 **업데이트하고 재시작**을 선택하면 다운로드·설치 후 다시 시작합니다. 기본 로컬 빌드와 CI 미리보기 빌드는 공개 키가 없어 자동 업데이트가 비활성화됩니다.
@@ -207,7 +222,7 @@ packages/
   scripts/                 컨테이너·설치 파일·릴리스 검증
 ```
 
-API 계약은 [packages/api/src/index.ts](packages/api/src/index.ts), 서버 환경 변수 예시는 [apps/server/.env.example](apps/server/.env.example)에서 확인할 수 있습니다.
+API 계약은 [packages/api/src/index.ts](packages/api/src/index.ts), 환경 변수 예시는 [클라이언트](apps/client/.env.example)와 [서버](apps/server/.env.example)에서 확인할 수 있습니다.
 
 ## 상태 동기화
 

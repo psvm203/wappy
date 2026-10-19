@@ -15,11 +15,11 @@ test("chat reaches only friends at send time, persists, expires and is removed w
   let server = createApp({ databasePath, now: () => now });
   let base = "";
   async function listen() {
-    server.listen(0, "127.0.0.1");
+    server.listen(0, "localhost");
     await once(server, "listening");
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    base = `http://127.0.0.1:${address.port}`;
+    base = `http://localhost:${address.port}`;
   }
   async function close() {
     const closed = once(server, "close");

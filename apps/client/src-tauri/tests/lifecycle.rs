@@ -303,10 +303,13 @@ fn animation_frames(window: &tauri::WebviewWindow) -> Result<u64, String> {
 }
 
 fn presence_server() -> Result<(String, Receiver<String>), String> {
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
+    let listener = TcpListener::bind("localhost:0").map_err(|error| error.to_string())?;
     let base = format!(
-        "http://{}",
-        listener.local_addr().map_err(|error| error.to_string())?
+        "http://localhost:{}",
+        listener
+            .local_addr()
+            .map_err(|error| error.to_string())?
+            .port()
     );
     let (sent, requests) = mpsc::channel();
     thread::spawn(move || {

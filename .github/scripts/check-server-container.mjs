@@ -20,7 +20,7 @@ writeFileSync(
   `services:
   proxy:
     ports: !override
-      - "127.0.0.1::443"
+      - "[::1]::443"
 `,
 );
 const env = {
@@ -90,8 +90,8 @@ try {
   compose("up", "-d", "--wait", "--wait-timeout", "60");
   const initial = serverId();
   const port = inspect(initial).NetworkSettings.Ports["3001/tcp"][0];
-  assert.equal(port.HostIp, "127.0.0.1");
-  endpoint = `http://127.0.0.1:${port.HostPort}`;
+  assert.equal(port.HostIp, "::1");
+  endpoint = `http://localhost:${port.HostPort}`;
   assert.equal(compose("exec", "-T", "server", "id", "-u").trim(), "1000");
   assert.deepEqual(await call("/health"), { ok: true });
   assert.deepEqual(
@@ -155,7 +155,7 @@ try {
     initial,
     "recreate the container, retain its volume",
   );
-  endpoint = `http://127.0.0.1:${inspect(serverId()).NetworkSettings.Ports["3001/tcp"][0].HostPort}`;
+  endpoint = `http://localhost:${inspect(serverId()).NetworkSettings.Ports["3001/tcp"][0].HostPort}`;
   const state = await call("/state", undefined, bob.token);
   assert.equal(state.friends[0].id, alice.profile.id);
   assert.equal(state.friends[0].online, false);
@@ -202,7 +202,7 @@ try {
     null,
     "Docker must not publish the trusted backend",
   );
-  assert.equal(proxyPort.HostIp, "127.0.0.1");
+  assert.equal(proxyPort.HostIp, "::1");
   // Trust only this disposable Caddy CA, without disabling TLS validation.
   let ca;
   for (let attempt = 0; attempt < 30; attempt++) {
@@ -224,7 +224,8 @@ try {
     return new Promise((resolve, reject) => {
       const req = request(
         {
-          hostname: "127.0.0.1",
+          hostname: "localhost",
+          family: 6,
           port: Number(proxyPort.HostPort),
           servername: "localhost",
           path,
