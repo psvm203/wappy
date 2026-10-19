@@ -376,6 +376,9 @@
   &[data-attack-style="smash"][data-attack="impact"] .hulk-raised-fists {
     visibility: hidden;
   }
+  &[data-attack-style="sasumata"] .chiikawa-awake {
+    transform: none;
+  }
   &[data-attack-style="sasumata"][data-attack="impact"] .sasumata {
     @apply animate-sasumata-thrust;
   }
