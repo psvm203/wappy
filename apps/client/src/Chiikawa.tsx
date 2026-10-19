@@ -138,6 +138,69 @@ export function Hachiware({ asleep }: { asleep: boolean }) {
 }
 
 export function Usagi({ asleep }: { asleep: boolean }) {
+  if (asleep)
+    return (
+      <g
+        transform="translate(119 -11) scale(-.34 .34)"
+        fill="#fff5d3"
+        stroke="#16130f"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <g className="origin-[226px_127px] animate-usagi-sleep-ears">
+          <path d="M208 128C205 110 214 82 230 63Q244 50 260 48Q269 47 263 58C246 74 233 98 230 125M229 129C235 105 250 83 271 73Q288 65 291 71Q294 77 285 85C266 101 253 118 247 140" />
+          <path
+            d="M213 122C212 99 225 73 239 61L252 55C233 77 224 99 221 124ZM235 128C242 104 256 87 273 79L283 75C264 94 251 113 244 134Z"
+            fill="#f5b5c4"
+            stroke="none"
+          />
+        </g>
+        <path
+          d="M207 121C169 115 138 132 120 160C105 181 101 207 109 229Q116 244 132 253C122 258 121 273 127 280Q131 285 138 277C140 293 155 305 172 310Q176 330 187 330Q193 331 193 315Q195 333 203 331Q210 330 212 315C229 313 242 304 248 292Q256 294 259 284Q262 275 258 266C283 253 298 233 299 207C301 169 282 141 250 132Q231 123 207 121Z"
+          stroke="none"
+        />
+        <path
+          d="M207 121C169 115 138 132 120 160C105 181 101 207 109 229Q116 244 132 253M250 132C282 141 301 169 299 207C298 233 283 253 258 266M126 257Q119 273 127 280Q134 286 138 273M138 284Q146 303 172 310Q176 330 187 330Q193 331 193 315M193 315Q195 333 203 331Q210 330 212 315C229 313 242 304 248 292M258 273Q262 290 252 292Q243 292 245 280"
+          fill="none"
+        />
+        <g fill="#f5b5c4" stroke="none">
+          <ellipse cx="144" cy="183" rx="21" ry="16" />
+          <ellipse cx="242" cy="200" rx="19" ry="16" />
+        </g>
+        <g fill="#fffefa" strokeWidth="4.5">
+          <ellipse
+            cx="174"
+            cy="171"
+            rx="6.3"
+            ry="5.6"
+            transform="rotate(-15 174 171)"
+          />
+          <ellipse cx="223" cy="181" rx="5.6" ry="6.3" />
+        </g>
+        <g fill="none" strokeWidth="4.5">
+          <path d="M148 155Q160 134 182 133M225 141C245 141 256 159 258 180" />
+          <path d="M184 193Q182 201 191 201Q198 202 199 194M191 201Q191 207 185 209Q188 214 193 211M195 202Q201 206 206 202" />
+          <path d="m135 178-4 6m12-5-4 8m12-6-4 8m12-5-3 6m80 8-3 7m11-6-3 7m11-6-3 7m10-6-2 6" />
+        </g>
+        <g
+          className="origin-[184px_195px] animate-usagi-sleep-bubble"
+          fill="#ddf7fa"
+          fillOpacity=".65"
+          strokeWidth="3.5"
+          aria-hidden="true"
+        >
+          <path d="M184 195C173 176 171 145 145 134C117 118 83 133 81 160C78 200 128 219 184 195Z" />
+          <path
+            d="M101 143q-18 14-8 32"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="4"
+          />
+        </g>
+      </g>
+    );
+
   return (
     <g
       transform="translate(-10 -20) scale(1.2)"
@@ -195,28 +258,20 @@ export function Usagi({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="1.7"
       />
-      {asleep ? (
-        <path
-          d="M37.2 52.5q3.4 3.6 6.8-.6M55.7 50.7q3.4 3.6 6.8-.6"
-          fill="none"
-          strokeWidth="1.6"
-        />
-      ) : (
-        <g fill="#14120f" stroke="none">
-          <path d="M37 52.2C37.5 49.4 41.6 48.6 43.5 50.9C45.2 53.8 42.9 57 40 56.4C37.8 56.3 36.3 54.4 37 52.2ZM55.7 50.2C56.4 47.7 60 47.1 62 49.4C64 52.1 62 55.1 59.2 54.8C56.7 54.8 55.1 52.6 55.7 50.2Z" />
-          <g fill="#fffef8">
-            <ellipse
-              cx="40"
-              cy="51.8"
-              rx="1.2"
-              ry=".7"
-              transform="rotate(-35 40 51.8)"
-            />
-            <ellipse cx="58.8" cy="50" rx="1.2" ry=".75" />
-            <path d="M40.2 54.3q1.1.1 1.9-.8q.6 1.3-1.2 1.7q-1.1.2-.7-.9ZM58.8 52.4q1.3.3 2.3-.3q.2 1.5-1.5 1.3q-1-.1-.8-1Z" />
-          </g>
+      <g fill="#14120f" stroke="none">
+        <path d="M37 52.2C37.5 49.4 41.6 48.6 43.5 50.9C45.2 53.8 42.9 57 40 56.4C37.8 56.3 36.3 54.4 37 52.2ZM55.7 50.2C56.4 47.7 60 47.1 62 49.4C64 52.1 62 55.1 59.2 54.8C56.7 54.8 55.1 52.6 55.7 50.2Z" />
+        <g fill="#fffef8">
+          <ellipse
+            cx="40"
+            cy="51.8"
+            rx="1.2"
+            ry=".7"
+            transform="rotate(-35 40 51.8)"
+          />
+          <ellipse cx="58.8" cy="50" rx="1.2" ry=".75" />
+          <path d="M40.2 54.3q1.1.1 1.9-.8q.6 1.3-1.2 1.7q-1.1.2-.7-.9ZM58.8 52.4q1.3.3 2.3-.3q.2 1.5-1.5 1.3q-1-.1-.8-1Z" />
         </g>
-      )}
+      </g>
       <path
         className="hero-rest-pose"
         d="M51.6 57.9v1.6M47.3 59.5q2.1 2.8 4.5-.1q3.9 2.8 4.1-1M51.9 60.5q2.5 2.9.8 3.2l-1.4-.3"
@@ -228,33 +283,31 @@ export function Usagi({ asleep }: { asleep: boolean }) {
         fill="none"
         strokeWidth="1.8"
       />
-      {!asleep && (
-        <g className="hero-attack-pose" visibility="hidden">
-          <path d="M49.5 61q1 9 4.5 8 3-1 2.5-9" fill="#51332b" />
+      <g className="hero-attack-pose" visibility="hidden">
+        <path d="M49.5 61q1 9 4.5 8 3-1 2.5-9" fill="#51332b" />
+        <path
+          d="M51.5 66q2-3 4.2-1l-1 3.5q-2 1.5-3.2-2.5Z"
+          fill="#f3b9c4"
+          stroke="none"
+        />
+        <path
+          d="M51.6 57.9v1.6M47.3 59.5q2.1 2.8 4.5-.1q3.9 2.8 4.1-1"
+          fill="none"
+          strokeWidth="1.6"
+        />
+        <g className="usagi-staff">
+          <path d="M34 81q4-4 9 0m27-8q3-6 7-5" fill="none" />
           <path
-            d="M51.5 66q2-3 4.2-1l-1 3.5q-2 1.5-3.2-2.5Z"
-            fill="#f3b9c4"
-            stroke="none"
+            d="M-3 76Q53 88 101 54q5-3 8 1t-3 8Q57 99-5 85q-5-2-3-6 2-3 5-3Z"
+            fill="#ffd47c"
           />
           <path
-            d="M51.6 57.9v1.6M47.3 59.5q2.1 2.8 4.5-.1q3.9 2.8 4.1-1"
-            fill="none"
-            strokeWidth="1.6"
+            d="M-3 76l13 2q3 4-1 9l-14-2q-5-2-3-6 2-3 5-3ZM98 56l3-2q5-3 8 1t-3 8l-3 2q1-6-5-9Z"
+            fill="#fffefa"
           />
-          <g className="usagi-staff">
-            <path d="M34 81q4-4 9 0m27-8q3-6 7-5" fill="none" />
-            <path
-              d="M-3 76Q53 88 101 54q5-3 8 1t-3 8Q57 99-5 85q-5-2-3-6 2-3 5-3Z"
-              fill="#ffd47c"
-            />
-            <path
-              d="M-3 76l13 2q3 4-1 9l-14-2q-5-2-3-6 2-3 5-3ZM98 56l3-2q5-3 8 1t-3 8l-3 2q1-6-5-9Z"
-              fill="#fffefa"
-            />
-            <path d="M40 80q1-4 4-3 4 1 3 6l-1 5q-2 4-5 1m31-18q-1-4 3-5 4-1 5 4l-1 5q-2 3-5 1Z" />
-          </g>
+          <path d="M40 80q1-4 4-3 4 1 3 6l-1 5q-2 4-5 1m31-18q-1-4 3-5 4-1 5 4l-1 5q-2 3-5 1Z" />
         </g>
-      )}
+      </g>
     </g>
   );
 }
