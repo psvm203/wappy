@@ -103,6 +103,19 @@ function App() {
   const [panel, setPanel] = useState<
     "friends" | "invite" | "profile" | "settings"
   >("friends");
+  const panelScrollPositions = useRef<Partial<Record<typeof panel, number>>>(
+    {},
+  );
+  const panelContentRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return;
+      node.scrollTop = panelScrollPositions.current[panel] ?? 0;
+      return () => {
+        panelScrollPositions.current[panel] = node.scrollTop;
+      };
+    },
+    [panel],
+  );
   const [code, setCode] = useState("");
   const [verifiedInvitation, setVerifiedInvitation] = useState("");
   const invitationSource = JSON.stringify([code, server]);
@@ -883,6 +896,8 @@ function App() {
               ))}
           </nav>
           <div
+            key={panel}
+            ref={panelContentRef}
             className="
               scroll-area content min-h-0 flex-1 [scrollbar-width:thin]
               [scrollbar-color:#d8ddd0_transparent] overflow-y-auto p-[14px_20px_20px]
